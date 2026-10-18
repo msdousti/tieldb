@@ -19,6 +19,7 @@
 #include "io/io.h"
 #include "net/connection.h"
 #include "net/protocol.h"
+#include "types/type_registry.h"
 
 static constexpr size_t TRANSCRIPT_CAPACITY = 1024;
 
@@ -91,7 +92,7 @@ static wire_writer_t *expected_greeting(void)
 
 static void put_version_reply(wire_writer_t *w)
 {
-    const protocol_column_t column = {"version", PROTOCOL_TYPE_TEXT};
+    const protocol_column_t column = {"version", TYPE_OID_TEXT};
     const protocol_value_t value = {"TielDB 0.1.0", 12};
     assert_int_equal(protocol_put_row_description(w, &column, 1), 0);
     assert_int_equal(protocol_put_data_row(w, &value, 1), 0);

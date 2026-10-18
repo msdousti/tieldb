@@ -27,6 +27,12 @@ static bool parse_int32(const char *text, int32_t *value)
     return valid;
 }
 
+static bool int4_accepts(const char *text)
+{
+    int32_t value = 0;
+    return parse_int32(text, &value);
+}
+
 static ssize_t int4_input(const char *text, void *buffer, size_t capacity)
 {
     int32_t value = 0;
@@ -62,6 +68,11 @@ static int int4_compare(const void *left, [[maybe_unused]] size_t left_length, c
     return (a > b) - (a < b);
 }
 
+static bool text_accepts([[maybe_unused]] const char *text)
+{
+    return true;
+}
+
 static ssize_t text_input(const char *text, void *buffer, size_t capacity)
 {
     size_t length = strlen(text);
@@ -93,12 +104,12 @@ static int text_compare(const void *left, size_t left_length, const void *right,
     return (left_length > right_length) - (left_length < right_length);
 }
 
-static const type_info_t INT4_TYPE = {TYPE_OID_INT4, "int4",      sizeof(int32_t),
-                                      int4_input,    int4_output, int4_compare};
-static const type_info_t TEXT_TYPE = {TYPE_OID_TEXT, "text",      TYPE_VARIABLE_LENGTH,
-                                      text_input,    text_output, text_compare};
+const type_info_t TYPE_INT4 = {TYPE_OID_INT4, "int4",      sizeof(int32_t), int4_accepts,
+                               int4_input,    int4_output, int4_compare};
+const type_info_t TYPE_TEXT = {TYPE_OID_TEXT, "text",      TYPE_VARIABLE_LENGTH, text_accepts,
+                               text_input,    text_output, text_compare};
 
-static const type_info_t *const TYPES[] = {&INT4_TYPE, &TEXT_TYPE};
+static const type_info_t *const TYPES[] = {&TYPE_INT4, &TYPE_TEXT};
 
 typedef struct {
     const char *name;
@@ -106,10 +117,10 @@ typedef struct {
 } type_alias_t;
 
 static const type_alias_t ALIASES[] = {
-    {"int4", &INT4_TYPE},
-    {"int", &INT4_TYPE},
-    {"integer", &INT4_TYPE},
-    {"text", &TEXT_TYPE},
+    {"int4", &TYPE_INT4},
+    {"int", &TYPE_INT4},
+    {"integer", &TYPE_INT4},
+    {"text", &TYPE_TEXT},
 };
 
 const type_info_t *type_find_by_name(const char *name)

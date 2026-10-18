@@ -14,6 +14,7 @@
 
 #include "net/query_handler.h"
 #include "storage/catalog.h"
+#include "types/type_registry.h"
 
 static const session_info_t SESSION = {.user = "tester", .database = "testdb"};
 
@@ -28,7 +29,7 @@ static wire_writer_t *create_writer(void)
 
 static void put_expected_version_response(wire_writer_t *w)
 {
-    const protocol_column_t column = {"version", PROTOCOL_TYPE_TEXT};
+    const protocol_column_t column = {"version", TYPE_OID_TEXT};
     const protocol_value_t value = {"TielDB 0.1.0", strlen("TielDB 0.1.0")};
 
     assert_int_equal(protocol_put_row_description(w, &column, 1), 0);
@@ -50,7 +51,7 @@ static void put_expected_unsupported_response(wire_writer_t *w)
 
 static void put_expected_user_rows(wire_writer_t *w, size_t count)
 {
-    const protocol_column_t columns[] = {{"id", PROTOCOL_TYPE_INT4}, {"name", PROTOCOL_TYPE_TEXT}};
+    const protocol_column_t columns[] = {{"id", TYPE_OID_INT4}, {"name", TYPE_OID_TEXT}};
     const char *rows[][2] = {{"1", "Alice"}, {"2", "Bob"}, {"3", "Carol"}, {"4", "Dave"}};
     char tag[16];
 
@@ -154,7 +155,7 @@ static void put_expected_table_exists_response(wire_writer_t *w)
 
 static void put_expected_pets_response(wire_writer_t *w)
 {
-    const protocol_column_t columns[] = {{"id", PROTOCOL_TYPE_INT4}, {"name", PROTOCOL_TYPE_TEXT}};
+    const protocol_column_t columns[] = {{"id", TYPE_OID_INT4}, {"name", TYPE_OID_TEXT}};
     const protocol_value_t values[] = {{"7", 1}, {"Rex", 3}};
 
     assert_int_equal(protocol_put_row_description(w, columns, 2), 0);
@@ -213,7 +214,7 @@ static void test_a_query_without_a_statement_gets_an_empty_response([[maybe_unus
 static void put_expected_single_value_response(wire_writer_t *w, const char *column,
                                                const char *value)
 {
-    const protocol_column_t description = {column, PROTOCOL_TYPE_TEXT};
+    const protocol_column_t description = {column, TYPE_OID_TEXT};
     const protocol_value_t row = {value, strlen(value)};
 
     assert_int_equal(protocol_put_row_description(w, &description, 1), 0);
@@ -284,7 +285,7 @@ static void test_null_arguments_are_rejected([[maybe_unused]] void **state)
 
 static void put_expected_flipped_response(wire_writer_t *w)
 {
-    const protocol_column_t columns[] = {{"b", PROTOCOL_TYPE_TEXT}, {"a", PROTOCOL_TYPE_INT4}};
+    const protocol_column_t columns[] = {{"b", TYPE_OID_TEXT}, {"a", TYPE_OID_INT4}};
     const protocol_value_t values[] = {{"one", 3}, {"1", 1}};
 
     assert_int_equal(protocol_put_row_description(w, columns, 2), 0);
@@ -295,7 +296,7 @@ static void put_expected_flipped_response(wire_writer_t *w)
 
 static void test_select_star_shows_columns_in_the_display_order([[maybe_unused]] void **state)
 {
-    const table_column_t columns[] = {{"a", COLUMN_TYPE_INTEGER}, {"b", COLUMN_TYPE_TEXT}};
+    const table_column_t columns[] = {{"a", &TYPE_INT4}, {"b", &TYPE_TEXT}};
     const char *row[] = {"1", "one"};
     const size_t flipped[] = {1, 0};
     table_t *table = catalog_create_table("shown_flipped", columns, 2);
@@ -337,7 +338,7 @@ static const struct CMUnitTest tests[] = {
 // The tests share one table: user (id INTEGER, name TEXT) with three rows
 static int create_user_table([[maybe_unused]] void **state)
 {
-    const table_column_t columns[] = {{"id", COLUMN_TYPE_INTEGER}, {"name", COLUMN_TYPE_TEXT}};
+    const table_column_t columns[] = {{"id", &TYPE_INT4}, {"name", &TYPE_TEXT}};
     const char *rows[][2] = {{"1", "Alice"}, {"2", "Bob"}, {"3", "Carol"}};
     table_t *table = catalog_create_table("user", columns, 2);
     int status = table == nullptr;

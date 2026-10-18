@@ -11,6 +11,7 @@
 #include <cmocka.h>
 
 #include "net/protocol.h"
+#include "types/type_registry.h"
 
 static wire_writer_t *create_writer(void)
 {
@@ -214,7 +215,7 @@ static void test_error_response_rejects_invalid_arguments([[maybe_unused]] void 
 static void test_row_description_matches_postgres_bytes([[maybe_unused]] void **state)
 {
     wire_writer_t *w = create_writer();
-    const protocol_column_t columns[] = {{"id", PROTOCOL_TYPE_INT4}};
+    const protocol_column_t columns[] = {{"id", TYPE_OID_INT4}};
     const uint8_t expected[] = {
         'T',  0,    0,    0,    27, // type, length
         0,    1,                    // one column
@@ -235,7 +236,7 @@ static void test_row_description_matches_postgres_bytes([[maybe_unused]] void **
 static void test_row_description_encodes_several_columns([[maybe_unused]] void **state)
 {
     wire_writer_t *w = create_writer();
-    const protocol_column_t columns[] = {{"id", PROTOCOL_TYPE_INT4}, {"name", PROTOCOL_TYPE_TEXT}};
+    const protocol_column_t columns[] = {{"id", TYPE_OID_INT4}, {"name", TYPE_OID_TEXT}};
     const uint8_t expected[] = {
         'R',  0,    0,    0,    8,    0,    0, 0, 0,                    // AuthenticationOk
         'T',  0,    0,    0,    50,   0,    2,                          // RowDescription, 2 columns
@@ -264,8 +265,8 @@ static void test_row_description_allows_zero_columns([[maybe_unused]] void **sta
 static void test_row_description_rejects_invalid_arguments([[maybe_unused]] void **state)
 {
     wire_writer_t *w = create_writer();
-    const protocol_column_t column = {"id", PROTOCOL_TYPE_INT4};
-    const protocol_column_t unnamed = {nullptr, PROTOCOL_TYPE_INT4};
+    const protocol_column_t column = {"id", TYPE_OID_INT4};
+    const protocol_column_t unnamed = {nullptr, TYPE_OID_INT4};
 
     errno = 0;
     assert_int_equal(protocol_put_row_description(nullptr, &column, 1), -1);
@@ -281,7 +282,7 @@ static void test_row_description_rejects_invalid_arguments([[maybe_unused]] void
 static void test_row_description_rejects_unknown_type([[maybe_unused]] void **state)
 {
     wire_writer_t *w = create_writer();
-    const protocol_column_t columns[] = {{"id", PROTOCOL_TYPE_INT4}, {"x", 9999}};
+    const protocol_column_t columns[] = {{"id", TYPE_OID_INT4}, {"x", 9999}};
 
     errno = 0;
     assert_int_equal(protocol_put_row_description(w, columns, 2), -1);
