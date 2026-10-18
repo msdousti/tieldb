@@ -20,7 +20,7 @@ See [ROADMAP.md](ROADMAP.md) for the complete development plan.
 ## Quick Start
 
 **Prerequisites:**
-- Linux environment (OrbStack VM recommended for macOS users)
+- Linux environment (a Linux VM on macOS)
 - Meson build system, Ninja, Clang
 - cmocka testing framework
 

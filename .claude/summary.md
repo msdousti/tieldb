@@ -30,7 +30,7 @@
   - macOS lacks O_DIRECT, io_uring, fallocate, sync_file_range
   - fsync semantics differ (needs F_FULLFSYNC)
   - Sanitizers (LeakSanitizer, Valgrind) don't work properly on Apple Silicon
-- **Recommended setup**: Use OrbStack for lightweight Linux VM on Mac
+- **Recommended setup**: Use a lightweight Linux VM on Mac
 - Keep data directory on VM's disk (ext4/xfs), not shared folders
 - Edit source on Mac, build/run in VM
 - Use modern C (C23, latest standard). Incorporate guidelines from `c-guidelines.md`
@@ -44,6 +44,6 @@ The discussion ended with the question of whether to scaffold the repo or go dee
 
 ## Next Steps
 - [ ] Decide: scaffold repo structure vs. dive deeper into buffer pool design
-- [ ] Set up Linux development environment (OrbStack)
+- [ ] Set up Linux development environment
 - [ ] Define bare minimum feature set
 - [ ] Create initial project structure
