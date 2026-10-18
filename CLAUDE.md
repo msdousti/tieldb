@@ -373,7 +373,7 @@ Before submitting/committing code:
 - [ ] No comments unless explaining *why*
 - [ ] Module internals are `static`
 - [ ] Stateful module types are opaque (`foo_create`/`foo_destroy`); vtables only where implementations are swappable
-- [ ] Every failure sets `errno`, documented in the header and asserted in tests
+- [ ] Every failure that can occur sets `errno`, documented in the header and asserted in tests (no handling for malformed or hostile clients)
 - [ ] At most 4 parameters per function; use an options struct beyond that
 - [ ] Headers are self-contained with `#pragma once`
 
