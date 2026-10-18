@@ -5,6 +5,14 @@
 #include "net/protocol.h"
 
 #include <errno.h>
+#include <string.h>
+
+static constexpr size_t SQLSTATE_LENGTH = 5;
+
+typedef struct error_field {
+    char code;
+    const char *value;
+} error_field_t;
 
 static int begin_message(wire_writer_t *writer, uint8_t type)
 {
@@ -43,6 +51,44 @@ int protocol_put_command_complete(wire_writer_t *writer, const char *tag)
     }
     size_t start = wire_writer_size(writer);
     if (begin_message(writer, 'C') != 0 || wire_writer_put_cstring(writer, tag) != 0) {
+        wire_writer_truncate(writer, start);
+        return -1;
+    }
+    return end_message(writer, start);
+}
+
+static int put_error_field(wire_writer_t *writer, const error_field_t *field)
+{
+    if (wire_writer_put_u8(writer, (uint8_t) field->code) != 0) {
+        return -1;
+    }
+    return wire_writer_put_cstring(writer, field->value);
+}
+
+static int put_error_fields(wire_writer_t *writer, const error_field_t *fields, size_t count)
+{
+    int result = 0;
+    for (size_t i = 0; i < count && result == 0; i++) {
+        result = put_error_field(writer, &fields[i]);
+    }
+    if (result != 0) {
+        return -1;
+    }
+    return wire_writer_put_u8(writer, 0);
+}
+
+int protocol_put_error_response(wire_writer_t *writer, const char *severity, const char *sqlstate,
+                                const char *message)
+{
+    if (writer == nullptr || severity == nullptr || sqlstate == nullptr || message == nullptr ||
+        strlen(sqlstate) != SQLSTATE_LENGTH) {
+        errno = EINVAL;
+        return -1;
+    }
+    const error_field_t fields[] = {{'S', severity}, {'C', sqlstate}, {'M', message}};
+    size_t start = wire_writer_size(writer);
+    if (begin_message(writer, 'E') != 0 ||
+        put_error_fields(writer, fields, sizeof(fields) / sizeof(fields[0])) != 0) {
         wire_writer_truncate(writer, start);
         return -1;
     }

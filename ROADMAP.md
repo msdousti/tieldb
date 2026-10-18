@@ -57,7 +57,7 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
     - [x] CommandComplete
     - [ ] RowDescription
     - [ ] DataRow
-  - [ ] Error handling (ErrorResponse)
+  - [x] Error handling (ErrorResponse)
 - [ ] Parse simple SQL (CREATE TABLE, INSERT, SELECT *)
   - [ ] Use existing parser (e.g., `libpg_query` or hand-write for just these 3)
   - [ ] AST representation

@@ -9,6 +9,16 @@
  *     0     1  2  3  4    5  6  7  8
  *    'R'    length = 8    result = 0
  *
+ *   ErrorResponse: a command failed; psql prints it as "ERROR:  message"
+ *
+ *     0     1  2  3  4    5 ...
+ *    'E'    length        fields, then a 0 byte
+ *
+ *     each field is a one-byte code and a NUL-terminated value:
+ *       'S' severity, e.g. "ERROR" or "FATAL"
+ *       'C' SQLSTATE error code, always 5 characters, e.g. "42601" (syntax error)
+ *       'M' human-readable message
+ *
  *   CommandComplete: a command finished; the tag names it, e.g. "SELECT 5"
  *
  *     0     1  2  3  4    5 ...
@@ -37,4 +47,6 @@ typedef enum {
 
 [[nodiscard]] int protocol_put_authentication_ok(wire_writer_t *writer);
 [[nodiscard]] int protocol_put_command_complete(wire_writer_t *writer, const char *tag);
+[[nodiscard]] int protocol_put_error_response(wire_writer_t *writer, const char *severity,
+                                              const char *sqlstate, const char *message);
 [[nodiscard]] int protocol_put_ready_for_query(wire_writer_t *writer, transaction_status_t status);
