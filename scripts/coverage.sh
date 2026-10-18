@@ -6,9 +6,9 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 # Unoptimized: inlining and _FORTIFY_SOURCE add compiler-generated branches that no test can reach
 if [ ! -d build-cov ]; then
-    meson setup build-cov -Db_coverage=true -Dbuildtype=debug
+    meson setup build-cov -Db_coverage=true -Dbuildtype=debug -Dc_args=-fprofile-update=atomic
 else
-    meson configure build-cov -Db_coverage=true -Dbuildtype=debug
+    meson configure build-cov -Db_coverage=true -Dbuildtype=debug -Dc_args=-fprofile-update=atomic
 fi
 
 find build-cov -name '*.gcda' -delete
