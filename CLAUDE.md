@@ -422,6 +422,8 @@ Work proceeds as a sequence of small, reviewable pull requests, each leaving `ma
   (e.g. header + tests, then implementation, then wiring)
 - **Each PR includes** its own tests, and passes format, lint, and sanitizer checks
 - **One concern per PR:** no unrelated refactors mixed into a feature PR
+- **Roadmap upkeep:** each PR updates `ROADMAP.md` in the same PR. Check a task only when every part of it is done.
+  If the PR does only part of a step, add sub-items under that step and check only the ones it completes
 - **Measure before opening:** check `git diff --stat main` and split if the size is over target
 
 ---
