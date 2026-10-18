@@ -29,15 +29,23 @@ static constexpr size_t TAG_CAPACITY = 32;
 // Each step appends one message; context is the table or table name the response is about
 typedef int (*response_step_t)(wire_writer_t *out, const void *context);
 
-static int put_version_description(wire_writer_t *out, [[maybe_unused]] const void *context)
+// The context of the single-value responses
+typedef struct {
+    const char *column;
+    const char *value;
+} single_value_t;
+
+static int put_single_description(wire_writer_t *out, const void *context)
 {
-    const protocol_column_t column = {VERSION_COLUMN, PROTOCOL_TYPE_TEXT};
+    const single_value_t *single = context;
+    const protocol_column_t column = {single->column, PROTOCOL_TYPE_TEXT};
     return protocol_put_row_description(out, &column, 1);
 }
 
-static int put_version_row(wire_writer_t *out, [[maybe_unused]] const void *context)
+static int put_single_row(wire_writer_t *out, const void *context)
 {
-    const protocol_value_t value = {SERVER_VERSION, sizeof(SERVER_VERSION) - 1};
+    const single_value_t *single = context;
+    const protocol_value_t value = {single->value, strlen(single->value)};
     return protocol_put_data_row(out, &value, 1);
 }
 
@@ -123,8 +131,8 @@ static int put_ready(wire_writer_t *out, [[maybe_unused]] const void *context)
     return protocol_put_ready_for_query(out, TRANSACTION_IDLE);
 }
 
-static const response_step_t VERSION_RESPONSE[] = {put_version_description, put_version_row,
-                                                   put_select_one_tag, put_ready};
+static const response_step_t SINGLE_VALUE_RESPONSE[] = {put_single_description, put_single_row,
+                                                        put_select_one_tag, put_ready};
 static const response_step_t TABLE_RESPONSE[] = {put_table_description, put_table_rows,
                                                  put_table_tag, put_ready};
 static const response_step_t INSERT_RESPONSE[] = {put_insert_tag, put_ready};
@@ -202,6 +210,12 @@ static int respond_create_table(const sql_create_table_t *create, wire_writer_t 
     return run_steps(out, CREATE_TABLE_RESPONSE, STEP_COUNT(CREATE_TABLE_RESPONSE), nullptr);
 }
 
+static int respond_single_value(wire_writer_t *out, const char *column, const char *value)
+{
+    const single_value_t single = {column, value};
+    return run_steps(out, SINGLE_VALUE_RESPONSE, STEP_COUNT(SINGLE_VALUE_RESPONSE), &single);
+}
+
 static int respond(const char *sql, wire_writer_t *out)
 {
     int result = 0;
@@ -211,7 +225,7 @@ static int respond(const char *sql, wire_writer_t *out)
         return run_steps(out, EMPTY_RESPONSE, STEP_COUNT(EMPTY_RESPONSE), nullptr);
     }
     if (sql_is_version_query(sql)) {
-        return run_steps(out, VERSION_RESPONSE, STEP_COUNT(VERSION_RESPONSE), nullptr);
+        return respond_single_value(out, VERSION_COLUMN, SERVER_VERSION);
     }
     if (sql_parse_select_all(sql, table_name, sizeof(table_name))) {
         return respond_select_all(table_name, out);
