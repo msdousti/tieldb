@@ -152,3 +152,16 @@ test_wire_buffer_oom = executable('test_wire_buffer_oom',
 )
 
 test('wire_buffer_oom', test_wire_buffer_oom)
+
+# Test: a real psql session against the tieldb binary. Skipped when psql is not installed.
+psql = find_program('psql', required: false)
+if psql.found()
+  test('psql_session', find_program('bash'),
+    args: [files('psql_session.sh'), tieldb_exe, psql, files('psql_session.expected')],
+    depends: tieldb_exe,
+    suite: 'client',
+    timeout: 60,
+  )
+else
+  warning('psql not found, the psql session test will be skipped')
+endif

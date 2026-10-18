@@ -14,5 +14,6 @@ if [ ! -d "$build_dir" ]; then
 fi
 ninja -C "$build_dir"
 
-meson test -C "$build_dir" --timeout-multiplier 10 \
+# The psql session test is left out: it would run psql itself under Valgrind
+meson test -C "$build_dir" --no-suite client --timeout-multiplier 10 \
     --wrapper "valgrind --error-exitcode=99 --leak-check=full --errors-for-leak-kinds=definite,indirect --trace-children=yes --quiet" "$@"

@@ -1,5 +1,5 @@
 name: Set up clang 22
-description: Installs clang 22 from apt.llvm.org with the build dependencies and any extra packages
+description: Installs clang 22 from apt.llvm.org with the build dependencies (including psql, for the client test) and any extra packages
 
 inputs:
   packages:
@@ -15,4 +15,4 @@ runs:
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
         echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-22 main" | sudo tee /etc/apt/sources.list.d/llvm.list
         sudo apt-get update
-        sudo apt-get install -y meson ninja-build clang-22 libcmocka-dev pkg-config ${{ inputs.packages }}
+        sudo apt-get install -y meson ninja-build clang-22 libcmocka-dev pkg-config postgresql-client ${{ inputs.packages }}
