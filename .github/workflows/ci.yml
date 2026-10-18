@@ -74,7 +74,7 @@ jobs:
       - name: Run clang-tidy
         run: |
           clang-tidy-22 --version
-          find src -name '*.c' -print0 | xargs -0 -n1 clang-tidy-22 -p build
+          find src tests -name '*.c' -print0 | xargs -0 -n1 clang-tidy-22 -p build
 
   build-asan:
     name: Build (ASan + UBSan)

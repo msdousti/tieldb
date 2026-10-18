@@ -14,15 +14,16 @@ if [ -z "$STAGED_FILES" ]; then
     exit 0
 fi
 
-# Check if clang-format is available
-if ! command -v clang-format &> /dev/null; then
+FORMAT=$(command -v clang-format-22 || command -v clang-format || true)
+TIDY=$(command -v clang-tidy-22 || command -v clang-tidy || true)
+
+if [ -z "$FORMAT" ]; then
     echo "⚠️  clang-format not found, skipping format check"
-    echo "   Install with: sudo apt install clang-format (Linux) or brew install clang-format (macOS)"
+    echo "   Install with: sudo apt install clang-format-22 (Linux) or brew install clang-format (macOS)"
 else
     echo "Checking code formatting..."
 
-    # Check formatting
-    FORMAT_ISSUES=$(echo "$STAGED_FILES" | xargs clang-format --dry-run --Werror 2>&1 || true)
+    FORMAT_ISSUES=$(echo "$STAGED_FILES" | xargs "$FORMAT" --dry-run --Werror 2>&1 || true)
 
     if [ -n "$FORMAT_ISSUES" ]; then
         echo "❌ Format check failed!"
@@ -31,7 +32,7 @@ else
         echo "$FORMAT_ISSUES"
         echo ""
         echo "Run this to fix:"
-        echo "  clang-format -i $STAGED_FILES"
+        echo "  $FORMAT -i $STAGED_FILES"
         echo ""
         exit 1
     fi
@@ -39,22 +40,17 @@ else
     echo "✅ Format check passed"
 fi
 
-# Check if clang-tidy is available (only in build environment)
-if [ -d "build-asan" ] && command -v clang-tidy &> /dev/null; then
-    echo "Running clang-tidy..."
+C_FILES=$(echo "$STAGED_FILES" | grep '\.c$' || true)
 
-    # Only check staged .c files
-    C_FILES=$(echo "$STAGED_FILES" | grep '\.c$' || true)
-
-    if [ -n "$C_FILES" ]; then
-        if ! clang-tidy -p build-asan $C_FILES 2>&1 | grep -q "warnings generated"; then
-            echo "⚠️  clang-tidy check completed (check output above for issues)"
-        fi
-    fi
-
-    echo "✅ clang-tidy passed"
-else
+if [ -z "$TIDY" ] || [ ! -d "build-asan" ]; then
     echo "⚠️  Skipping clang-tidy (build-asan not found or clang-tidy not installed)"
+elif [ -n "$C_FILES" ]; then
+    echo "Running clang-tidy..."
+    if ! "$TIDY" -p build-asan $C_FILES; then
+        echo "❌ clang-tidy failed"
+        exit 1
+    fi
+    echo "✅ clang-tidy passed"
 fi
 
 echo ""

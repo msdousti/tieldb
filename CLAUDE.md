@@ -285,7 +285,7 @@ rm -rf build-asan && meson setup build-asan -Db_sanitize=address,undefined
 clang-format -i src/**/*.{c,h} tests/**/*.{c,h}
 
 # Lint
-clang-tidy -p build-asan src/*.c
+clang-tidy -p build-asan src/*.c tests/*.c
 ```
 
 ### 6. Key Architecture Patterns
