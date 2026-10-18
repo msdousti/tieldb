@@ -43,16 +43,16 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
 **Goal:** Connect with `psql`, execute hardcoded queries in memory. No persistence yet.
 
 ### Tasks
-- [ ] Implement Postgres wire protocol
+- [x] Implement Postgres wire protocol
   - [x] Output buffer (big-endian writer)
   - [x] Input buffer (bounds-checked reader)
   - [x] Writer length patching and size cap (support for variable-length messages)
-  - [ ] Startup message (accept every connection, database selection; no authentication)
+  - [x] Startup message (accept every connection, database selection; no authentication)
     - [x] AuthenticationOk response
     - [x] ParameterStatus (`server_version`, `client_encoding`) so psql shows the server version
-    - [x] Startup packet decoding (version check; parameters ignored)
+    - [x] Startup packet decoding
     - [x] Decline `SSLRequest` with `N` (no TLS)
-    - [ ] Parse startup parameters (user, database)
+    - [x] Parse startup parameters (user, database), kept in the session; `SELECT current_user` and `SELECT current_database()` report them
   - [x] Simple query protocol (text queries)
     - [x] Decode the Query message and answer `SELECT version()` (hardcoded)
     - [x] Per-connection message loop (Query, Terminate)
@@ -104,7 +104,7 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
 ./build-asan/tieldb
 
 # In another terminal
-psql -h localhost -p 5433 -U test testdb
+psql -h localhost -U test testdb
 
 testdb=> CREATE TABLE user (id INTEGER, name TEXT);
 CREATE TABLE

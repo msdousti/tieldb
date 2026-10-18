@@ -23,8 +23,8 @@
 #include "net/server.h"
 
 static const uint8_t SESSION[] = {
-    0,   0, 0, 8, 0, 3, 0, 0, // StartupMessage
-    'X', 0, 0, 0, 4,          // Terminate
+    0,   0, 0, 9, 0, 3, 0, 0, 0, // StartupMessage
+    'X', 0, 0, 0, 4,             // Terminate
 };
 
 static server_t *create_server(void)

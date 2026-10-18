@@ -15,6 +15,8 @@
 #include "net/query_handler.h"
 #include "storage/catalog.h"
 
+static const session_info_t SESSION = {.user = "tester", .database = "testdb"};
+
 static wire_writer_t *create_writer(void)
 {
     wire_writer_t *writer = wire_writer_create();
@@ -40,8 +42,8 @@ static void put_expected_unsupported_response(wire_writer_t *w)
     assert_int_equal(
         protocol_put_error_response(
             w, "ERROR", "0A000",
-            "only SELECT version(), SELECT * FROM <table>, INSERT INTO <table> VALUES (...) and "
-            "CREATE TABLE are supported"),
+            "only SELECT version(), SELECT current_user, SELECT current_database(), SELECT * FROM "
+            "<table>, INSERT INTO <table> VALUES (...) and CREATE TABLE are supported"),
         0);
     assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
 }
@@ -100,7 +102,7 @@ static void assert_response(const char *sql, void (*put_expected)(wire_writer_t 
     wire_writer_t *expected = create_writer();
 
     put_expected(expected);
-    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, actual), 0);
+    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, actual, &SESSION), 0);
 
     assert_int_equal(wire_writer_size(actual), wire_writer_size(expected));
     assert_memory_equal(wire_writer_data(actual), wire_writer_data(expected),
@@ -208,6 +210,36 @@ static void test_a_query_without_a_statement_gets_an_empty_response([[maybe_unus
     assert_response(" ;; \n", put_expected_empty_response);
 }
 
+static void put_expected_single_value_response(wire_writer_t *w, const char *column,
+                                               const char *value)
+{
+    const protocol_column_t description = {column, PROTOCOL_TYPE_TEXT};
+    const protocol_value_t row = {value, strlen(value)};
+
+    assert_int_equal(protocol_put_row_description(w, &description, 1), 0);
+    assert_int_equal(protocol_put_data_row(w, &row, 1), 0);
+    assert_int_equal(protocol_put_command_complete(w, "SELECT 1"), 0);
+    assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
+}
+
+static void put_expected_current_user_response(wire_writer_t *w)
+{
+    put_expected_single_value_response(w, "current_user", "tester");
+}
+
+static void put_expected_current_database_response(wire_writer_t *w)
+{
+    put_expected_single_value_response(w, "current_database", "testdb");
+}
+
+static void test_current_user_and_database_come_from_the_session([[maybe_unused]] void **state)
+{
+    assert_response("select current_user", put_expected_current_user_response);
+    assert_response("SELECT CURRENT_USER;", put_expected_current_user_response);
+    assert_response("select current_database()", put_expected_current_database_response);
+    assert_response(" Select Current_Database() ; ", put_expected_current_database_response);
+}
+
 static void test_other_queries_get_an_error_and_stay_usable([[maybe_unused]] void **state)
 {
     assert_response("SELECT 1", put_expected_unsupported_response);
@@ -220,7 +252,7 @@ static void test_response_appends_after_existing_content([[maybe_unused]] void *
     const char *sql = "SELECT 1";
 
     assert_int_equal(protocol_put_authentication_ok(w), 0);
-    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w), 0);
+    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w, &SESSION), 0);
     assert_int_equal(wire_writer_data(w)[0], 'R');
     assert_int_equal(wire_writer_data(w)[9], 'E');
     wire_writer_destroy(w);
@@ -231,17 +263,23 @@ static void test_message_without_a_string_is_rejected([[maybe_unused]] void **st
     wire_writer_t *w = create_writer();
 
     errno = 0;
-    assert_int_equal(query_handle_message("", 0, w), -1);
+    assert_int_equal(query_handle_message("", 0, w, &SESSION), -1);
     assert_int_equal(errno, EBADMSG);
     assert_int_equal(wire_writer_size(w), 0);
     wire_writer_destroy(w);
 }
 
-static void test_null_writer_is_rejected([[maybe_unused]] void **state)
+static void test_null_arguments_are_rejected([[maybe_unused]] void **state)
 {
+    wire_writer_t *w = create_writer();
+
     errno = 0;
-    assert_int_equal(query_handle_message("SELECT 1", sizeof("SELECT 1"), nullptr), -1);
+    assert_int_equal(query_handle_message("SELECT 1", sizeof("SELECT 1"), nullptr, &SESSION), -1);
     assert_int_equal(errno, EINVAL);
+    errno = 0;
+    assert_int_equal(query_handle_message("SELECT 1", sizeof("SELECT 1"), w, nullptr), -1);
+    assert_int_equal(errno, EINVAL);
+    wire_writer_destroy(w);
 }
 
 static void put_expected_flipped_response(wire_writer_t *w)
@@ -288,10 +326,11 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_table_without_columns_can_be_created_and_selected),
     cmocka_unit_test(test_create_table_for_an_existing_table_is_an_error),
     cmocka_unit_test(test_a_query_without_a_statement_gets_an_empty_response),
+    cmocka_unit_test(test_current_user_and_database_come_from_the_session),
     cmocka_unit_test(test_other_queries_get_an_error_and_stay_usable),
     cmocka_unit_test(test_response_appends_after_existing_content),
     cmocka_unit_test(test_message_without_a_string_is_rejected),
-    cmocka_unit_test(test_null_writer_is_rejected),
+    cmocka_unit_test(test_null_arguments_are_rejected),
     cmocka_unit_test(test_inserted_row_shows_up_in_select_star),
 };
 

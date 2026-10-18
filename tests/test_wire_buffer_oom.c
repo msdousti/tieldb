@@ -59,6 +59,8 @@ void *oom_realloc(void *ptr, size_t size)
 }
 // NOLINTEND(misc-use-internal-linkage)
 
+static const session_info_t SESSION = {.user = "tester", .database = "testdb"};
+
 static wire_writer_t *create_writer_with_real_allocations(void)
 {
     will_return(oom_calloc, true);
@@ -324,14 +326,14 @@ static void test_data_row_rolls_back_finished_value_when_next_fails([[maybe_unus
 
 static void assert_startup_fails_leaving(wire_writer_t *w)
 {
-    const uint8_t packet[] = {0, 3, 0, 0};
-    startup_result_t result = STARTUP_CONTINUE;
+    const uint8_t packet[] = {0, 3, 0, 0, 0};
+    startup_outcome_t outcome = {.result = STARTUP_CONTINUE};
     size_t filled = wire_writer_size(w);
 
     will_return(oom_calloc, true);
     will_return(oom_realloc, false);
     errno = 0;
-    assert_int_equal(startup_handle_packet(packet, sizeof(packet), w, &result), -1);
+    assert_int_equal(startup_handle_packet(packet, sizeof(packet), w, &outcome), -1);
 
     assert_int_equal(errno, ENOMEM);
     assert_int_equal(wire_writer_size(w), filled);
@@ -340,13 +342,13 @@ static void assert_startup_fails_leaving(wire_writer_t *w)
 
 static void test_startup_leaves_writer_unchanged_when_reader_fails([[maybe_unused]] void **state)
 {
-    const uint8_t packet[] = {0, 3, 0, 0};
-    startup_result_t result = STARTUP_CONTINUE;
+    const uint8_t packet[] = {0, 3, 0, 0, 0};
+    startup_outcome_t outcome = {.result = STARTUP_CONTINUE};
     wire_writer_t *w = create_writer_with_real_allocations();
 
     will_return(oom_calloc, false);
     errno = 0;
-    assert_int_equal(startup_handle_packet(packet, sizeof(packet), w, &result), -1);
+    assert_int_equal(startup_handle_packet(packet, sizeof(packet), w, &outcome), -1);
 
     assert_int_equal(errno, ENOMEM);
     assert_int_equal(wire_writer_size(w), 0);
@@ -432,16 +434,16 @@ static void test_parameter_status_rolls_back_when_value_fails([[maybe_unused]] v
 static void test_startup_leaves_result_unset_when_decline_write_fails([[maybe_unused]] void **state)
 {
     const uint8_t packet[] = {0x04, 0xD2, 0x16, 0x2F};
-    startup_result_t result = STARTUP_DONE;
+    startup_outcome_t outcome = {.result = STARTUP_DONE};
     wire_writer_t *w = create_writer_filled_to(WRITER_CAPACITY);
 
     will_return(oom_calloc, true);
     will_return(oom_realloc, false);
     errno = 0;
-    assert_int_equal(startup_handle_packet(packet, sizeof(packet), w, &result), -1);
+    assert_int_equal(startup_handle_packet(packet, sizeof(packet), w, &outcome), -1);
 
     assert_int_equal(errno, ENOMEM);
-    assert_int_equal(result, STARTUP_DONE);
+    assert_int_equal(outcome.result, STARTUP_DONE);
     assert_int_equal(wire_writer_size(w), WRITER_CAPACITY);
     wire_writer_destroy(w);
 }
@@ -457,7 +459,7 @@ static void test_query_response_is_rolled_back_when_a_message_fails([[maybe_unus
     will_return(oom_calloc, true);
     will_return(oom_realloc, false);
     errno = 0;
-    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w), -1);
+    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w, &SESSION), -1);
 
     assert_int_equal(errno, ENOMEM);
     assert_int_equal(wire_writer_size(w), filled);
@@ -487,7 +489,7 @@ static void test_table_response_is_rolled_back_when_a_row_fails([[maybe_unused]]
     will_return(oom_calloc, true);
     will_return(oom_realloc, false);
     errno = 0;
-    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w), -1);
+    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w, &SESSION), -1);
 
     assert_int_equal(errno, ENOMEM);
     assert_int_equal(wire_writer_size(w), filled);
@@ -501,7 +503,7 @@ test_query_fails_cleanly_when_the_reader_cannot_be_created([[maybe_unused]] void
 
     will_return(oom_calloc, false);
     errno = 0;
-    assert_int_equal(query_handle_message("SELECT 1", sizeof("SELECT 1"), w), -1);
+    assert_int_equal(query_handle_message("SELECT 1", sizeof("SELECT 1"), w, &SESSION), -1);
 
     assert_int_equal(errno, ENOMEM);
     assert_int_equal(wire_writer_size(w), 0);
@@ -628,7 +630,7 @@ test_insert_fails_when_the_statement_text_cannot_be_copied([[maybe_unused]] void
     will_return(oom_calloc, true);
     will_return(oom_malloc, false);
     errno = 0;
-    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w), -1);
+    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w, &SESSION), -1);
 
     assert_int_equal(errno, ENOMEM);
     assert_int_equal(wire_writer_size(w), 0);
@@ -645,7 +647,7 @@ static void test_insert_fails_when_the_row_cannot_be_stored([[maybe_unused]] voi
     will_return(oom_malloc, true);
     will_return(oom_malloc, false);
     errno = 0;
-    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w), -1);
+    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w, &SESSION), -1);
 
     assert_int_equal(errno, ENOMEM);
     assert_int_equal(wire_writer_size(w), 0);
@@ -706,7 +708,7 @@ static void test_create_table_fails_when_memory_runs_out([[maybe_unused]] void *
     will_return(oom_malloc, true);
     will_return(oom_calloc, false);
     errno = 0;
-    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w), -1);
+    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w, &SESSION), -1);
 
     assert_int_equal(errno, ENOMEM);
     assert_int_equal(wire_writer_size(w), 0);

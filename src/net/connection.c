@@ -103,41 +103,42 @@ static int put_unsupported_message(wire_writer_t *out)
     return protocol_put_ready_for_query(out, TRANSACTION_IDLE);
 }
 
-static int answer_message(const frame_t *frame, wire_writer_t *out)
+static int answer_message(const frame_t *frame, const session_info_t *session, wire_writer_t *out)
 {
     if (frame->type == MESSAGE_QUERY) {
-        return query_handle_message(frame->body, frame->size, out);
+        return query_handle_message(frame->body, frame->size, out, session);
     }
     return put_unsupported_message(out);
 }
 
-static int exchange_startup(int fd, wire_writer_t *out, startup_result_t *result)
+static int exchange_startup(int fd, wire_writer_t *out, startup_outcome_t *outcome)
 {
     frame_t frame = {};
     int status = read_frame(fd, false, &frame);
     if (status == 0) {
-        status = startup_handle_packet(frame.body, frame.size, out, result);
+        status = startup_handle_packet(frame.body, frame.size, out, outcome);
     }
     free(frame.body);
     return status == 0 ? flush_replies(fd, out) : status;
 }
 
-static int run_startup(int fd, wire_writer_t *out, startup_result_t *result)
+static int run_startup(int fd, wire_writer_t *out, startup_outcome_t *outcome)
 {
     int status = 0;
     do {
-        status = exchange_startup(fd, out, result);
-    } while (status == 0 && *result == STARTUP_CONTINUE);
+        status = exchange_startup(fd, out, outcome);
+    } while (status == 0 && outcome->result == STARTUP_CONTINUE);
     return status;
 }
 
-static int exchange_message(int fd, wire_writer_t *out, bool *terminated)
+static int exchange_message(int fd, wire_writer_t *out, const session_info_t *session,
+                            bool *terminated)
 {
     frame_t frame = {};
     int status = read_frame(fd, true, &frame);
     *terminated = status == 0 && frame.type == MESSAGE_TERMINATE;
     if (status == 0 && !*terminated) {
-        status = answer_message(&frame, out);
+        status = answer_message(&frame, session, out);
     }
     free(frame.body);
     if (status == 0 && !*terminated) {
@@ -146,12 +147,12 @@ static int exchange_message(int fd, wire_writer_t *out, bool *terminated)
     return status;
 }
 
-static int run_messages(int fd, wire_writer_t *out)
+static int run_messages(int fd, wire_writer_t *out, const session_info_t *session)
 {
     bool terminated = false;
     int status = 0;
     while (status == 0 && !terminated) {
-        status = exchange_message(fd, out, &terminated);
+        status = exchange_message(fd, out, session, &terminated);
     }
     return status;
 }
@@ -162,10 +163,10 @@ int connection_serve(int fd)
     if (out == nullptr) {
         return -1;
     }
-    startup_result_t result = STARTUP_CONTINUE;
-    int status = run_startup(fd, out, &result);
-    if (status == 0 && result == STARTUP_DONE) {
-        status = run_messages(fd, out);
+    startup_outcome_t outcome = {.result = STARTUP_CONTINUE};
+    int status = run_startup(fd, out, &outcome);
+    if (status == 0 && outcome.result == STARTUP_DONE) {
+        status = run_messages(fd, out, &outcome.session);
     }
     wire_writer_destroy(out);
     return status;
