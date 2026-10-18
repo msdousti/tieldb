@@ -204,11 +204,11 @@ git push
 
 ```bash
 # Initial setup (already done)
-meson setup build-asan -Db_sanitize=address,undefined -Dc_std=c2x
+meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined -Dc_std=c2x
 
 # Clean rebuild
 rm -rf build-asan
-meson setup build-asan -Db_sanitize=address,undefined -Dc_std=c2x
+meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined -Dc_std=c2x
 
 # Build
 ninja -C build-asan
@@ -479,7 +479,7 @@ SELECT * FROM users;
 ```bash
 # Clean rebuild
 rm -rf build-asan
-meson setup build-asan -Db_sanitize=address,undefined -Dc_std=c2x
+meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined -Dc_std=c2x
 ninja -C build-asan
 
 # Check Meson version (should be recent)

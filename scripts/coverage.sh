@@ -4,11 +4,13 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-# Unoptimized: inlining and _FORTIFY_SOURCE add compiler-generated branches that no test can reach
+# Unoptimized: inlining and _FORTIFY_SOURCE add compiler-generated branches that no test can reach.
+# Atomic counters: threads running the same code would otherwise corrupt the coverage counts
+options=(-Db_coverage=true -Dbuildtype=debug -Dc_args=-fprofile-update=atomic)
 if [ ! -d build-cov ]; then
-    meson setup build-cov -Db_coverage=true -Dbuildtype=debug
+    meson setup build-cov --native-file clang.ini "${options[@]}"
 else
-    meson configure build-cov -Db_coverage=true -Dbuildtype=debug
+    meson configure build-cov "${options[@]}"
 fi
 
 find build-cov -name '*.gcda' -delete
