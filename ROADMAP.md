@@ -79,7 +79,7 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
   - [x] Listen on port (default 5432, like Postgres)
     - [x] Listener on the loopback interface (`server_create`)
     - [x] `tieldb` binary with `--port` and `--once`
-  - [x] Accept connections (one at a time)
+  - [x] Accept connections
   - [x] Per-connection thread (or event loop)
 
 ### Tests
