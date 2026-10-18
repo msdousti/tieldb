@@ -13,6 +13,9 @@
 /** Longest identifier plus its terminator, as in Postgres (63 characters). */
 constexpr size_t SQL_IDENTIFIER_CAPACITY = 64;
 
+/** Matches text with no statement in it: nothing, or only whitespace and semicolons. */
+[[nodiscard]] bool sql_is_empty(const char *sql);
+
 /** Matches "SELECT version()". */
 [[nodiscard]] bool sql_is_version_query(const char *sql);
 

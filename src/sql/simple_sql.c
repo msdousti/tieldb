@@ -83,6 +83,15 @@ static bool consume_identifier(const char **cursor, char *out, size_t capacity)
     return true;
 }
 
+bool sql_is_empty(const char *sql)
+{
+    const char *cursor = sql;
+    while (isspace((unsigned char) *cursor) || *cursor == SEMICOLON) {
+        cursor++;
+    }
+    return *cursor == '\0';
+}
+
 bool sql_is_version_query(const char *sql)
 {
     const char *cursor = skip_spaces(sql);

@@ -59,6 +59,12 @@ int protocol_put_parameter_status(wire_writer_t *writer, const char *name, const
     return end_message(writer, start);
 }
 
+int protocol_put_empty_query_response(wire_writer_t *writer)
+{
+    static const uint8_t message[] = {'I', 0, 0, 0, 4};
+    return wire_writer_put_bytes(writer, message, sizeof(message));
+}
+
 int protocol_put_ready_for_query(wire_writer_t *writer, transaction_status_t status)
 {
     if (status != TRANSACTION_IDLE && status != TRANSACTION_IN_BLOCK &&
