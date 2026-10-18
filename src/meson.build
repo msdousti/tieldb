@@ -20,6 +20,11 @@ sql_sources = files(
   'sql/simple_sql.c',
 )
 
+# Storage module
+storage_sources = files(
+  'storage/table.c',
+)
+
 # Command-line options
 cli_sources = files(
   'options.c',
@@ -32,6 +37,7 @@ tieldb_lib = static_library('tieldb',
   io_sources,
   net_sources,
   sql_sources,
+  storage_sources,
   cli_sources,
   include_directories: inc,
   install: false,

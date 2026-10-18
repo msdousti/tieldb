@@ -75,6 +75,8 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
   - [ ] `CREATE TABLE` → add to catalog
   - [ ] `INSERT` → append to tuple array
   - [ ] `SELECT *` → iterate and return all rows
+    - [x] Against a hardcoded `user` table (so results show in psql before INSERT and CREATE TABLE exist)
+    - [ ] Against catalog tables
 - [x] Network server
   - [x] Listen on port (default 5432, like Postgres)
     - [x] Listener on the loopback interface (`server_create`)
@@ -103,11 +105,11 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
 # In another terminal
 psql -h localhost -p 5433 -U test testdb
 
-testdb=> CREATE TABLE users (id INTEGER, name TEXT);
+testdb=> CREATE TABLE user (id INTEGER, name TEXT);
 CREATE TABLE
-testdb=> INSERT INTO users VALUES (1, 'Alice');
+testdb=> INSERT INTO user VALUES (1, 'Alice');
 INSERT 0 1
-testdb=> SELECT * FROM users;
+testdb=> SELECT * FROM user;
  id | name
 ----+-------
   1 | Alice
@@ -168,13 +170,13 @@ testdb=> SELECT * FROM users;
 ### Completion Criteria
 ```bash
 # Insert data
-psql -h localhost -p 5433 -c "INSERT INTO users VALUES (2, 'Bob');"
+psql -h localhost -p 5433 -c "INSERT INTO user VALUES (2, 'Bob');"
 
 # Restart server (Ctrl-C, then restart)
 ./build-asan/tieldb
 
 # Data still there
-psql -h localhost -p 5433 -c "SELECT * FROM users;"
+psql -h localhost -p 5433 -c "SELECT * FROM user;"
  id | name
 ----+------
   1 | Alice
@@ -200,8 +202,8 @@ psql -h localhost -p 5433 -c "SELECT * FROM users;"
   - [ ] Filter tuples during scan
   - [ ] Conjunctive normal form (CNF) for optimizations later
 - [ ] Projection
-  - [ ] Select specific columns: `SELECT id, name FROM users`
-  - [ ] Computed columns: `SELECT id * 2 AS double_id FROM users`
+  - [ ] Select specific columns: `SELECT id, name FROM user`
+  - [ ] Computed columns: `SELECT id * 2 AS double_id FROM user`
 - [ ] ORDER BY (external sort)
   - [ ] In-memory sort for small tables
   - [ ] External merge sort for large tables (spill to disk)
@@ -236,7 +238,7 @@ psql -h localhost -p 5433 -c "SELECT * FROM users;"
 ```sql
 -- Complex query works
 SELECT u.name, o.amount
-FROM users u JOIN orders o ON u.id = o.user_id
+FROM user u JOIN orders o ON u.id = o.user_id
 WHERE o.amount > 100
 ORDER BY o.amount DESC
 LIMIT 10;
@@ -293,13 +295,13 @@ HAVING COUNT(*) > 5;
 ### Completion Criteria
 ```sql
 -- Create index
-CREATE INDEX idx_users_id ON users(id);
+CREATE INDEX idx_user_id ON user(id);
 
 -- Query uses index (verify with EXPLAIN later)
-SELECT * FROM users WHERE id = 42;
+SELECT * FROM user WHERE id = 42;
 
 -- Range scan works
-SELECT * FROM users WHERE id >= 10 AND id < 100;
+SELECT * FROM user WHERE id >= 10 AND id < 100;
 ```
 
 **Estimated Time:** 2-3 weeks
@@ -353,7 +355,7 @@ SELECT * FROM users WHERE id >= 10 AND id < 100;
 ### Completion Criteria
 ```bash
 # Insert data
-psql -c "BEGIN; INSERT INTO users VALUES (100, 'Test'); COMMIT;"
+psql -c "BEGIN; INSERT INTO user VALUES (100, 'Test'); COMMIT;"
 
 # Kill server hard (kill -9)
 kill -9 $(pgrep tieldb)
@@ -362,7 +364,7 @@ kill -9 $(pgrep tieldb)
 ./build-asan/tieldb
 
 # Data is there
-psql -c "SELECT * FROM users WHERE id = 100;"
+psql -c "SELECT * FROM user WHERE id = 100;"
  id | name
 -----+------
  100 | Test
@@ -417,12 +419,12 @@ psql -c "SELECT * FROM users WHERE id = 100;"
 ```sql
 -- Transaction 1
 BEGIN;
-UPDATE users SET name = 'Alice2' WHERE id = 1;
+UPDATE user SET name = 'Alice2' WHERE id = 1;
 -- (pause)
 
 -- Transaction 2 (blocks until T1 commits/aborts)
 BEGIN;
-UPDATE users SET name = 'Alice3' WHERE id = 1;  -- waits
+UPDATE user SET name = 'Alice3' WHERE id = 1;  -- waits
 -- T1 commits
 COMMIT;  -- now T2 proceeds
 COMMIT;
@@ -479,18 +481,18 @@ COMMIT;
 ### Completion Criteria
 ```sql
 -- Collect stats
-ANALYZE users;
+ANALYZE user;
 
 -- Show plan
-EXPLAIN SELECT * FROM users WHERE id = 42;
+EXPLAIN SELECT * FROM user WHERE id = 42;
 
 QUERY PLAN
 -------------------------------------------------------------
-Index Scan using idx_users_id on users  (cost=0.00..8.27 rows=1)
+Index Scan using idx_user_id on user  (cost=0.00..8.27 rows=1)
   Index Cond: (id = 42)
 
 -- Complex join plan
-EXPLAIN SELECT * FROM users u JOIN orders o ON u.id = o.user_id;
+EXPLAIN SELECT * FROM user u JOIN orders o ON u.id = o.user_id;
 
 QUERY PLAN
 -------------------------------------------------------------
@@ -498,7 +500,7 @@ Hash Join  (cost=24.50..89.75 rows=1000)
   Hash Cond: (o.user_id = u.id)
   -> Seq Scan on orders o  (cost=0.00..20.00 rows=1000)
   -> Hash  (cost=15.00..15.00 rows=500)
-        -> Seq Scan on users u  (cost=0.00..15.00 rows=500)
+        -> Seq Scan on user u  (cost=0.00..15.00 rows=500)
 ```
 
 **Estimated Time:** 2-3 weeks

@@ -462,6 +462,24 @@ static void test_query_response_is_rolled_back_when_a_message_fails([[maybe_unus
     wire_writer_destroy(w);
 }
 
+static void test_table_response_is_rolled_back_when_a_row_fails([[maybe_unused]] void **state)
+{
+    const char *sql = "SELECT * FROM user";
+    size_t row_description_size = MESSAGE_HEADER_SIZE + FIELD_COUNT_SIZE + cstring_size("id") +
+                                  cstring_size("name") + (2 * COLUMN_FIXED_SIZE);
+    size_t filled = fill_to_overflow_at(row_description_size + MESSAGE_HEADER_SIZE);
+    wire_writer_t *w = create_writer_filled_to(filled);
+
+    will_return(oom_calloc, true);
+    will_return(oom_realloc, false);
+    errno = 0;
+    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w), -1);
+
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(wire_writer_size(w), filled);
+    wire_writer_destroy(w);
+}
+
 static void
 test_query_fails_cleanly_when_the_reader_cannot_be_created([[maybe_unused]] void **state)
 {
@@ -566,6 +584,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_parameter_status_rolls_back_when_value_fails),
     cmocka_unit_test(test_startup_leaves_result_unset_when_decline_write_fails),
     cmocka_unit_test(test_query_response_is_rolled_back_when_a_message_fails),
+    cmocka_unit_test(test_table_response_is_rolled_back_when_a_row_fails),
     cmocka_unit_test(test_query_fails_cleanly_when_the_reader_cannot_be_created),
     cmocka_unit_test(test_connection_fails_when_the_writer_cannot_be_created),
     cmocka_unit_test(test_connection_fails_when_a_packet_cannot_be_buffered),
