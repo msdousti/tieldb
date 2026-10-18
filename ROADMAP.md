@@ -4,33 +4,37 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
 
 ---
 
-## Phase 0: Project Setup
+## Phase 0: Project Setup ✅
 
 **Goal:** Scaffold the project, toolchain, and development environment.
 
 ### Tasks
 - [x] Define coding guidelines (C, clean code, style)
 - [x] Define design choices (storage, concurrency, WAL, etc.)
-- [ ] Set up development environment (OrbStack Linux VM on macOS)
-- [ ] Initialize Meson build system
-- [ ] Configure sanitizers (build-asan, build-tsan, build-release)
-- [ ] Set up cmocka test framework
-- [ ] Create initial directory structure
-- [ ] Write injectable I/O interface (for fault injection)
-- [ ] First "hello world" test
+- [x] Set up development environment (OrbStack Linux VM on macOS)
+- [x] Initialize Meson build system
+- [x] Configure sanitizers (build-asan, build-tsan, build-release)
+- [x] Set up cmocka test framework
+- [x] Create initial directory structure
+- [x] Write injectable I/O interface (for fault injection)
+- [x] First "hello world" test
 
 ### Deliverables
-- `meson.build`, `.clang-format`, `.clang-tidy`
-- `src/io/io.{h,c}` - Injectable I/O interface
-- `tests/test_io.c` - First test
-- `docs/dev-setup.md` - Development environment setup guide
+- ✅ `meson.build`, `.clang-format`, `.clang-tidy`
+- ✅ `src/io/io.{h,c}` - Injectable I/O interface
+- ✅ `tests/test_io.c` - First test (5 tests passing)
+- ✅ `CLAUDE.md` - Development guide (replaces docs/dev-setup.md)
+- ✅ `.github/workflows/ci.yml` - CI/CD pipeline
+- ✅ `scripts/pre-commit` - Git pre-commit hooks
 
 ### Completion Criteria
-- `meson test -C build-asan` passes
-- `clang-format` and `clang-tidy` run clean
-- Can build and run tests in Linux VM
+- ✅ `meson test -C build-asan` passes (1/1 tests, 5 assertions)
+- ✅ `clang-format` and `clang-tidy` run clean
+- ✅ Can build and run tests in Linux VM (OrbStack)
+- ✅ CI pipeline passing on GitHub Actions
 
-**Estimated Time:** 2-3 days
+**Estimated Time:** 2-3 days  
+**Actual Time:** ~1 day
 
 ---
 
