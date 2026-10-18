@@ -65,6 +65,7 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
 - [ ] Parse simple SQL (CREATE TABLE, INSERT, SELECT *)
   - [ ] Use existing parser (e.g., `libpg_query` or hand-write for just these 3)
   - [ ] AST representation
+  - [x] Stopgap hand-written matchers for `SELECT version()`, `SELECT * FROM <table>` and `INSERT INTO <table> VALUES (...)`, until a real parser replaces them
 - [ ] In-memory catalog
   - [ ] Table metadata (columns, types)
   - [ ] Hash map: table name → table definition
