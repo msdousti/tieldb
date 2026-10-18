@@ -63,10 +63,8 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
     - [x] DataRow
     - [x] EmptyQueryResponse, for a query string with no statement (`;`)
   - [x] Error handling (ErrorResponse)
-- [ ] Parse simple SQL (CREATE TABLE, INSERT, SELECT *)
-  - [ ] Use existing parser (e.g., `libpg_query` or hand-write for just these 3)
-  - [ ] AST representation
-  - [x] Stopgap hand-written matchers for `SELECT version()`, `SELECT * FROM <table>`, `INSERT INTO <table> VALUES (...)` and `CREATE TABLE <table> (<column> <type>, ...)`, until a real parser replaces them
+- [x] Parse simple SQL (CREATE TABLE, INSERT, SELECT *)
+  - [x] Stopgap hand-written matchers for `SELECT version()`, `SELECT * FROM <table>`, `INSERT INTO <table> VALUES (...)` and `CREATE TABLE <table> (<column> <type>, ...)`, until the real parser replaces them (see Phase 3: SQL parser and syntax tree)
 - [ ] In-memory catalog
   - [x] Table metadata (columns, types)
   - [x] Column display order, separate from the storage order (starts as the definition order; no SQL to change it yet)
@@ -88,10 +86,10 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
   - [x] Per-connection thread (or event loop)
 
 ### Tests
-- [ ] Unit tests for wire protocol parsing
-- [ ] Unit tests for SQL parsing (CREATE, INSERT, SELECT)
+- [x] Unit tests for wire protocol parsing
+- [x] Unit tests for SQL parsing (CREATE, INSERT, SELECT)
 - [x] Integration test: connect with `psql`, run queries
-- [ ] Fuzz test for wire protocol messages
+- Fuzz test for wire protocol messages: dropped, since TielDB trusts well-behaved clients and does not defend against malformed messages. The SQL parser is fuzzed in Phase 3
 
 ### Deliverables
 - `src/net/protocol.{h,c}` - Postgres wire protocol
@@ -202,6 +200,13 @@ psql -h localhost -p 5433 -c "SELECT * FROM user;"
 **Goal:** Move from `SELECT *` to real SQL query execution.
 
 ### Tasks
+- [ ] SQL parser and syntax tree (first, because expressions and WHERE need a tree)
+  - [ ] Tokenizer: keywords, quoted identifiers, numbers, strings, comments (`--`, `/* */`)
+  - [ ] Recursive-descent parser building an AST; replaces the stopgap matchers in `sql/simple_sql`
+  - [ ] Several statements in one query string (`select 1; select 2`)
+  - [ ] Syntax errors with SQLSTATE `42601` and an error position, as in Postgres
+  - [ ] Quick wins once it exists: `INSERT INTO t (a, b) VALUES ...` with a column list, multi-row `VALUES (1, 'a'), (2, 'b')`, `CREATE TABLE IF NOT EXISTS`, `DROP TABLE [IF EXISTS]`
+  - [ ] Fuzz test for the parser (random text must never crash it)
 - [ ] Expression evaluation
   - [ ] Arithmetic (`+`, `-`, `*`, `/`, `%`)
   - [ ] Comparison (`=`, `!=`, `<`, `>`, `<=`, `>=`)
@@ -213,6 +218,11 @@ psql -h localhost -p 5433 -c "SELECT * FROM user;"
 - [ ] Projection
   - [ ] Select specific columns: `SELECT id, name FROM user`
   - [ ] Computed columns: `SELECT id * 2 AS double_id FROM user`
+- [ ] Changing data (after WHERE; with MVCC in Phase 6 these mark row versions instead of removing them)
+  - [ ] `DELETE FROM t [WHERE ...]`
+  - [ ] `UPDATE t SET col = expr [, ...] [WHERE ...]`
+  - [ ] `TRUNCATE t`
+  - [ ] `INSERT INTO t SELECT ...` (after projection)
 - [ ] ORDER BY (external sort)
   - [ ] In-memory sort for small tables
   - [ ] External merge sort for large tables (spill to disk)
@@ -232,6 +242,9 @@ psql -h localhost -p 5433 -c "SELECT * FROM user;"
 - [ ] Adding columns: `ALTER TABLE <t> ADD COLUMN <column> <type> [AFTER <other column> | FIRST]` (MariaDB syntax)
   - [ ] Add the column at the end of the stored row, and give it the requested display position, so existing rows are not rewritten
   - [ ] Existing rows need a value for the new column: needs NULL or `DEFAULT` support first
+- [ ] `generate_series(start, stop [, step])` as a function in FROM, for test and benchmark data
+  - [ ] `SELECT * FROM generate_series(1, 100000)` as a function-scan operator, no table needed
+  - [ ] Then fill tables with `INSERT INTO t SELECT ... FROM generate_series(...)`; large inputs for ORDER BY, aggregate, join and (Phase 2) buffer pool tests
 - [ ] Volcano iterator model
   - [ ] SeqScan, Filter, Project, Sort, Limit, HashAgg, NestedLoopJoin, HashJoin operators
   - [ ] `open()`, `next()`, `close()` interface
@@ -411,6 +424,7 @@ psql -c "SELECT * FROM user WHERE id = 100;"
   - [ ] No dirty reads
 - [ ] (Later) MVCC (Multi-Version Concurrency Control)
   - [ ] xmin/xmax in tuple headers (PostgreSQL-style)
+  - [ ] DELETE and UPDATE mark row versions dead and write new ones; vacuum removes the dead versions
   - [ ] Snapshot isolation
   - [ ] Visibility rules (tuple visible to transaction?)
   - [ ] No read locks (higher concurrency)
