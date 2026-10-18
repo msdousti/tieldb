@@ -128,12 +128,15 @@ static int run_steps(wire_writer_t *out, const response_step_t *steps, size_t co
 
 static int respond_select_all(const char *table_name, wire_writer_t *out)
 {
-    const table_t *table = table_find(table_name);
+    table_t *table = table_find(table_name);
     if (table == nullptr) {
         return run_steps(out, MISSING_TABLE_RESPONSE, STEP_COUNT(MISSING_TABLE_RESPONSE),
                          table_name);
     }
-    return run_steps(out, TABLE_RESPONSE, STEP_COUNT(TABLE_RESPONSE), table);
+    table_lock(table);
+    int result = run_steps(out, TABLE_RESPONSE, STEP_COUNT(TABLE_RESPONSE), table);
+    table_unlock(table);
+    return result;
 }
 
 static int respond(const char *sql, wire_writer_t *out)
