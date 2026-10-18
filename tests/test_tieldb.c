@@ -32,7 +32,7 @@ static const char *tieldb_path;
 
 static const uint8_t SESSION[] = {
     0,   0,   0,   8,   0x04, 0xD2, 0x16, 0x2F,                                 // SSLRequest
-    0,   0,   0,   8,   0,    3,    0,    0,                                    // StartupMessage
+    0,   0,   0,   9,   0,    3,    0,    0,    0,                              // StartupMessage
     'Q', 0,   0,   0,   22,   's',  'e',  'l',  'e', 'c', 't', ' ',             // Query
     'v', 'e', 'r', 's', 'i',  'o',  'n',  '(',  ')', ';', 0,   'X', 0, 0, 0, 4, // Terminate
 };

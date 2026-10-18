@@ -15,12 +15,14 @@
 
 static constexpr char SERVER_VERSION[] = "TielDB 0.1.0";
 static constexpr char VERSION_COLUMN[] = "version";
+static constexpr char CURRENT_USER_COLUMN[] = "current_user";
+static constexpr char CURRENT_DATABASE_COLUMN[] = "current_database";
 static constexpr char SELECT_ONE_TAG[] = "SELECT 1";
 static constexpr char ERROR_SEVERITY[] = "ERROR";
 static constexpr char UNSUPPORTED_SQLSTATE[] = "0A000";
 static constexpr char UNSUPPORTED_MESSAGE[] =
-    "only SELECT version(), SELECT * FROM <table>, INSERT INTO <table> VALUES (...) and CREATE "
-    "TABLE are supported";
+    "only SELECT version(), SELECT current_user, SELECT current_database(), SELECT * FROM "
+    "<table>, INSERT INTO <table> VALUES (...) and CREATE TABLE are supported";
 static constexpr char INSERT_TAG[] = "INSERT 0 1";
 static constexpr char CREATE_TABLE_TAG[] = "CREATE TABLE";
 static constexpr char SELECT_TAG_FORMAT[] = "SELECT %zu";
@@ -216,7 +218,23 @@ static int respond_single_value(wire_writer_t *out, const char *column, const ch
     return run_steps(out, SINGLE_VALUE_RESPONSE, STEP_COUNT(SINGLE_VALUE_RESPONSE), &single);
 }
 
-static int respond(const char *sql, wire_writer_t *out)
+// Returns whether sql is one of the single-value queries; if so, *result is the outcome
+static bool respond_if_single_value(const char *sql, const session_info_t *session,
+                                    wire_writer_t *out, int *result)
+{
+    if (sql_is_version_query(sql)) {
+        *result = respond_single_value(out, VERSION_COLUMN, SERVER_VERSION);
+    } else if (sql_is_current_user_query(sql)) {
+        *result = respond_single_value(out, CURRENT_USER_COLUMN, session->user);
+    } else if (sql_is_current_database_query(sql)) {
+        *result = respond_single_value(out, CURRENT_DATABASE_COLUMN, session->database);
+    } else {
+        return false;
+    }
+    return true;
+}
+
+static int respond(const char *sql, const session_info_t *session, wire_writer_t *out)
 {
     int result = 0;
     sql_create_table_t create;
@@ -224,8 +242,8 @@ static int respond(const char *sql, wire_writer_t *out)
     if (sql_is_empty(sql)) {
         return run_steps(out, EMPTY_RESPONSE, STEP_COUNT(EMPTY_RESPONSE), nullptr);
     }
-    if (sql_is_version_query(sql)) {
-        return respond_single_value(out, VERSION_COLUMN, SERVER_VERSION);
+    if (respond_if_single_value(sql, session, out, &result)) {
+        return result;
     }
     if (sql_parse_select_all(sql, table_name, sizeof(table_name))) {
         return respond_select_all(table_name, out);
@@ -250,10 +268,11 @@ static int read_sql(const void *body, size_t size, const char **sql)
     return status;
 }
 
-int query_handle_message(const void *body, size_t size, wire_writer_t *out)
+int query_handle_message(const void *body, size_t size, wire_writer_t *out,
+                         const session_info_t *session)
 {
     const char *sql = nullptr;
-    if (out == nullptr) {
+    if (out == nullptr || session == nullptr) {
         errno = EINVAL;
         return -1;
     }
@@ -261,7 +280,7 @@ int query_handle_message(const void *body, size_t size, wire_writer_t *out)
         return -1;
     }
     size_t start = wire_writer_size(out);
-    int status = respond(sql, out);
+    int status = respond(sql, session, out);
     if (status != 0) {
         wire_writer_truncate(out, start);
     }

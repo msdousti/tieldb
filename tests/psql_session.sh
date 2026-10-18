@@ -34,7 +34,7 @@ start_server() {
 
 run_session() {
     start_server
-    "$psql" -X -h 127.0.0.1 -p "$port" >"$work/actual" 2>&1 <<'SQL'
+    "$psql" -X -h 127.0.0.1 -p "$port" -U tester testdb >"$work/actual" 2>&1 <<'SQL'
 create table pet (id integer, name text);
 insert into pet values (1, 'Rex');
 insert into pet values (2, 'O''Neil');
@@ -43,6 +43,8 @@ insert into pet values ('x', 'y');
 select * from nope;
 ;
 select version();
+select current_user;
+select current_database();
 SQL
     wait "$server_pid" || true
     server_pid=""

@@ -16,19 +16,23 @@
  * version mismatch when it does not get server_version.
  *
  * After an 'N' the client may send another packet on the same connection, typically the
- * StartupMessage. A StartupMessage also carries parameters such as the user and database name;
- * TielDB has no authentication or databases yet, so it accepts every connection and ignores them.
+ * StartupMessage. A StartupMessage also carries parameters as pairs of NUL-terminated strings,
+ * ending with an empty name. The "user" and "database" ones go into the outcome's session (the
+ * database defaults to the user name, as in Postgres); the others are ignored. TielDB has no
+ * authentication, so it accepts every connection.
  *
  * The client is assumed to be psql or a well-behaved driver, so nothing here defends against
  * malformed packets: sizes and protocol versions are not validated.
  *
  * Errors return -1 and set errno: EINVAL for a null argument, EBADMSG for a packet too short to
- * hold a code. On failure the output writer and *result are left unchanged.
+ * hold a code or a StartupMessage whose parameters are cut short. On failure the output writer
+ * and *outcome are left unchanged.
  */
 
 #pragma once
 
 #include "net/protocol.h"
+#include "net/session.h"
 
 /** What the connection should do next. */
 typedef enum {
@@ -38,8 +42,17 @@ typedef enum {
 } startup_result_t;
 
 /**
+ * What a startup packet led to: how to continue, and, once the connection is established
+ * (STARTUP_DONE), who the client is.
+ */
+typedef struct {
+    startup_result_t result;
+    session_info_t session;
+} startup_outcome_t;
+
+/**
  * Handles one startup packet (the bytes after the length field) and appends the reply, if any,
- * to out. *result tells the caller how to continue.
+ * to out. outcome->result tells the caller how to continue.
  */
 [[nodiscard]] int startup_handle_packet(const void *packet, size_t size, wire_writer_t *out,
-                                        startup_result_t *result);
+                                        startup_outcome_t *outcome);

@@ -23,7 +23,7 @@
 static constexpr size_t TRANSCRIPT_CAPACITY = 1024;
 
 static const uint8_t SSL_REQUEST[] = {0, 0, 0, 8, 0x04, 0xD2, 0x16, 0x2F};
-static const uint8_t STARTUP_MESSAGE[] = {0, 0, 0, 8, 0, 3, 0, 0};
+static const uint8_t STARTUP_MESSAGE[] = {0, 0, 0, 9, 0, 3, 0, 0, 0};
 static const uint8_t CANCEL_REQUEST[] = {0, 0, 0, 16, 0x04, 0xD2, 0x16, 0x2E,
                                          0, 0, 0, 7,  0,    0,    0,    9};
 static const uint8_t VERSION_QUERY[] = {'Q', 0,   0,   0,   22,  's', 'e', 'l', 'e', 'c', 't', ' ',

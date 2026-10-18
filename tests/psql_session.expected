@@ -14,3 +14,13 @@ ERROR:  relation "nope" does not exist
  TielDB 0.1.0
 (1 row)
 
+ current_user 
+--------------
+ tester
+(1 row)
+
+ current_database 
+------------------
+ testdb
+(1 row)
+
