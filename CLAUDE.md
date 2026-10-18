@@ -410,6 +410,20 @@ Before submitting/committing code:
    git commit -m "Add module: brief description"
    ```
 
+### 9. Development Model: Small Incremental PRs
+
+Work proceeds as a sequence of small, reviewable pull requests, each leaving `main` working.
+
+- **Target size:** feature PRs stay under 100-200 changed lines
+- **Hard limit:** 500 changed lines for feature PRs; never exceed it without asking the user first
+- **Exceptions:** ask the user for approval before opening a feature PR over the limit
+- **Scope:** docs, CI, formatting, and other non-feature PRs are exempt from the limit
+- **Splitting:** break roadmap items into the smallest slices that build, pass tests, and stand alone
+  (e.g. header + tests, then implementation, then wiring)
+- **Each PR includes** its own tests, and passes format, lint, and sanitizer checks
+- **One concern per PR:** no unrelated refactors mixed into a feature PR
+- **Measure before opening:** check `git diff --stat main` and split if the size is over target
+
 ---
 
 ## Current Development Focus
@@ -463,6 +477,7 @@ Tasks:
 8. **Memory:** Use arenas, check all allocations, assert zero leaks
 9. **Errors:** Check every return value, log context, fail fast
 10. **Read Postgres code** when stuck on a component
+11. **Small PRs:** feature PRs under 100-200 lines, 500 hard limit; ask the user for exceptions
 
 **Code I write must:**
 - Pass `clang-format` (auto-formatted)
