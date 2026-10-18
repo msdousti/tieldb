@@ -20,6 +20,8 @@ cli_sources = files(
   'options.c',
 )
 
+thread_dep = dependency('threads')
+
 # Build static library
 tieldb_lib = static_library('tieldb',
   io_sources,
@@ -32,6 +34,7 @@ tieldb_lib = static_library('tieldb',
 # Dependency for tests
 tieldb_dep = declare_dependency(
   link_with: tieldb_lib,
+  dependencies: thread_dep,
   include_directories: inc,
 )
 
@@ -39,5 +42,6 @@ tieldb_dep = declare_dependency(
 tieldb_exe = executable('tieldb',
   'main.c',
   link_with: tieldb_lib,
+  dependencies: thread_dep,
   include_directories: inc,
 )

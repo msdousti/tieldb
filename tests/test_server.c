@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include <pthread.h>
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -156,11 +157,66 @@ static void test_serve_fails_when_a_connection_cannot_be_accepted([[maybe_unused
     server_destroy(server);
 }
 
+typedef struct {
+    server_t *server;
+    int status;
+} serving_t;
+
+static void *serve_two_connections(void *argument)
+{
+    serving_t *serving = argument;
+    serving->status = server_serve(serving->server, 2);
+    return nullptr;
+}
+
+static void test_a_stuck_client_does_not_block_others([[maybe_unused]] void **state)
+{
+    server_t *server = create_server();
+    pthread_t thread;
+    serving_t serving = {.server = server, .status = -1};
+    int stuck = connect_client(server);
+    int active = connect_client(server);
+
+    assert_int_equal(pthread_create(&thread, nullptr, serve_two_connections, &serving), 0);
+    send_session(active);
+    assert_server_said_authentication_ok(active);
+    send_session(stuck);
+    assert_server_said_authentication_ok(stuck);
+
+    assert_int_equal(pthread_join(thread, nullptr), 0);
+    assert_int_equal(serving.status, 0);
+    close(stuck);
+    close(active);
+    server_destroy(server);
+}
+
+static void test_serve_fails_when_a_thread_cannot_be_started([[maybe_unused]] void **state)
+{
+    server_t *server = create_server();
+    int client = connect_client(server);
+    struct rlimit saved;
+    assert_int_equal(getrlimit(RLIMIT_NPROC, &saved), 0);
+    struct rlimit none = {.rlim_cur = 0, .rlim_max = saved.rlim_max};
+    assert_int_equal(setrlimit(RLIMIT_NPROC, &none), 0);
+
+    errno = 0;
+    int status = server_serve(server, 1);
+    int error = errno;
+
+    assert_int_equal(setrlimit(RLIMIT_NPROC, &saved), 0);
+    assert_int_equal(status, -1);
+    assert_int_equal(error, EAGAIN);
+    close(client);
+    server_destroy(server);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_create_reports_the_port_it_listens_on),
     cmocka_unit_test(test_create_fails_when_the_port_is_taken),
     cmocka_unit_test(test_serves_connections_in_turn),
     cmocka_unit_test(test_client_hanging_up_does_not_stop_the_server),
+    cmocka_unit_test(test_a_stuck_client_does_not_block_others),
+    cmocka_unit_test(test_serve_fails_when_a_thread_cannot_be_started),
     cmocka_unit_test(test_create_fails_when_no_descriptor_is_free),
     cmocka_unit_test(test_serve_fails_when_a_connection_cannot_be_accepted),
 };
