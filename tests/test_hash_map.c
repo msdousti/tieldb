@@ -12,6 +12,7 @@
 #include <cmocka.h>
 
 #include "ds/hash_map.h"
+#include "test_random.h"
 
 typedef struct {
     hash_node_t node;
@@ -96,14 +97,6 @@ static void test_create_rejects_missing_operations([[maybe_unused]] void **state
     errno = 0;
     assert_null(hash_map_create(nullptr, 8));
     assert_int_equal(errno, EINVAL);
-}
-
-static uint64_t next_random(uint64_t *state)
-{
-    *state ^= *state << 13;
-    *state ^= *state >> 7;
-    *state ^= *state << 17;
-    return *state;
 }
 
 static constexpr uint32_t KEY_RANGE = 300;

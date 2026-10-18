@@ -6,11 +6,13 @@
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 
 #include <cmocka.h>
 
 #include "storage/page.h"
+#include "test_random.h"
 
 static constexpr size_t HEADER_SIZE = 24;
 static constexpr size_t SLOT_SIZE = 4;
@@ -160,6 +162,155 @@ static void test_scattered_free_space_is_gathered_when_needed([[maybe_unused]] v
     }
 }
 
+static constexpr size_t MODEL_SLOTS = 2048;
+static constexpr size_t MAX_TUPLE = 400;
+static constexpr size_t OPERATIONS = 20000;
+static constexpr size_t CHECK_EVERY = 50;
+static constexpr uint64_t RECLAIM_ONE_IN = 16;
+
+typedef enum { MODEL_UNUSED, MODEL_NORMAL, MODEL_DEAD } model_state_t;
+
+typedef struct {
+    model_state_t state;
+    size_t length;
+    unsigned char data[MAX_TUPLE];
+} model_slot_t;
+
+// The model is an array of tuples; it knows nothing about offsets or free space except the sum
+typedef struct {
+    model_slot_t slots[MODEL_SLOTS];
+    size_t count;
+} model_t;
+
+static size_t model_free_slot(const model_t *model)
+{
+    size_t slot = 0;
+    while (slot < model->count && model->slots[slot].state != MODEL_UNUSED) {
+        slot++;
+    }
+    return slot;
+}
+
+static size_t model_reclaimable(const model_t *model)
+{
+    size_t space = PAGE_SIZE - HEADER_SIZE - (model->count * SLOT_SIZE);
+    for (size_t slot = 0; slot < model->count; slot++) {
+        space -= model->slots[slot].state == MODEL_NORMAL ? model->slots[slot].length : 0;
+    }
+    return space;
+}
+
+static size_t model_free_space(const model_t *model)
+{
+    size_t cost = model_free_slot(model) == model->count ? SLOT_SIZE : 0;
+    size_t space = model_reclaimable(model);
+    return space > cost ? space - cost : 0;
+}
+
+static void model_insert(model_t *model, size_t length, unsigned char fill)
+{
+    unsigned char data[MAX_TUPLE];
+    size_t slot = model_free_slot(model);
+    bool fits = length <= model_free_space(model);
+
+    memset(data, fill, length);
+    errno = 0;
+    int result = page_insert(&page, data, length);
+    assert_int_equal(result, fits ? (int) slot : -1);
+    if (!fits) {
+        assert_int_equal(errno, ENOSPC);
+        return;
+    }
+    model->slots[slot].state = MODEL_NORMAL;
+    model->slots[slot].length = length;
+    memcpy(model->slots[slot].data, data, length);
+    model->count += slot == model->count ? 1 : 0;
+}
+
+static void model_delete(model_t *model, size_t slot)
+{
+    bool is_live = slot < model->count && model->slots[slot].state == MODEL_NORMAL;
+
+    errno = 0;
+    assert_int_equal(page_delete(&page, slot), is_live ? 0 : -1);
+    assert_int_equal(errno, is_live ? 0 : ENOENT);
+    if (is_live) {
+        model->slots[slot].state = MODEL_DEAD;
+    }
+}
+
+static void model_reclaim(model_t *model)
+{
+    size_t dead = 0;
+
+    for (size_t slot = 0; slot < model->count; slot++) {
+        dead += model->slots[slot].state == MODEL_DEAD ? 1 : 0;
+        model->slots[slot].state =
+            model->slots[slot].state == MODEL_DEAD ? MODEL_UNUSED : model->slots[slot].state;
+    }
+    assert_int_equal(page_reclaim_dead_slots(&page), dead);
+}
+
+static void model_compare_slot(const model_t *model, size_t slot)
+{
+    if (model->slots[slot].state == MODEL_NORMAL) {
+        assert_tuple_is(slot, model->slots[slot].data, model->slots[slot].length);
+    } else {
+        assert_slot_is_missing(slot);
+    }
+}
+
+static void model_compare(const model_t *model)
+{
+    assert_int_equal(page_slot_count(&page), model->count);
+    assert_int_equal(page_free_space(&page), model_free_space(model));
+    for (size_t slot = 0; slot < model->count; slot++) {
+        model_compare_slot(model, slot);
+    }
+}
+
+static void model_step(model_t *model, uint64_t *random, size_t step)
+{
+    size_t length = next_random(random) % (MAX_TUPLE + 1);
+    size_t slot = next_random(random) % (model->count + 2);
+
+    uint64_t action = next_random(random) % RECLAIM_ONE_IN;
+
+    if (action < RECLAIM_ONE_IN / 2) {
+        model_insert(model, length, (unsigned char) step);
+    } else if (action < RECLAIM_ONE_IN - 1) {
+        model_delete(model, slot);
+    } else {
+        model_reclaim(model);
+    }
+    if (step % CHECK_EVERY == 0) {
+        model_compare(model);
+    }
+}
+
+static void run_against_model(uint64_t seed)
+{
+    static model_t model;
+    uint64_t random = seed;
+
+    print_message("seed %llu\n", (unsigned long long) seed);
+    page_init(&page, PAGE_TYPE_HEAP);
+    model = (model_t){};
+    for (size_t step = 0; step < OPERATIONS; step++) {
+        model_step(&model, &random, step);
+    }
+    model_compare(&model);
+}
+
+static void test_page_agrees_with_a_model_under_random_operations([[maybe_unused]] void **state)
+{
+    const uint64_t seeds[] = {1, 42, 0xdeadbeef, 20261019};
+
+    for (size_t i = 0; i < sizeof(seeds) / sizeof(seeds[0]); i++) {
+        run_against_model(seeds[i]);
+    }
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup(test_new_page_is_empty, new_page),
     cmocka_unit_test_setup(test_inserted_tuples_are_returned_unchanged, new_page),
@@ -170,6 +321,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup(test_page_flags_are_kept_for_the_engine, new_page),
     cmocka_unit_test_setup(test_the_largest_tuple_fills_the_page, new_page),
     cmocka_unit_test_setup(test_scattered_free_space_is_gathered_when_needed, new_page),
+    cmocka_unit_test(test_page_agrees_with_a_model_under_random_operations),
 };
 
 int main(void)
