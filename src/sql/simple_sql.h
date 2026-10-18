@@ -42,3 +42,24 @@ typedef struct {
  * which must have room for strlen(sql) + 1 bytes and stay alive while insert is used.
  */
 [[nodiscard]] bool sql_parse_insert(const char *sql, char *scratch, sql_insert_t *insert);
+
+/** Most columns a CREATE TABLE statement may define; the same as the most columns of a table. */
+constexpr size_t SQL_MAX_CREATE_COLUMNS = 32;
+
+/** One column definition. The type is only the name written in the statement, lower-cased. */
+typedef struct {
+    char name[SQL_IDENTIFIER_CAPACITY];
+    char type[SQL_IDENTIFIER_CAPACITY];
+} sql_column_def_t;
+
+typedef struct {
+    char table[SQL_IDENTIFIER_CAPACITY];
+    sql_column_def_t columns[SQL_MAX_CREATE_COLUMNS];
+    size_t count;
+} sql_create_table_t;
+
+/**
+ * Matches "CREATE TABLE <table> (<column> <type>, ...)". Whether a type exists is not decided
+ * here.
+ */
+[[nodiscard]] bool sql_parse_create_table(const char *sql, sql_create_table_t *create);

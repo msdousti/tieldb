@@ -16,6 +16,8 @@ static constexpr char SEMICOLON = ';';
 static constexpr char INSERT_KEYWORD[] = "insert";
 static constexpr char INTO_KEYWORD[] = "into";
 static constexpr char VALUES_KEYWORD[] = "values";
+static constexpr char CREATE_KEYWORD[] = "create";
+static constexpr char TABLE_KEYWORD[] = "table";
 static constexpr char QUOTE = '\'';
 static constexpr char MINUS = '-';
 
@@ -129,7 +131,7 @@ static bool consume_symbol(const char **cursor, char symbol)
     return true;
 }
 
-static bool consume_table_name(const char **cursor, char *out, size_t capacity)
+static bool consume_name(const char **cursor, char *out, size_t capacity)
 {
     const char *text = skip_spaces(*cursor);
     if (!consume_identifier(&text, out, capacity)) {
@@ -210,7 +212,38 @@ bool sql_parse_insert(const char *sql, char *scratch, sql_insert_t *insert)
     char *write = scratch;
     *insert = (sql_insert_t){};
     return consume_word(&cursor, INSERT_KEYWORD) && consume_word(&cursor, INTO_KEYWORD) &&
-           consume_table_name(&cursor, insert->table, sizeof(insert->table)) &&
+           consume_name(&cursor, insert->table, sizeof(insert->table)) &&
            consume_word(&cursor, VALUES_KEYWORD) && consume_symbol(&cursor, '(') &&
            consume_value_list(&cursor, &write, insert) && is_end_of_statement(cursor);
+}
+
+static bool consume_column_def(const char **cursor, sql_create_table_t *create)
+{
+    if (create->count == SQL_MAX_CREATE_COLUMNS) {
+        return false;
+    }
+    sql_column_def_t *column = &create->columns[create->count++];
+    return consume_name(cursor, column->name, sizeof(column->name)) &&
+           consume_name(cursor, column->type, sizeof(column->type));
+}
+
+static bool consume_column_list(const char **cursor, sql_create_table_t *create)
+{
+    bool is_valid = true;
+    bool has_more = true;
+    while (is_valid && has_more) {
+        is_valid = consume_column_def(cursor, create);
+        has_more = is_valid && consume_symbol(cursor, ',');
+    }
+    return is_valid && consume_symbol(cursor, ')');
+}
+
+bool sql_parse_create_table(const char *sql, sql_create_table_t *create)
+{
+    const char *cursor = sql;
+    *create = (sql_create_table_t){};
+    return consume_word(&cursor, CREATE_KEYWORD) && consume_word(&cursor, TABLE_KEYWORD) &&
+           consume_name(&cursor, create->table, sizeof(create->table)) &&
+           consume_symbol(&cursor, '(') && consume_column_list(&cursor, create) &&
+           is_end_of_statement(cursor);
 }
