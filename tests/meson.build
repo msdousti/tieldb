@@ -60,9 +60,19 @@ test_query_handler = executable('test_query_handler',
 
 test('query_handler', test_query_handler)
 
+# Test: per-connection message loop
+test_connection = executable('test_connection',
+  'test_connection.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('connection', test_connection)
+
 # Test: wire protocol output buffer, out-of-memory paths. wire_buffer.c is compiled a second
 # time with its allocation calls renamed to the mocks in the test, so only that file is affected.
 wire_buffer_oom_lib = static_library('wire_buffer_oom',
+  io_sources,
   net_sources,
   include_directories: inc,
   c_args: ['-Dmalloc=oom_malloc', '-Dcalloc=oom_calloc', '-Drealloc=oom_realloc'],
