@@ -66,21 +66,9 @@ BreakBeforeBinaryOperators: None
 BreakBeforeTernaryOperators: true
 
 # Includes
-SortIncludes: true
-IncludeBlocks: Regroup
-IncludeCategories:
-  # Standard C headers (must come before cmocka)
-  - Regex:           '<(fcntl|setjmp|stdarg|stddef|stdint|stdio|stdlib|string|unistd|sys/.*)\.h>'
-    Priority:        1
-  # Testing framework (needs types from standard headers)
-  - Regex:           '<cmocka\.h>'
-    Priority:        2
-  # Other system headers
-  - Regex:           '<.*\.h>'
-    Priority:        3
-  # Project headers
-  - Regex:           '".*"'
-    Priority:        4
+# Disabled: include order matters when headers have dependencies (e.g., cmocka.h needs stddef.h)
+# We prefer explicit, manual control over include order
+SortIncludes: false
 
 # Other
 KeepEmptyLinesAtTheStartOfBlocks: false
