@@ -52,7 +52,6 @@ jobs:
             meson ninja-build clang-22 clang-tidy-22 \
             libcmocka-dev pkg-config
           sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-22 100
-          sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-22 100
 
       - name: Setup build
         run: meson setup build -Db_sanitize=address,undefined
@@ -62,8 +61,8 @@ jobs:
 
       - name: Run clang-tidy
         run: |
-          clang-tidy --version
-          find src -name '*.c' -print0 | xargs -0 -n1 clang-tidy -p build
+          clang-tidy-22 --version
+          find src -name '*.c' -print0 | xargs -0 -n1 clang-tidy-22 -p build
 
   build-asan:
     name: Build (ASan + UBSan)
