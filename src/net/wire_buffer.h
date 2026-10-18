@@ -66,6 +66,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/** Big-endian encoders for building a fixed-size block of fields in a local array. */
+void wire_encode_i16(uint8_t *out, int16_t value);
+void wire_encode_i32(uint8_t *out, int32_t value);
+
 /** Growable output buffer. */
 typedef struct wire_writer wire_writer_t;
 

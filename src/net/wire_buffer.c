@@ -96,14 +96,14 @@ int wire_writer_put_u8(wire_writer_t *writer, uint8_t value)
     return wire_writer_put_bytes(writer, &value, sizeof(value));
 }
 
-int wire_writer_put_i16(wire_writer_t *writer, int16_t value)
+void wire_encode_i16(uint8_t *out, int16_t value)
 {
     uint16_t bits = (uint16_t) value;
-    const uint8_t bytes[] = {(uint8_t) (bits >> 8), (uint8_t) bits};
-    return wire_writer_put_bytes(writer, bytes, sizeof(bytes));
+    out[0] = (uint8_t) (bits >> 8);
+    out[1] = (uint8_t) bits;
 }
 
-static void encode_i32(uint8_t *out, int32_t value)
+void wire_encode_i32(uint8_t *out, int32_t value)
 {
     uint32_t bits = (uint32_t) value;
     out[0] = (uint8_t) (bits >> 24);
@@ -112,10 +112,17 @@ static void encode_i32(uint8_t *out, int32_t value)
     out[3] = (uint8_t) bits;
 }
 
+int wire_writer_put_i16(wire_writer_t *writer, int16_t value)
+{
+    uint8_t bytes[2];
+    wire_encode_i16(bytes, value);
+    return wire_writer_put_bytes(writer, bytes, sizeof(bytes));
+}
+
 int wire_writer_put_i32(wire_writer_t *writer, int32_t value)
 {
     uint8_t bytes[4];
-    encode_i32(bytes, value);
+    wire_encode_i32(bytes, value);
     return wire_writer_put_bytes(writer, bytes, sizeof(bytes));
 }
 
@@ -125,7 +132,7 @@ int wire_writer_patch_i32(wire_writer_t *writer, size_t offset, int32_t value)
         offset > writer->size - sizeof(int32_t)) {
         return fail_with(EINVAL);
     }
-    encode_i32(writer->data + offset, value);
+    wire_encode_i32(writer->data + offset, value);
     return 0;
 }
 

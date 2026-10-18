@@ -94,3 +94,40 @@ int protocol_put_error_response(wire_writer_t *writer, const char *severity, con
     }
     return end_message(writer, start);
 }
+
+static int put_column(wire_writer_t *writer, const protocol_column_t *column)
+{
+    uint8_t fixed[18] = {};
+    wire_encode_i32(fixed + 6, column->type_oid);
+    wire_encode_i16(fixed + 10, column->type_size);
+    wire_encode_i32(fixed + 12, -1);
+    if (wire_writer_put_cstring(writer, column->name) != 0) {
+        return -1;
+    }
+    return wire_writer_put_bytes(writer, fixed, sizeof(fixed));
+}
+
+static int put_columns(wire_writer_t *writer, const protocol_column_t *columns, size_t count)
+{
+    int result = 0;
+    for (size_t i = 0; i < count && result == 0; i++) {
+        result = put_column(writer, &columns[i]);
+    }
+    return result;
+}
+
+int protocol_put_row_description(wire_writer_t *writer, const protocol_column_t *columns,
+                                 size_t count)
+{
+    if (writer == nullptr || count > INT16_MAX || (columns == nullptr && count > 0)) {
+        errno = EINVAL;
+        return -1;
+    }
+    size_t start = wire_writer_size(writer);
+    if (begin_message(writer, 'T') != 0 || wire_writer_put_i16(writer, (int16_t) count) != 0 ||
+        put_columns(writer, columns, count) != 0) {
+        wire_writer_truncate(writer, start);
+        return -1;
+    }
+    return end_message(writer, start);
+}

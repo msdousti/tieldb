@@ -184,6 +184,41 @@ static void test_error_response_rolls_back_when_terminator_fails([[maybe_unused]
     assert_error_response_fails_leaving(42);
 }
 
+static void assert_row_description_fails_leaving(size_t filled)
+{
+    const protocol_column_t columns[] = {{"id", PROTOCOL_TYPE_INT4, 4},
+                                         {"name", PROTOCOL_TYPE_TEXT, -1}};
+    wire_writer_t *w = create_writer_filled_to(filled);
+
+    will_return(oom_realloc, false);
+    errno = 0;
+    assert_int_equal(protocol_put_row_description(w, columns, 2), -1);
+
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(wire_writer_size(w), filled);
+    wire_writer_destroy(w);
+}
+
+static void test_row_description_rolls_back_when_header_fails([[maybe_unused]] void **state)
+{
+    assert_row_description_fails_leaving(60);
+}
+
+static void test_row_description_rolls_back_when_count_fails([[maybe_unused]] void **state)
+{
+    assert_row_description_fails_leaving(58);
+}
+
+static void test_row_description_rolls_back_when_name_fails([[maybe_unused]] void **state)
+{
+    assert_row_description_fails_leaving(56);
+}
+
+static void test_row_description_rolls_back_when_column_fields_fail([[maybe_unused]] void **state)
+{
+    assert_row_description_fails_leaving(40);
+}
+
 int main(void)
 {
     const struct CMUnitTest tests[] = {
@@ -197,6 +232,10 @@ int main(void)
         cmocka_unit_test(test_error_response_rolls_back_when_field_code_fails),
         cmocka_unit_test(test_error_response_rolls_back_when_field_value_fails),
         cmocka_unit_test(test_error_response_rolls_back_when_terminator_fails),
+        cmocka_unit_test(test_row_description_rolls_back_when_header_fails),
+        cmocka_unit_test(test_row_description_rolls_back_when_count_fails),
+        cmocka_unit_test(test_row_description_rolls_back_when_name_fails),
+        cmocka_unit_test(test_row_description_rolls_back_when_column_fields_fail),
     };
     return cmocka_run_group_tests(tests, nullptr, nullptr);
 }
