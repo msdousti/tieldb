@@ -1,11 +1,12 @@
 /**
- * Output buffer primitives for the Postgres wire protocol.
+ * Byte buffer primitives for the Postgres wire protocol.
  *
  * Why this exists
  * ---------------
  * psql and TielDB talk over TCP using the Postgres wire protocol. Almost every
- * message is built from the same few primitives, so this module writes them
- * one by one into a growing byte buffer.
+ * message is built from the same few primitives. A wire_writer_t appends them
+ * one by one to a growing byte buffer (sending); a wire_reader_t takes them
+ * back off a received buffer, refusing to read past its end (receiving).
  *
  * Anatomy of a message
  * --------------------
@@ -50,11 +51,13 @@
  *
  * Error handling
  * --------------
- * All functions return 0 on success. On failure they return -1, set errno,
- * and leave the buffer unchanged:
+ * All functions return 0 on success. On failure they return -1 (the create
+ * functions return nullptr), set errno, and leave the buffer or the read
+ * position unchanged:
  *
  *   EINVAL      a required argument was null
- *   EOVERFLOW   the buffer size would exceed SIZE_MAX
+ *   EOVERFLOW   writer: the buffer size would exceed SIZE_MAX
+ *   EBADMSG     reader: the input is too short, or a string has no terminator
  *   ENOMEM      memory allocation failed
  */
 
@@ -80,3 +83,24 @@ void wire_writer_destroy(wire_writer_t *writer);
 
 const uint8_t *wire_writer_data(const wire_writer_t *writer);
 size_t wire_writer_size(const wire_writer_t *writer);
+
+/**
+ * Cursor over a received message. It does not own or copy the input, which must
+ * stay valid and unchanged until the reader is destroyed.
+ */
+typedef struct wire_reader wire_reader_t;
+
+/** Returns nullptr on failure; data may be null only when size is 0. */
+wire_reader_t *wire_reader_create(const void *data, size_t size);
+void wire_reader_destroy(wire_reader_t *reader);
+
+/** Bytes not yet read; 0 for a null reader. */
+size_t wire_reader_remaining(const wire_reader_t *reader);
+
+[[nodiscard]] int wire_reader_get_u8(wire_reader_t *reader, uint8_t *out);
+[[nodiscard]] int wire_reader_get_i16(wire_reader_t *reader, int16_t *out);
+[[nodiscard]] int wire_reader_get_i32(wire_reader_t *reader, int32_t *out);
+[[nodiscard]] int wire_reader_get_bytes(wire_reader_t *reader, void *out, size_t size);
+
+/** On success *out points into the input, so it is valid as long as the input is. */
+[[nodiscard]] int wire_reader_get_cstring(wire_reader_t *reader, const char **out);
