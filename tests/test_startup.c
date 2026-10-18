@@ -27,6 +27,14 @@ static void assert_writer_holds(const wire_writer_t *writer, const uint8_t *expe
     assert_memory_equal(wire_writer_data(writer), expected, size);
 }
 
+static void put_expected_acceptance(wire_writer_t *w)
+{
+    assert_int_equal(protocol_put_authentication_ok(w), 0);
+    assert_int_equal(protocol_put_parameter_status(w, "server_version", "18.0 (TielDB 0.1.0)"), 0);
+    assert_int_equal(protocol_put_parameter_status(w, "client_encoding", "UTF8"), 0);
+    assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
+}
+
 static void assert_declines_with_n(const uint8_t *packet, size_t size)
 {
     wire_writer_t *w = create_writer();
@@ -70,11 +78,13 @@ static void test_startup_message_is_accepted_without_authentication([[maybe_unus
     wire_writer_t *w = create_writer();
     startup_result_t result = STARTUP_CONTINUE;
     const uint8_t packet[] = {0, 3, 0, 0, 'u', 's', 'e', 'r', 0, 't', 0, 0};
-    const uint8_t expected[] = {'R', 0, 0, 0, 8, 0, 0, 0, 0, 'Z', 0, 0, 0, 5, 'I'};
+    wire_writer_t *expected = create_writer();
+    put_expected_acceptance(expected);
 
     assert_int_equal(startup_handle_packet(packet, sizeof(packet), w, &result), 0);
     assert_int_equal(result, STARTUP_DONE);
-    assert_writer_holds(w, expected, sizeof(expected));
+    assert_writer_holds(w, wire_writer_data(expected), wire_writer_size(expected));
+    wire_writer_destroy(expected);
     wire_writer_destroy(w);
 }
 

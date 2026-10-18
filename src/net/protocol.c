@@ -44,6 +44,21 @@ int protocol_put_authentication_ok(wire_writer_t *writer)
     return wire_writer_put_bytes(writer, message, sizeof(message));
 }
 
+int protocol_put_parameter_status(wire_writer_t *writer, const char *name, const char *value)
+{
+    if (writer == nullptr || name == nullptr || value == nullptr) {
+        errno = EINVAL;
+        return -1;
+    }
+    size_t start = wire_writer_size(writer);
+    if (begin_message(writer, 'S') != 0 || wire_writer_put_cstring(writer, name) != 0 ||
+        wire_writer_put_cstring(writer, value) != 0) {
+        wire_writer_truncate(writer, start);
+        return -1;
+    }
+    return end_message(writer, start);
+}
+
 int protocol_put_ready_for_query(wire_writer_t *writer, transaction_status_t status)
 {
     if (status != TRANSACTION_IDLE && status != TRANSACTION_IN_BLOCK &&

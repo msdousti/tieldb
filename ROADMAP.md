@@ -49,6 +49,7 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
   - [x] Writer length patching and size cap (support for variable-length messages)
   - [ ] Startup message (accept every connection, database selection; no authentication)
     - [x] AuthenticationOk response
+    - [x] ParameterStatus (`server_version`, `client_encoding`) so psql shows the server version
     - [x] Startup packet decoding (version check; parameters ignored)
     - [x] Decline `SSLRequest` with `N` (no TLS)
     - [ ] Parse startup parameters (user, database)

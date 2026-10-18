@@ -103,6 +103,26 @@ static wire_writer_t *create_writer_filled_to(size_t size)
     return writer;
 }
 
+// The writer doubles its capacity when it grows, so a writer grown once holds twice as much
+static constexpr size_t GROWN_WRITER_CAPACITY = 2 * WRITER_CAPACITY;
+
+static size_t fill_grown_writer_to_overflow_at(size_t bytes_through_failing_write)
+{
+    return GROWN_WRITER_CAPACITY + 1 - bytes_through_failing_write;
+}
+
+static wire_writer_t *create_grown_writer_filled_to(size_t size)
+{
+    wire_writer_t *writer = create_writer_filled_to(WRITER_CAPACITY);
+
+    will_return(oom_realloc, true);
+    if (wire_writer_put_u8(writer, 0) != 0) {
+        fail();
+    }
+    wire_writer_truncate(writer, size);
+    return writer;
+}
+
 static void test_create_fails_when_struct_allocation_fails([[maybe_unused]] void **state)
 {
     will_return(oom_calloc, false);
@@ -298,11 +318,11 @@ static void test_data_row_rolls_back_finished_value_when_next_fails([[maybe_unus
         MESSAGE_HEADER_SIZE + FIELD_COUNT_SIZE + sizeof(int32_t) + strlen("ab") + sizeof(int32_t)));
 }
 
-static void assert_startup_fails_leaving(size_t filled)
+static void assert_startup_fails_leaving(wire_writer_t *w)
 {
     const uint8_t packet[] = {0, 3, 0, 0};
     startup_result_t result = STARTUP_CONTINUE;
-    wire_writer_t *w = create_writer_filled_to(filled);
+    size_t filled = wire_writer_size(w);
 
     will_return(oom_calloc, true);
     will_return(oom_realloc, false);
@@ -329,15 +349,80 @@ static void test_startup_leaves_writer_unchanged_when_reader_fails([[maybe_unuse
     wire_writer_destroy(w);
 }
 
+static size_t parameter_status_size(const char *name, const char *value)
+{
+    return MESSAGE_HEADER_SIZE + cstring_size(name) + cstring_size(value);
+}
+
+static size_t startup_version_size(void)
+{
+    return parameter_status_size("server_version", "18.0 (TielDB 0.1.0)");
+}
+
+static size_t startup_encoding_size(void)
+{
+    return parameter_status_size("client_encoding", "UTF8");
+}
+
 static void test_startup_rolls_back_when_authentication_ok_fails([[maybe_unused]] void **state)
 {
-    assert_startup_fails_leaving(fill_to_overflow_at(AUTHENTICATION_OK_SIZE));
+    assert_startup_fails_leaving(
+        create_writer_filled_to(fill_to_overflow_at(AUTHENTICATION_OK_SIZE)));
+}
+
+static void
+test_startup_rolls_back_when_the_first_parameter_status_fails([[maybe_unused]] void **state)
+{
+    size_t through_version = AUTHENTICATION_OK_SIZE + startup_version_size();
+
+    assert_startup_fails_leaving(create_writer_filled_to(fill_to_overflow_at(through_version)));
+}
+
+static void
+test_startup_rolls_back_when_the_second_parameter_status_fails([[maybe_unused]] void **state)
+{
+    size_t through_header = AUTHENTICATION_OK_SIZE + startup_version_size() + MESSAGE_HEADER_SIZE;
+
+    assert_startup_fails_leaving(create_writer_filled_to(fill_to_overflow_at(through_header)));
 }
 
 static void test_startup_rolls_back_when_ready_for_query_fails([[maybe_unused]] void **state)
 {
+    size_t through_ready = AUTHENTICATION_OK_SIZE + startup_version_size() +
+                           startup_encoding_size() + READY_FOR_QUERY_SIZE;
+
     assert_startup_fails_leaving(
-        fill_to_overflow_at(AUTHENTICATION_OK_SIZE + READY_FOR_QUERY_SIZE));
+        create_grown_writer_filled_to(fill_grown_writer_to_overflow_at(through_ready)));
+}
+
+static void assert_parameter_status_fails_leaving(size_t filled)
+{
+    wire_writer_t *w = create_writer_filled_to(filled);
+
+    will_return(oom_realloc, false);
+    errno = 0;
+    assert_int_equal(protocol_put_parameter_status(w, "name", "value"), -1);
+
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(wire_writer_size(w), filled);
+    wire_writer_destroy(w);
+}
+
+static void test_parameter_status_rolls_back_when_header_fails([[maybe_unused]] void **state)
+{
+    assert_parameter_status_fails_leaving(fill_to_overflow_at(MESSAGE_HEADER_SIZE));
+}
+
+static void test_parameter_status_rolls_back_when_name_fails([[maybe_unused]] void **state)
+{
+    assert_parameter_status_fails_leaving(
+        fill_to_overflow_at(MESSAGE_HEADER_SIZE + cstring_size("name")));
+}
+
+static void test_parameter_status_rolls_back_when_value_fails([[maybe_unused]] void **state)
+{
+    assert_parameter_status_fails_leaving(
+        fill_to_overflow_at(MESSAGE_HEADER_SIZE + cstring_size("name") + cstring_size("value")));
 }
 
 static void test_startup_leaves_result_unset_when_decline_write_fails([[maybe_unused]] void **state)
@@ -447,7 +532,12 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_data_row_rolls_back_finished_value_when_next_fails),
     cmocka_unit_test(test_startup_leaves_writer_unchanged_when_reader_fails),
     cmocka_unit_test(test_startup_rolls_back_when_authentication_ok_fails),
+    cmocka_unit_test(test_startup_rolls_back_when_the_first_parameter_status_fails),
+    cmocka_unit_test(test_startup_rolls_back_when_the_second_parameter_status_fails),
     cmocka_unit_test(test_startup_rolls_back_when_ready_for_query_fails),
+    cmocka_unit_test(test_parameter_status_rolls_back_when_header_fails),
+    cmocka_unit_test(test_parameter_status_rolls_back_when_name_fails),
+    cmocka_unit_test(test_parameter_status_rolls_back_when_value_fails),
     cmocka_unit_test(test_startup_leaves_result_unset_when_decline_write_fails),
     cmocka_unit_test(test_query_response_is_rolled_back_when_a_message_fails),
     cmocka_unit_test(test_query_fails_cleanly_when_the_reader_cannot_be_created),
