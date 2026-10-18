@@ -159,6 +159,82 @@ static void test_insert_with_too_many_values_is_rejected([[maybe_unused]] void *
     assert_false(parse_insert(sql, &insert));
 }
 
+static void assert_column_is(const sql_create_table_t *create, size_t index, const char *name,
+                             const char *type)
+{
+    assert_string_equal(create->columns[index].name, name);
+    assert_string_equal(create->columns[index].type, type);
+}
+
+static void assert_not_create_table(const char *sql)
+{
+    sql_create_table_t create;
+
+    assert_false(sql_parse_create_table(sql, &create));
+}
+
+static void test_create_table_gives_the_table_and_the_columns([[maybe_unused]] void **state)
+{
+    sql_create_table_t create;
+
+    assert_true(sql_parse_create_table("CREATE TABLE user (id INTEGER, name TEXT);", &create));
+    assert_string_equal(create.table, "user");
+    assert_int_equal(create.count, 2);
+    assert_column_is(&create, 0, "id", "integer");
+    assert_column_is(&create, 1, "name", "text");
+}
+
+static void test_create_table_ignores_case_and_spaces([[maybe_unused]] void **state)
+{
+    sql_create_table_t create;
+
+    assert_true(sql_parse_create_table("  create  table  T1 ( A  Int ) ; ", &create));
+    assert_string_equal(create.table, "t1");
+    assert_int_equal(create.count, 1);
+    assert_column_is(&create, 0, "a", "int");
+}
+
+static void test_text_that_is_not_a_create_table_is_rejected([[maybe_unused]] void **state)
+{
+    assert_not_create_table("");
+    assert_not_create_table("CREATE");
+    assert_not_create_table("CREATETABLE t (a int)");
+    assert_not_create_table("CREATE t (a int)");
+    assert_not_create_table("CREATE TABLE (a int)");
+    assert_not_create_table("CREATE TABLE 1t (a int)");
+    assert_not_create_table("CREATE TABLE t a int");
+    assert_not_create_table("CREATE TABLE t ()");
+    assert_not_create_table("CREATE TABLE t (a)");
+    assert_not_create_table("CREATE TABLE t (a int,)");
+    assert_not_create_table("CREATE TABLE t (a int b int)");
+    assert_not_create_table("CREATE TABLE t (a int");
+    assert_not_create_table("CREATE TABLE t (a int) x");
+}
+
+static size_t build_create_with_columns(char *sql, size_t capacity, size_t columns)
+{
+    size_t used = (size_t) snprintf(sql, capacity, "CREATE TABLE t (c0 int");
+
+    for (size_t i = 1; i < columns; i++) {
+        used += (size_t) snprintf(sql + used, capacity - used, ",c%zu int", i);
+    }
+    used += (size_t) snprintf(sql + used, capacity - used, ")");
+    return used;
+}
+
+static void test_create_table_with_too_many_columns_is_rejected([[maybe_unused]] void **state)
+{
+    char sql[512];
+    sql_create_table_t create;
+
+    build_create_with_columns(sql, sizeof(sql), SQL_MAX_CREATE_COLUMNS);
+    assert_true(sql_parse_create_table(sql, &create));
+    assert_int_equal(create.count, SQL_MAX_CREATE_COLUMNS);
+
+    build_create_with_columns(sql, sizeof(sql), SQL_MAX_CREATE_COLUMNS + 1);
+    assert_false(sql_parse_create_table(sql, &create));
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_version_query_is_recognized),
     cmocka_unit_test(test_other_text_is_not_a_version_query),
@@ -169,6 +245,10 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_insert_ignores_case_and_spaces_and_unescapes_strings),
     cmocka_unit_test(test_text_that_is_not_an_insert_is_rejected),
     cmocka_unit_test(test_insert_with_too_many_values_is_rejected),
+    cmocka_unit_test(test_create_table_gives_the_table_and_the_columns),
+    cmocka_unit_test(test_create_table_ignores_case_and_spaces),
+    cmocka_unit_test(test_text_that_is_not_a_create_table_is_rejected),
+    cmocka_unit_test(test_create_table_with_too_many_columns_is_rejected),
 };
 
 int main(void)
