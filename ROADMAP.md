@@ -569,6 +569,7 @@ Hash Join  (cost=24.50..89.75 rows=1000)
 - [ ] BYTEA (binary data)
 - [ ] Arrays
 - [ ] User-defined types (UDTs), on top of the type registry from Phase 2
+  - [ ] Once types can be created at runtime, make the type registry mutable and locked, and look types up through two hash maps (by name and by OID) instead of the linear scan; the `type_find_by_*` API stays the same
   - [ ] `CREATE TYPE ... AS ENUM`, as the first one: simple, and visible in `psql`
   - [ ] Composite types: `CREATE TYPE ... AS (a int, b text)`
   - [ ] Domains: a base type plus a constraint
