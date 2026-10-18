@@ -22,6 +22,7 @@ struct table {
     char **cells;
     size_t cell_count;
     size_t cell_capacity;
+    size_t row_count; // kept apart from the cells, because a table may have no columns
     pthread_mutex_t lock;
     column_slot_t columns[]; // followed in the same allocation by the table and column names
 };
@@ -122,6 +123,7 @@ static int append_row(table_t *table, const char *const *cells, size_t count)
         status = append_cell(table, cells[i]);
     }
     drop_cells_after(table, status == 0 ? table->cell_count : start);
+    table->row_count += status == 0 ? 1 : 0;
     return status;
 }
 
@@ -216,7 +218,7 @@ const table_column_t *table_column(const table_t *table, size_t index)
 
 size_t table_row_count(const table_t *table)
 {
-    return table->cell_count / table->column_count;
+    return table->row_count;
 }
 
 const char *table_cell(const table_t *table, size_t row, size_t column)

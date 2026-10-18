@@ -229,6 +229,9 @@ static bool consume_column_def(const char **cursor, sql_create_table_t *create)
 
 static bool consume_column_list(const char **cursor, sql_create_table_t *create)
 {
+    if (consume_symbol(cursor, ')')) {
+        return true;
+    }
     bool is_valid = true;
     bool has_more = true;
     while (is_valid && has_more) {

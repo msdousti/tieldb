@@ -8,7 +8,7 @@
  *
  *   user (id INTEGER, name TEXT)   three rows
  *
- * catalog_create_table needs 1 to TABLE_MAX_COLUMNS columns and copies its arguments. Errors
+ * catalog_create_table takes 0 to TABLE_MAX_COLUMNS columns and copies its arguments. Errors
  * return nullptr and set errno: EEXIST when a table of that name exists, ENOMEM when memory runs
  * out. On failure the catalog is unchanged.
  */

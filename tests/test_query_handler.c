@@ -169,6 +169,27 @@ static void test_create_table_insert_and_select_work_together([[maybe_unused]] v
     assert_response("SELECT * FROM pets", put_expected_pets_response);
 }
 
+static void put_expected_rows_without_columns_response(wire_writer_t *w)
+{
+    assert_int_equal(protocol_put_row_description(w, nullptr, 0), 0);
+    assert_int_equal(protocol_put_data_row(w, nullptr, 0), 0);
+    assert_int_equal(protocol_put_data_row(w, nullptr, 0), 0);
+    assert_int_equal(protocol_put_command_complete(w, "SELECT 2"), 0);
+    assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
+}
+
+static void test_table_without_columns_can_be_created_and_selected([[maybe_unused]] void **state)
+{
+    const char *no_cells[1] = {};
+
+    assert_response("create table empty_rows();", put_expected_create_table_response);
+    table_t *table = catalog_find("empty_rows");
+    assert_int_equal(table_insert(table, no_cells, 0), 0);
+    assert_int_equal(table_insert(table, no_cells, 0), 0);
+
+    assert_response("SELECT * FROM empty_rows", put_expected_rows_without_columns_response);
+}
+
 static void test_create_table_for_an_existing_table_is_an_error([[maybe_unused]] void **state)
 {
     assert_response("CREATE TABLE user (id INTEGER)", put_expected_table_exists_response);
@@ -252,6 +273,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_select_star_shows_columns_in_the_display_order),
     cmocka_unit_test(test_insert_with_a_wrong_value_count_is_an_error),
     cmocka_unit_test(test_create_table_insert_and_select_work_together),
+    cmocka_unit_test(test_table_without_columns_can_be_created_and_selected),
     cmocka_unit_test(test_create_table_for_an_existing_table_is_an_error),
     cmocka_unit_test(test_other_queries_get_an_error_and_stay_usable),
     cmocka_unit_test(test_response_appends_after_existing_content),

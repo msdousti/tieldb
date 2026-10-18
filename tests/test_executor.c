@@ -181,6 +181,16 @@ static void test_create_table_makes_a_table_with_the_given_columns([[maybe_unuse
     assert_int_equal(table_row_count(made), 0);
 }
 
+static void test_create_table_without_columns_makes_an_empty_table([[maybe_unused]] void **state)
+{
+    executor_error_t error;
+
+    run_create("CREATE TABLE nothing ()", &error);
+
+    assert_string_equal(error.sqlstate, "");
+    assert_int_equal(table_column_count(catalog_find("nothing")), 0);
+}
+
 static void assert_create_rejected(const char *sql, const char *sqlstate, const char *message)
 {
     executor_error_t error;
@@ -220,6 +230,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_number_in_a_text_column_is_stored_as_text),
     cmocka_unit_test(test_select_gives_the_locked_table_until_released),
     cmocka_unit_test(test_create_table_makes_a_table_with_the_given_columns),
+    cmocka_unit_test(test_create_table_without_columns_makes_an_empty_table),
     cmocka_unit_test(test_create_table_with_an_unknown_type_is_an_error),
     cmocka_unit_test(test_create_table_with_a_repeated_column_is_an_error),
     cmocka_unit_test(test_create_table_for_an_existing_table_is_an_error),
