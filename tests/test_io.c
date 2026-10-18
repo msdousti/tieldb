@@ -2,8 +2,7 @@
  * Tests for injectable I/O interface
  */
 
-#include "io/io.h"
-
+#include <cmocka.h>
 #include <fcntl.h>
 #include <setjmp.h>
 #include <stdarg.h>
@@ -14,30 +13,27 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <cmocka.h>
+#include "io/io.h"
 
 // Test fixture setup/teardown
-static int
-setup(void **state)
+static int setup(void **state)
 {
-    (void)state; // Unused
+    (void) state;  // Unused
     io_init(true); // Start with real I/O
     return 0;
 }
 
-static int
-teardown(void **state)
+static int teardown(void **state)
 {
-    (void)state; // Unused
+    (void) state; // Unused
     io_reset_faults();
     return 0;
 }
 
 // Test: Real I/O operations work
-static void
-test_real_io_operations(void **state)
+static void test_real_io_operations(void **state)
 {
-    (void)state;
+    (void) state;
 
     const char *test_file = "/tmp/tieldb_test_io.dat";
     const char *test_data = "Hello, TielDB!";
@@ -48,7 +44,7 @@ test_real_io_operations(void **state)
     assert_true(fd >= 0);
 
     ssize_t written = io->write(fd, test_data, strlen(test_data));
-    assert_int_equal(written, (ssize_t)strlen(test_data));
+    assert_int_equal(written, (ssize_t) strlen(test_data));
 
     int sync_result = io->fsync(fd);
     assert_int_equal(sync_result, 0);
@@ -63,10 +59,9 @@ test_real_io_operations(void **state)
 }
 
 // Test: Fault injection for torn write
-static void
-test_fault_injection_torn_write(void **state)
+static void test_fault_injection_torn_write(void **state)
 {
-    (void)state;
+    (void) state;
 
     io_init(false); // Use fault injection
 
@@ -82,7 +77,7 @@ test_fault_injection_torn_write(void **state)
 
     // This write will be torn (only half written)
     ssize_t written = io->write(fd, test_data, strlen(test_data));
-    assert_int_equal(written, (ssize_t)(strlen(test_data) / 2)); // Only half
+    assert_int_equal(written, (ssize_t) (strlen(test_data) / 2)); // Only half
 
     io->close(fd);
 
@@ -96,10 +91,9 @@ test_fault_injection_torn_write(void **state)
 }
 
 // Test: Fault injection for fsync failure
-static void
-test_fault_injection_fsync_fail(void **state)
+static void test_fault_injection_fsync_fail(void **state)
 {
-    (void)state;
+    (void) state;
 
     io_init(false); // Use fault injection
 
@@ -123,10 +117,9 @@ test_fault_injection_fsync_fail(void **state)
 }
 
 // Test: Multiple calls, fault on Nth
-static void
-test_fault_on_nth_call(void **state)
+static void test_fault_on_nth_call(void **state)
 {
-    (void)state;
+    (void) state;
 
     io_init(false);
 
@@ -157,10 +150,9 @@ test_fault_on_nth_call(void **state)
 }
 
 // Test: Reset faults
-static void
-test_reset_faults(void **state)
+static void test_reset_faults(void **state)
 {
-    (void)state;
+    (void) state;
 
     io_init(false);
     io_inject_fault(IO_FAULT_WRITE_ERROR, 1);
@@ -180,8 +172,7 @@ test_reset_faults(void **state)
     unlink(test_file);
 }
 
-int
-main(void)
+int main(void)
 {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup_teardown(test_real_io_operations, setup, teardown),

@@ -77,11 +77,11 @@ extern const io_ops_t io_fault_inject_ops;
  */
 typedef enum {
     IO_FAULT_NONE,
-    IO_FAULT_TORN_WRITE,    // Partial write (simulate power loss mid-write)
-    IO_FAULT_FSYNC_FAIL,    // fsync returns error
-    IO_FAULT_FSYNC_DROP,    // fsync succeeds but doesn't persist (fsyncgate)
-    IO_FAULT_READ_ERROR,    // read fails
-    IO_FAULT_WRITE_ERROR,   // write fails
+    IO_FAULT_TORN_WRITE,  // Partial write (simulate power loss mid-write)
+    IO_FAULT_FSYNC_FAIL,  // fsync returns error
+    IO_FAULT_FSYNC_DROP,  // fsync succeeds but doesn't persist (fsyncgate)
+    IO_FAULT_READ_ERROR,  // read fails
+    IO_FAULT_WRITE_ERROR, // write fails
 } io_fault_type_t;
 
 /**

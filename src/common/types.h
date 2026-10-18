@@ -8,9 +8,9 @@
 #include <stdint.h>
 
 // Page and buffer pool types
-typedef uint64_t page_id_t;    // Page identifier
-typedef uint64_t lsn_t;         // Log Sequence Number
-typedef uint32_t txn_id_t;      // Transaction ID
+typedef uint64_t page_id_t; // Page identifier
+typedef uint64_t lsn_t;     // Log Sequence Number
+typedef uint32_t txn_id_t;  // Transaction ID
 
 // Tuple identifier (page + slot)
 typedef struct tuple_id {
@@ -20,7 +20,7 @@ typedef struct tuple_id {
 
 // Common constants
 enum {
-    PAGE_SIZE = 8192,                    // 8 KB pages
+    PAGE_SIZE = 8192, // 8 KB pages
     INVALID_PAGE_ID = UINT64_MAX,
     INVALID_LSN = 0,
     INVALID_TXN_ID = 0,
