@@ -468,6 +468,22 @@ static void test_query_response_is_rolled_back_when_a_message_fails([[maybe_unus
     wire_writer_destroy(w);
 }
 
+static void
+test_table_response_is_rolled_back_when_a_row_cannot_be_formatted([[maybe_unused]] void **state)
+{
+    const char *sql = "SELECT * FROM user";
+    wire_writer_t *w = create_writer_with_real_allocations();
+
+    will_return(oom_calloc, true);
+    will_return(oom_malloc, false);
+    errno = 0;
+    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w, &SESSION), -1);
+
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(wire_writer_size(w), 0);
+    wire_writer_destroy(w);
+}
+
 // Making the user table takes the catalog's hash map (its struct and its buckets), the table, room
 // for its cells, and a copy of each of the 6 cells of its 3 rows
 static void expect_user_table_creation(void)
@@ -490,6 +506,7 @@ static void test_table_response_is_rolled_back_when_a_row_fails([[maybe_unused]]
     wire_writer_t *w = create_writer_filled_to(filled);
 
     will_return(oom_calloc, true);
+    will_return(oom_malloc, true);
     will_return(oom_realloc, false);
     errno = 0;
     assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w, &SESSION), -1);
@@ -772,6 +789,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_startup_leaves_result_unset_when_decline_write_fails),
     cmocka_unit_test(test_query_response_is_rolled_back_when_a_message_fails),
     cmocka_unit_test(test_table_response_is_rolled_back_when_a_row_fails),
+    cmocka_unit_test(test_table_response_is_rolled_back_when_a_row_cannot_be_formatted),
     cmocka_unit_test(test_insert_fails_when_the_statement_text_cannot_be_copied),
     cmocka_unit_test(test_insert_fails_when_the_row_cannot_be_stored),
     cmocka_unit_test(test_create_table_fails_when_memory_runs_out),

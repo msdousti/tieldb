@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
 
 static constexpr size_t INITIAL_CELL_CAPACITY = 16;
 
@@ -16,11 +17,16 @@ typedef struct {
     size_t display_position;
 } column_slot_t;
 
+typedef struct {
+    void *data;
+    size_t length;
+} cell_t;
+
 struct table {
     hash_node_t node; // for the catalog's hash map
     const char *name;
     size_t column_count;
-    char **cells;
+    cell_t *cells;
     size_t cell_count;
     size_t cell_capacity;
     size_t row_count; // kept apart from the cells, because a table may have no columns
@@ -71,9 +77,9 @@ table_t *table_create(const char *name, const table_column_t *columns, size_t co
 void table_destroy(table_t *table)
 {
     for (size_t i = 0; i < table->cell_count; i++) {
-        free(table->cells[i]);
+        free(table->cells[i].data);
     }
-    free((void *) table->cells);
+    free(table->cells);
     pthread_mutex_destroy(&table->lock);
     free(table);
 }
@@ -88,7 +94,7 @@ static int reserve_cells(table_t *table, size_t extra)
     if (capacity == table->cell_capacity) {
         return 0;
     }
-    char **grown = (char **) realloc((void *) table->cells, capacity * sizeof(*grown));
+    cell_t *grown = realloc(table->cells, capacity * sizeof(*grown));
     if (grown == nullptr) {
         return -1;
     }
@@ -97,22 +103,31 @@ static int reserve_cells(table_t *table, size_t extra)
     return 0;
 }
 
-static int append_cell(table_t *table, const char *text)
+static size_t stored_capacity(const type_info_t *type, const char *text)
 {
-    size_t size = strlen(text) + 1;
-    char *copy = malloc(size);
-    if (copy == nullptr) {
+    return type->storage_size == TYPE_VARIABLE_LENGTH ? strlen(text) + 1 : type->storage_size;
+}
+
+static int append_cell(table_t *table, const type_info_t *type, const char *text)
+{
+    size_t capacity = stored_capacity(type, text);
+    void *data = malloc(capacity);
+    if (data == nullptr) {
         return -1;
     }
-    memcpy(copy, text, size);
-    table->cells[table->cell_count++] = copy;
+    ssize_t length = type->input(text, data, capacity);
+    if (length < 0) {
+        free(data);
+        return -1;
+    }
+    table->cells[table->cell_count++] = (cell_t){data, (size_t) length};
     return 0;
 }
 
 static void drop_cells_after(table_t *table, size_t count)
 {
     while (table->cell_count > count) {
-        free(table->cells[--table->cell_count]);
+        free(table->cells[--table->cell_count].data);
     }
 }
 
@@ -121,7 +136,7 @@ static int append_row(table_t *table, const char *const *cells, size_t count)
     size_t start = table->cell_count;
     int status = reserve_cells(table, count);
     for (size_t i = 0; i < count && status == 0; i++) {
-        status = append_cell(table, cells[i]);
+        status = append_cell(table, table->columns[i].column.type, cells[i]);
     }
     drop_cells_after(table, status == 0 ? table->cell_count : start);
     table->row_count += status == 0 ? 1 : 0;
@@ -232,7 +247,8 @@ size_t table_row_count(const table_t *table)
     return table->row_count;
 }
 
-const char *table_cell(const table_t *table, size_t row, size_t column)
+table_value_t table_cell(const table_t *table, size_t row, size_t column)
 {
-    return table->cells[(row * table->column_count) + column];
+    const cell_t *cell = &table->cells[(row * table->column_count) + column];
+    return (table_value_t){cell->data, cell->length};
 }

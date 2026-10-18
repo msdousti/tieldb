@@ -39,6 +39,8 @@ typedef struct {
     size_t storage_size;
     /** Whether the text is a valid value of the type. */
     bool (*accepts)(const char *text);
+    /** The size of the buffer that output needs for a stored value of this length. */
+    size_t (*output_capacity)(size_t length);
     /** Converts text to the stored form; returns the number of bytes stored. */
     ssize_t (*input)(const char *text, void *buffer, size_t capacity);
     /** Converts a stored value to text with a terminating zero; returns the length without it. */

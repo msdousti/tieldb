@@ -1,8 +1,8 @@
 # TielDB Development State
 
 **Last updated:** 2026-10-19
-**Phase 1 is complete.** Next: plan Phase 2 (persistence). Start with the type registry and typed
-values (see "What comes next").
+**Phase 1 is complete; Phase 2 (persistence) is under way.** The type registry is done and values
+are stored in their own format. Next: the slotted page (see "What comes next").
 
 This file is the hand-over for a new session. Read it first, then `CLAUDE.md` (the rules) and
 `ROADMAP.md` (the plan). `ROADMAP.md` is the source of truth for what is done.
@@ -39,8 +39,9 @@ select version();   select current_user;   select current_database();
 - Columns have a display order separate from the storage order (`table_set_display_order`); there
   is no SQL to change it yet (roadmap: `ALTER TABLE ... MODIFY ... AFTER`).
 
-Known deviations from Postgres: integers are stored as written (`007` stays `007`; the type
-registry in Phase 2 fixes it); the server reports `server_version` `18.0 (TielDB 0.1.0)` so that
+Integers are stored as 4-byte values, so `007` is shown as `7`, like Postgres.
+
+Known deviations from Postgres: the server reports `server_version` `18.0 (TielDB 0.1.0)` so that
 psql 18 does not print a version-mismatch warning; the table named `user` works only because
 TielDB's matcher is simple (it is a reserved word in Postgres); SQL is recognized by stopgap
 matchers (`src/sql/simple_sql.c`), not a parser; no comments, no multiple statements per query.
@@ -126,16 +127,19 @@ src/
     query_handler    Query ('Q'): single-value queries, SELECT *, INSERT, CREATE TABLE, errors
     connection       per-connection loop (startup, then messages until Terminate)
     server           loopback TCP listener, a detached thread per connection
+  types/             type registry: int4 and text (OID, storage size, accepts/input/output/compare)
   sql/simple_sql     stopgap recognizers (version/current_user/current_database, select *,
                      insert, create table, empty); the real parser is a Phase 3 task
   executor/          executor_insert, executor_create_table, executor_select_all (+ release)
   storage/
-    table              in-memory table: copies name/columns, text cells, row count, per-table
-                       mutex, display order, embedded hash node
+    table              in-memory table: copies name/columns, cells stored in the format of their
+                       column type (converted by the registry), row count, per-table mutex,
+                       display order, embedded hash node
     catalog            all tables by name in a hash map behind a read-write lock
 tests/               one test_*.c per module (cmocka), test_wire_buffer_oom.c (allocation
                      failures via renamed malloc/calloc/realloc), test_tieldb.c (spawns the
-                     binary), psql_session.sh + .expected (real psql, suite "client")
+                     binary), psql_session.sh + .expected (real psql, suite "client"),
+                     table_assert.h (assert_cell_text for tests that read tables)
 .claude/             design docs for the rules (style, clean code, C guidelines, design choices)
 ```
 
@@ -164,12 +168,13 @@ counts conditions: a loop condition with `&&` needs a test for each operand bein
 
 ## What comes next
 
-1. **Plan Phase 2 with the user before writing code.** Proposed first step: the **type registry**
-   (like `pg_type`): each type has a name, OID, text in/out functions, storage size and a
-   comparison function; `INTEGER` and `TEXT` become registry entries; values are stored in their
-   own format, not as text (fixes `007`). It replaces `column_type_t`, the executor's type-name
-   table and the handler's type-to-OID mapping. Then the tuple format, slotted pages, buffer pool,
-   heap files, persistent catalog (including each column's display position).
+1. **Phase 2, in the order of the ROADMAP.md plan** (decisions are written there: the catalog in
+   real system tables, flush on shutdown and checkpoint since there is no WAL yet, per-table mutex
+   plus a buffer pool lock, rows must fit one page, overflow storage is Phase 8+). Done: the type
+   registry (PRs 1 to 3: registry, lookups through it, typed cells). Next, one PR each: slotted page
+   (`src/storage/page`, with a reference-model test and a fuzz target), tuple format (encode and
+   decode through the registry), heap file, buffer pool, free space map, heap-backed tables, then
+   the persistent catalog with a data directory option and the crash test.
 2. Phase 3 (already in the roadmap): the real SQL parser and syntax tree first, then expressions,
    `WHERE`, projection, `DELETE`/`UPDATE`/`TRUNCATE`/`INSERT ... SELECT`, `generate_series`,
    `ALTER TABLE ... MODIFY/ADD COLUMN ... AFTER|FIRST`, ORDER BY, aggregates, joins.
@@ -177,6 +182,11 @@ counts conditions: a loop condition with `&&` needs a test for each operand bein
    MVCC.
 
 ## Troubleshooting
+
+- `test_wire_buffer_oom` compiles the net, storage and executor sources with `malloc` renamed to a
+  mock, so a new `malloc`/`realloc`/`calloc` call in those files needs a matching `will_return`
+  in the tests that reach it (a missing one fails the test, and leftover values make later tests
+  hang). Run it with `timeout 20` when debugging.
 
 - A build directory made with GCC (or without the native file) fails at configure with a message
   pointing at `clang.ini`: delete it and set it up again.
