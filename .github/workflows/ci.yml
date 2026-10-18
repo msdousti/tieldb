@@ -13,18 +13,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install clang-format
+      - name: Install clang-format-22
         run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-22 main" | sudo tee /etc/apt/sources.list.d/llvm.list
           sudo apt-get update
-          sudo apt-get install -y clang-format
+          sudo apt-get install -y clang-format-22
 
       - name: Check formatting
         run: |
-          clang-format --version
+          clang-format-22 --version
           # Check if any files would be reformatted
           FILES=$(find src tests -type f \( -name '*.c' -o -name '*.h' \))
           if [ -n "$FILES" ]; then
-            echo "$FILES" | xargs clang-format --dry-run --Werror
+            echo "$FILES" | xargs clang-format-22 --dry-run --Werror
           fi
 
   lint:
@@ -35,10 +37,14 @@ jobs:
 
       - name: Install dependencies
         run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-22 main" | sudo tee /etc/apt/sources.list.d/llvm.list
           sudo apt-get update
           sudo apt-get install -y \
-            meson ninja-build clang clang-tidy \
+            meson ninja-build clang-22 clang-tidy-22 \
             libcmocka-dev pkg-config
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-22 100
+          sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-22 100
 
       - name: Setup build
         run: meson setup build -Db_sanitize=address,undefined
