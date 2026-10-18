@@ -148,6 +148,11 @@ testdb=> SELECT * FROM user;
   - [ ] Bootstrap: create catalog files on first run
   - [ ] Load catalog at startup
   - [ ] Store each column's display position next to its definition, so a reordering survives a restart
+- [ ] Type registry (like Postgres's `pg_type`), so types are data and not special cases in the code
+  - [ ] Each type has a name, an OID, text input and output functions, a storage size (fixed or variable length) and a comparison function
+  - [ ] `INTEGER` and `TEXT` become entries of the registry; the executor, the wire protocol layer and the tuple format look types up through it. This replaces the `column_type_t` enum, the type-name table in the executor and the type-to-OID mapping in the query handler
+  - [ ] Values are stored in their type's own format (an integer as 4 bytes), converted from and to text only at the edges; this also fixes integers being stored as written (`007`)
+  - [ ] The persistent catalog stores each column's type by id
 - [ ] Tuple format
   - [ ] Fixed-length header (null bitmap, optional xmin/xmax)
   - [ ] Variable-length data (length prefix for TEXT)
@@ -531,7 +536,11 @@ Hash Join  (cost=24.50..89.75 rows=1000)
 - [ ] DATE, TIMESTAMP, INTERVAL
 - [ ] BYTEA (binary data)
 - [ ] Arrays
-- [ ] User-defined types (UDTs)
+- [ ] User-defined types (UDTs), on top of the type registry from Phase 2
+  - [ ] `CREATE TYPE ... AS ENUM`, as the first one: simple, and visible in `psql`
+  - [ ] Composite types: `CREATE TYPE ... AS (a int, b text)`
+  - [ ] Domains: a base type plus a constraint
+  - [ ] Extra base types registered at compile time. Loading user-written shared libraries (what Postgres extensions do) is out of scope
 
 ### Checkpointing Improvements
 - [ ] Incremental checkpointing
