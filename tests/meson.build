@@ -63,7 +63,7 @@ test('simple_sql', test_simple_sql)
 # Test: in-memory tables
 test_table = executable('test_table',
   'test_table.c',
-  dependencies: [tieldb_dep, cmocka_dep],
+  dependencies: [tieldb_dep, cmocka_dep, thread_dep],
   include_directories: inc,
 )
 

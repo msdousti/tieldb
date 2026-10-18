@@ -25,6 +25,7 @@
 #include "net/protocol.h"
 #include "net/query_handler.h"
 #include "net/server.h"
+#include "storage/table.h"
 #include "net/startup.h"
 #include "net/wire_buffer.h"
 
@@ -462,6 +463,17 @@ static void test_query_response_is_rolled_back_when_a_message_fails([[maybe_unus
     wire_writer_destroy(w);
 }
 
+// The built-in user table is created on first use: the table itself, room for its cells, and a
+// copy of each of the 6 cells of its 3 rows
+static void expect_user_table_creation(void)
+{
+    will_return(oom_calloc, true);
+    will_return(oom_realloc, true);
+    for (size_t i = 0; i < 6; i++) {
+        will_return(oom_malloc, true);
+    }
+}
+
 static void test_table_response_is_rolled_back_when_a_row_fails([[maybe_unused]] void **state)
 {
     const char *sql = "SELECT * FROM user";
@@ -471,6 +483,7 @@ static void test_table_response_is_rolled_back_when_a_row_fails([[maybe_unused]]
     wire_writer_t *w = create_writer_filled_to(filled);
 
     will_return(oom_calloc, true);
+    expect_user_table_creation();
     will_return(oom_realloc, false);
     errno = 0;
     assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w), -1);
@@ -554,6 +567,57 @@ test_server_serve_fails_when_a_session_cannot_be_allocated([[maybe_unused]] void
     server_destroy(server);
 }
 
+static const table_column_t PAIR_COLUMNS[] = {{"a", COLUMN_TYPE_INTEGER}, {"b", COLUMN_TYPE_TEXT}};
+
+static table_t *create_pair_table_with_real_allocations(void)
+{
+    will_return(oom_calloc, true);
+    table_t *table = table_create("pair", PAIR_COLUMNS, 2);
+    if (table == nullptr) {
+        fail();
+    }
+    return table;
+}
+
+static void test_table_create_fails_when_memory_runs_out([[maybe_unused]] void **state)
+{
+    will_return(oom_calloc, false);
+
+    errno = 0;
+    assert_null(table_create("pair", PAIR_COLUMNS, 2));
+    assert_int_equal(errno, ENOMEM);
+}
+
+static void test_table_insert_fails_when_the_cells_cannot_grow([[maybe_unused]] void **state)
+{
+    table_t *table = create_pair_table_with_real_allocations();
+    const char *row[] = {"1", "x"};
+
+    will_return(oom_realloc, false);
+    errno = 0;
+    assert_int_equal(table_insert(table, row, 2), -1);
+
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(table_row_count(table), 0);
+    table_destroy(table);
+}
+
+static void test_table_insert_undoes_a_partly_copied_row([[maybe_unused]] void **state)
+{
+    table_t *table = create_pair_table_with_real_allocations();
+    const char *row[] = {"1", "x"};
+
+    will_return(oom_realloc, true);
+    will_return(oom_malloc, true);
+    will_return(oom_malloc, false);
+    errno = 0;
+    assert_int_equal(table_insert(table, row, 2), -1);
+
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(table_row_count(table), 0);
+    table_destroy(table);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_create_fails_when_struct_allocation_fails),
     cmocka_unit_test(test_create_fails_when_buffer_allocation_fails),
@@ -589,6 +653,9 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_connection_fails_when_the_writer_cannot_be_created),
     cmocka_unit_test(test_connection_fails_when_a_packet_cannot_be_buffered),
     cmocka_unit_test(test_server_create_fails_when_memory_runs_out),
+    cmocka_unit_test(test_table_create_fails_when_memory_runs_out),
+    cmocka_unit_test(test_table_insert_fails_when_the_cells_cannot_grow),
+    cmocka_unit_test(test_table_insert_undoes_a_partly_copied_row),
     cmocka_unit_test(test_server_serve_fails_when_a_session_cannot_be_allocated),
 };
 

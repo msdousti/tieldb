@@ -69,7 +69,7 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
   - [ ] Table metadata (columns, types)
   - [ ] Hash map: table name → table definition
 - [ ] In-memory tuple storage
-  - [ ] Array of tuples per table
+  - [x] Array of tuples per table (growable, one lock per table; rows are text for now)
   - [ ] Support `INTEGER` and `TEXT` types only
 - [ ] Hardcoded executor
   - [ ] `CREATE TABLE` → add to catalog
