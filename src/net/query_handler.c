@@ -74,15 +74,41 @@ static int put_table_description(wire_writer_t *out, const void *context)
     return protocol_put_row_description(out, columns, count);
 }
 
+static size_t row_text_capacity(const table_t *table, size_t row)
+{
+    size_t capacity = 0;
+    for (size_t i = 0; i < table_column_count(table); i++) {
+        table_value_t cell = table_cell(table, row, i);
+        capacity += table_column(table, i)->type->output_capacity(cell.length);
+    }
+    return capacity;
+}
+
+static void format_row(const table_t *table, size_t row, char *buffer, protocol_value_t *values)
+{
+    for (size_t i = 0; i < table_column_count(table); i++) {
+        size_t physical = table_physical_index(table, i);
+        const type_info_t *type = table_column(table, physical)->type;
+        table_value_t cell = table_cell(table, row, physical);
+        size_t capacity = type->output_capacity(cell.length);
+        ssize_t length = type->output(cell.data, cell.length, buffer, capacity);
+        values[i] = (protocol_value_t){buffer, (size_t) length};
+        buffer += capacity;
+    }
+}
+
 static int put_table_row(wire_writer_t *out, const table_t *table, size_t row)
 {
-    size_t count = table_column_count(table);
     protocol_value_t values[TABLE_MAX_COLUMNS];
-    for (size_t i = 0; i < count; i++) {
-        const char *cell = table_cell(table, row, table_physical_index(table, i));
-        values[i] = (protocol_value_t){cell, strlen(cell)};
+    char *buffer =
+        malloc(row_text_capacity(table, row) + 1); // never zero, for tables without columns
+    if (buffer == nullptr) {
+        return -1;
     }
-    return protocol_put_data_row(out, values, count);
+    format_row(table, row, buffer, values);
+    int result = protocol_put_data_row(out, values, table_column_count(table));
+    free(buffer);
+    return result;
 }
 
 static int put_table_rows(wire_writer_t *out, const void *context)

@@ -9,6 +9,7 @@
 #include <strings.h>
 
 static constexpr int DECIMAL_BASE = 10;
+static constexpr size_t INT4_TEXT_CAPACITY = sizeof("-2147483648");
 
 static ssize_t fail_with(int error)
 {
@@ -25,6 +26,11 @@ static bool parse_int32(const char *text, int32_t *value)
         end != text && *end == '\0' && errno == 0 && parsed >= INT32_MIN && parsed <= INT32_MAX;
     *value = (int32_t) parsed;
     return valid;
+}
+
+static size_t int4_output_capacity([[maybe_unused]] size_t length)
+{
+    return INT4_TEXT_CAPACITY;
 }
 
 static bool int4_accepts(const char *text)
@@ -68,6 +74,11 @@ static int int4_compare(const void *left, [[maybe_unused]] size_t left_length, c
     return (a > b) - (a < b);
 }
 
+static size_t text_output_capacity(size_t length)
+{
+    return length + 1;
+}
+
 static bool text_accepts([[maybe_unused]] const char *text)
 {
     return true;
@@ -104,10 +115,11 @@ static int text_compare(const void *left, size_t left_length, const void *right,
     return (left_length > right_length) - (left_length < right_length);
 }
 
-const type_info_t TYPE_INT4 = {TYPE_OID_INT4, "int4",      sizeof(int32_t), int4_accepts,
-                               int4_input,    int4_output, int4_compare};
-const type_info_t TYPE_TEXT = {TYPE_OID_TEXT, "text",      TYPE_VARIABLE_LENGTH, text_accepts,
-                               text_input,    text_output, text_compare};
+const type_info_t TYPE_INT4 = {TYPE_OID_INT4,        "int4",     sizeof(int32_t), int4_accepts,
+                               int4_output_capacity, int4_input, int4_output,     int4_compare};
+const type_info_t TYPE_TEXT = {
+    TYPE_OID_TEXT,        "text",     TYPE_VARIABLE_LENGTH, text_accepts,
+    text_output_capacity, text_input, text_output,          text_compare};
 
 static const type_info_t *const TYPES[] = {&TYPE_INT4, &TYPE_TEXT};
 

@@ -7,10 +7,12 @@
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <string.h>
 
 #include <cmocka.h>
 
 #include "storage/table.h"
+#include "table_assert.h"
 
 static const table_column_t PAIR_COLUMNS[] = {{"a", &TYPE_INT4}, {"b", &TYPE_TEXT}};
 
@@ -85,9 +87,9 @@ static void test_inserted_rows_are_copied_and_kept_in_order([[maybe_unused]] voi
     assert_int_equal(table_insert(table, second, 2), 0);
 
     assert_int_equal(table_row_count(table), 2);
-    assert_string_equal(table_cell(table, 0, 1), "one");
-    assert_string_equal(table_cell(table, 1, 0), "2");
-    assert_string_equal(table_cell(table, 1, 1), "two");
+    assert_cell_text(table, 0, 1, "one");
+    assert_cell_text(table, 1, 0, "2");
+    assert_cell_text(table, 1, 1, "two");
     table_destroy(table);
 }
 
@@ -101,7 +103,7 @@ static void test_table_grows_past_its_initial_capacity([[maybe_unused]] void **s
     }
 
     assert_int_equal(table_row_count(table), 100);
-    assert_string_equal(table_cell(table, 99, 1), "seven");
+    assert_cell_text(table, 99, 1, "seven");
     table_destroy(table);
 }
 
@@ -121,6 +123,32 @@ static void test_insert_rejects_bad_arguments([[maybe_unused]] void **state)
     assert_int_equal(errno, EINVAL);
     errno = 0;
     assert_int_equal(table_insert_locked(nullptr, row, 2), -1);
+    assert_int_equal(errno, EINVAL);
+    assert_int_equal(table_row_count(table), 0);
+    table_destroy(table);
+}
+
+static void test_cells_are_stored_in_the_format_of_their_type([[maybe_unused]] void **state)
+{
+    table_t *table = create_pair_table();
+    const char *row[] = {"007", "007"};
+    assert_int_equal(table_insert(table, row, 2), 0);
+
+    assert_int_equal(table_cell(table, 0, 0).length, sizeof(int32_t));
+    assert_cell_text(table, 0, 0, "7");
+    assert_int_equal(table_cell(table, 0, 1).length, strlen("007"));
+    assert_cell_text(table, 0, 1, "007");
+    table_destroy(table);
+}
+
+static void
+test_insert_rejects_text_that_does_not_fit_the_column_type([[maybe_unused]] void **state)
+{
+    table_t *table = create_pair_table();
+    const char *row[] = {"abc", "x"};
+
+    errno = 0;
+    assert_int_equal(table_insert(table, row, 2), -1);
     assert_int_equal(errno, EINVAL);
     assert_int_equal(table_row_count(table), 0);
     table_destroy(table);
@@ -148,8 +176,8 @@ test_display_order_can_be_changed_without_touching_the_rows([[maybe_unused]] voi
     assert_int_equal(table_physical_index(table, 0), 1);
     assert_int_equal(table_physical_index(table, 1), 0);
     assert_string_equal(table_column(table, 0)->name, "a");
-    assert_string_equal(table_cell(table, 0, 0), "1");
-    assert_string_equal(table_cell(table, 0, 1), "one");
+    assert_cell_text(table, 0, 0, "1");
+    assert_cell_text(table, 0, 1, "one");
     table_destroy(table);
 }
 
@@ -247,6 +275,8 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_insert_rejects_bad_arguments),
     cmocka_unit_test(test_columns_are_shown_in_definition_order_by_default),
     cmocka_unit_test(test_display_order_can_be_changed_without_touching_the_rows),
+    cmocka_unit_test(test_cells_are_stored_in_the_format_of_their_type),
+    cmocka_unit_test(test_insert_rejects_text_that_does_not_fit_the_column_type),
     cmocka_unit_test(test_invalid_display_orders_are_rejected),
     cmocka_unit_test(test_readers_see_a_consistent_display_order),
     cmocka_unit_test(test_concurrent_inserts_are_all_kept),

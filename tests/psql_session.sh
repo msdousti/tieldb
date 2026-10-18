@@ -38,6 +38,7 @@ run_session() {
 create table pet (id integer, name text);
 insert into pet values (1, 'Rex');
 insert into pet values (2, 'O''Neil');
+insert into pet values (007, 'Spot');
 select * from pet;
 insert into pet values ('x', 'y');
 select * from nope;

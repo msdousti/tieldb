@@ -15,6 +15,7 @@
 
 #include "executor/executor.h"
 #include "storage/catalog.h"
+#include "table_assert.h"
 
 static void run_insert(const char *sql, executor_error_t *error)
 {
@@ -81,8 +82,8 @@ static void test_valid_insert_adds_a_row([[maybe_unused]] void **state)
 
     assert_string_equal(error.sqlstate, "");
     assert_int_equal(table_row_count(user), 4);
-    assert_string_equal(table_cell(user, 3, 0), "4");
-    assert_string_equal(table_cell(user, 3, 1), "Dave");
+    assert_cell_text(user, 3, 0, "4");
+    assert_cell_text(user, 3, 1, "Dave");
 }
 
 static void test_number_in_a_text_column_is_stored_as_text([[maybe_unused]] void **state)
@@ -93,7 +94,7 @@ static void test_number_in_a_text_column_is_stored_as_text([[maybe_unused]] void
     run_insert("INSERT INTO user VALUES (5, 42)", &error);
 
     assert_string_equal(error.sqlstate, "");
-    assert_string_equal(table_cell(user, 4, 1), "42");
+    assert_cell_text(user, 4, 1, "42");
 }
 
 static void test_select_from_a_missing_table_is_an_error([[maybe_unused]] void **state)
@@ -139,8 +140,8 @@ static void test_insert_values_follow_the_display_order([[maybe_unused]] void **
     run_insert("INSERT INTO flipped VALUES ('x', 5)", &error);
 
     assert_string_equal(error.sqlstate, "");
-    assert_string_equal(table_cell(table, 0, 0), "5");
-    assert_string_equal(table_cell(table, 0, 1), "x");
+    assert_cell_text(table, 0, 0, "5");
+    assert_cell_text(table, 0, 1, "x");
 }
 
 static void test_integer_check_uses_the_column_shown_at_that_position([[maybe_unused]] void **state)

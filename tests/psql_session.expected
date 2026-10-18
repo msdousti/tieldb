@@ -1,11 +1,13 @@
 CREATE TABLE
 INSERT 0 1
 INSERT 0 1
+INSERT 0 1
  id |  name  
 ----+--------
   1 | Rex
   2 | O'Neil
-(2 rows)
+  7 | Spot
+(3 rows)
 
 ERROR:  invalid input syntax for type integer: "x"
 ERROR:  relation "nope" does not exist
