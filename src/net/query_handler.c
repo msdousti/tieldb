@@ -22,11 +22,8 @@ static constexpr char UNSUPPORTED_MESSAGE[] =
     "only SELECT version(), SELECT * FROM <table> and INSERT INTO <table> VALUES (...) are "
     "supported";
 static constexpr char INSERT_TAG[] = "INSERT 0 1";
-static constexpr char MISSING_TABLE_SQLSTATE[] = "42P01";
-static constexpr char MISSING_TABLE_FORMAT[] = "relation \"%s\" does not exist";
 static constexpr char SELECT_TAG_FORMAT[] = "SELECT %zu";
 static constexpr size_t TAG_CAPACITY = 32;
-static constexpr size_t MESSAGE_CAPACITY = SQL_IDENTIFIER_CAPACITY + sizeof(MISSING_TABLE_FORMAT);
 
 // Each step appends one message; context is the table or table name the response is about
 typedef int (*response_step_t)(wire_writer_t *out, const void *context);
@@ -52,13 +49,6 @@ static int put_unsupported_error(wire_writer_t *out, [[maybe_unused]] const void
 {
     return protocol_put_error_response(out, ERROR_SEVERITY, UNSUPPORTED_SQLSTATE,
                                        UNSUPPORTED_MESSAGE);
-}
-
-static int put_missing_table_error(wire_writer_t *out, const void *context)
-{
-    char message[MESSAGE_CAPACITY];
-    (void) snprintf(message, sizeof(message), MISSING_TABLE_FORMAT, (const char *) context);
-    return protocol_put_error_response(out, ERROR_SEVERITY, MISSING_TABLE_SQLSTATE, message);
 }
 
 static int32_t type_oid(column_type_t type)
@@ -126,7 +116,6 @@ static const response_step_t VERSION_RESPONSE[] = {put_version_description, put_
                                                    put_select_one_tag, put_ready};
 static const response_step_t TABLE_RESPONSE[] = {put_table_description, put_table_rows,
                                                  put_table_tag, put_ready};
-static const response_step_t MISSING_TABLE_RESPONSE[] = {put_missing_table_error, put_ready};
 static const response_step_t INSERT_RESPONSE[] = {put_insert_tag, put_ready};
 static const response_step_t EXECUTOR_ERROR_RESPONSE[] = {put_executor_error, put_ready};
 static const response_step_t UNSUPPORTED_RESPONSE[] = {put_unsupported_error, put_ready};
@@ -143,16 +132,19 @@ static int run_steps(wire_writer_t *out, const response_step_t *steps, size_t co
     return result;
 }
 
+static int respond_error(const executor_error_t *error, wire_writer_t *out)
+{
+    return run_steps(out, EXECUTOR_ERROR_RESPONSE, STEP_COUNT(EXECUTOR_ERROR_RESPONSE), error);
+}
+
 static int respond_select_all(const char *table_name, wire_writer_t *out)
 {
-    table_t *table = table_find(table_name);
-    if (table == nullptr) {
-        return run_steps(out, MISSING_TABLE_RESPONSE, STEP_COUNT(MISSING_TABLE_RESPONSE),
-                         table_name);
-    }
-    table_lock(table);
-    int result = run_steps(out, TABLE_RESPONSE, STEP_COUNT(TABLE_RESPONSE), table);
-    table_unlock(table);
+    executor_select_t select;
+    executor_select_all(table_name, &select);
+    int result = select.table == nullptr
+                     ? respond_error(&select.error, out)
+                     : run_steps(out, TABLE_RESPONSE, STEP_COUNT(TABLE_RESPONSE), select.table);
+    executor_select_release(&select);
     return result;
 }
 
@@ -163,7 +155,7 @@ static int respond_insert(const sql_insert_t *insert, wire_writer_t *out)
         return -1;
     }
     if (error.sqlstate[0] != '\0') {
-        return run_steps(out, EXECUTOR_ERROR_RESPONSE, STEP_COUNT(EXECUTOR_ERROR_RESPONSE), &error);
+        return respond_error(&error, out);
     }
     return run_steps(out, INSERT_RESPONSE, STEP_COUNT(INSERT_RESPONSE), nullptr);
 }
