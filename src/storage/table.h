@@ -1,7 +1,7 @@
 /**
  * In-memory tables that can grow.
  *
- * A table has a name, fixed columns (1 to TABLE_MAX_COLUMNS of them) and any number of rows, kept
+ * A table has a name, fixed columns (0 to TABLE_MAX_COLUMNS of them) and any number of rows, kept
  * as text, which is what the wire protocol sends. table_create copies the name and the column
  * names, so the arguments need not outlive the call; table_insert copies the cells.
  *

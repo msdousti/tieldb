@@ -59,7 +59,7 @@ typedef struct {
 } sql_create_table_t;
 
 /**
- * Matches "CREATE TABLE <table> (<column> <type>, ...)". Whether a type exists is not decided
- * here.
+ * Matches "CREATE TABLE <table> (<column> <type>, ...)"; the column list may be empty, as in
+ * Postgres. Whether a type exists is not decided here.
  */
 [[nodiscard]] bool sql_parse_create_table(const char *sql, sql_create_table_t *create);

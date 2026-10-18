@@ -194,6 +194,17 @@ static void test_create_table_ignores_case_and_spaces([[maybe_unused]] void **st
     assert_column_is(&create, 0, "a", "int");
 }
 
+static void test_create_table_may_have_no_columns([[maybe_unused]] void **state)
+{
+    sql_create_table_t create;
+
+    assert_true(sql_parse_create_table("create table t();", &create));
+    assert_string_equal(create.table, "t");
+    assert_int_equal(create.count, 0);
+    assert_true(sql_parse_create_table("CREATE TABLE t ( )", &create));
+    assert_int_equal(create.count, 0);
+}
+
 static void test_text_that_is_not_a_create_table_is_rejected([[maybe_unused]] void **state)
 {
     assert_not_create_table("");
@@ -203,9 +214,9 @@ static void test_text_that_is_not_a_create_table_is_rejected([[maybe_unused]] vo
     assert_not_create_table("CREATE TABLE (a int)");
     assert_not_create_table("CREATE TABLE 1t (a int)");
     assert_not_create_table("CREATE TABLE t a int");
-    assert_not_create_table("CREATE TABLE t ()");
     assert_not_create_table("CREATE TABLE t (a)");
     assert_not_create_table("CREATE TABLE t (a int,)");
+    assert_not_create_table("CREATE TABLE t (,)");
     assert_not_create_table("CREATE TABLE t (a int b int)");
     assert_not_create_table("CREATE TABLE t (a int");
     assert_not_create_table("CREATE TABLE t (a int) x");
@@ -247,6 +258,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_insert_with_too_many_values_is_rejected),
     cmocka_unit_test(test_create_table_gives_the_table_and_the_columns),
     cmocka_unit_test(test_create_table_ignores_case_and_spaces),
+    cmocka_unit_test(test_create_table_may_have_no_columns),
     cmocka_unit_test(test_text_that_is_not_a_create_table_is_rejected),
     cmocka_unit_test(test_create_table_with_too_many_columns_is_rejected),
 };

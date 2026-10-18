@@ -49,6 +49,22 @@ static void assert_display_order_rejected(table_t *table, const size_t *order, s
     assert_int_equal(errno, EINVAL);
 }
 
+static void test_table_without_columns_counts_its_rows([[maybe_unused]] void **state)
+{
+    table_t *table = table_create("none", nullptr, 0);
+    const char *no_cells[1] = {};
+    if (table == nullptr) {
+        fail();
+    }
+
+    assert_int_equal(table_column_count(table), 0);
+    assert_int_equal(table_row_count(table), 0);
+    assert_int_equal(table_insert(table, no_cells, 0), 0);
+    assert_int_equal(table_insert(table, no_cells, 0), 0);
+    assert_int_equal(table_row_count(table), 2);
+    table_destroy(table);
+}
+
 static void test_new_table_is_empty([[maybe_unused]] void **state)
 {
     table_t *table = create_pair_table();
@@ -224,6 +240,7 @@ static void test_concurrent_inserts_are_all_kept([[maybe_unused]] void **state)
 
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_table_copies_its_name_and_column_names),
+    cmocka_unit_test(test_table_without_columns_counts_its_rows),
     cmocka_unit_test(test_new_table_is_empty),
     cmocka_unit_test(test_inserted_rows_are_copied_and_kept_in_order),
     cmocka_unit_test(test_table_grows_past_its_initial_capacity),

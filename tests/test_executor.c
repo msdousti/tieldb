@@ -156,6 +156,70 @@ static void test_integer_check_uses_the_column_shown_at_that_position([[maybe_un
     assert_int_equal(table_row_count(table), 1);
 }
 
+static void run_create(const char *sql, executor_error_t *error)
+{
+    sql_create_table_t create;
+
+    assert_true(sql_parse_create_table(sql, &create));
+    assert_int_equal(executor_create_table(&create, error), 0);
+}
+
+static void test_create_table_makes_a_table_with_the_given_columns([[maybe_unused]] void **state)
+{
+    executor_error_t error;
+
+    run_create("CREATE TABLE made (a INTEGER, b TEXT, c INT, d int4)", &error);
+
+    const table_t *made = catalog_find("made");
+    assert_string_equal(error.sqlstate, "");
+    assert_int_equal(table_column_count(made), 4);
+    assert_string_equal(table_column(made, 2)->name, "c");
+    assert_int_equal(table_column(made, 0)->type, COLUMN_TYPE_INTEGER);
+    assert_int_equal(table_column(made, 1)->type, COLUMN_TYPE_TEXT);
+    assert_int_equal(table_column(made, 2)->type, COLUMN_TYPE_INTEGER);
+    assert_int_equal(table_column(made, 3)->type, COLUMN_TYPE_INTEGER);
+    assert_int_equal(table_row_count(made), 0);
+}
+
+static void test_create_table_without_columns_makes_an_empty_table([[maybe_unused]] void **state)
+{
+    executor_error_t error;
+
+    run_create("CREATE TABLE nothing ()", &error);
+
+    assert_string_equal(error.sqlstate, "");
+    assert_int_equal(table_column_count(catalog_find("nothing")), 0);
+}
+
+static void assert_create_rejected(const char *sql, const char *sqlstate, const char *message)
+{
+    executor_error_t error;
+
+    run_create(sql, &error);
+
+    assert_string_equal(error.sqlstate, sqlstate);
+    assert_string_equal(error.message, message);
+}
+
+static void test_create_table_with_an_unknown_type_is_an_error([[maybe_unused]] void **state)
+{
+    assert_create_rejected("CREATE TABLE odd (a float)", "42704", "type \"float\" does not exist");
+    assert_null(catalog_find("odd"));
+}
+
+static void test_create_table_with_a_repeated_column_is_an_error([[maybe_unused]] void **state)
+{
+    assert_create_rejected("CREATE TABLE twice (a int, b text, a text)", "42701",
+                           "column \"a\" specified more than once");
+    assert_null(catalog_find("twice"));
+}
+
+static void test_create_table_for_an_existing_table_is_an_error([[maybe_unused]] void **state)
+{
+    assert_create_rejected("CREATE TABLE user (a int)", "42P07",
+                           "relation \"user\" already exists");
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_insert_into_a_missing_table_is_an_error),
     cmocka_unit_test(test_insert_with_the_wrong_number_of_values_is_an_error),
@@ -165,6 +229,11 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_valid_insert_adds_a_row),
     cmocka_unit_test(test_number_in_a_text_column_is_stored_as_text),
     cmocka_unit_test(test_select_gives_the_locked_table_until_released),
+    cmocka_unit_test(test_create_table_makes_a_table_with_the_given_columns),
+    cmocka_unit_test(test_create_table_without_columns_makes_an_empty_table),
+    cmocka_unit_test(test_create_table_with_an_unknown_type_is_an_error),
+    cmocka_unit_test(test_create_table_with_a_repeated_column_is_an_error),
+    cmocka_unit_test(test_create_table_for_an_existing_table_is_an_error),
     cmocka_unit_test(test_insert_values_follow_the_display_order),
     cmocka_unit_test(test_integer_check_uses_the_column_shown_at_that_position),
 };
