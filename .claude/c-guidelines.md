@@ -157,12 +157,13 @@ Makefiles, no CMake.
 ### Headers and encapsulation
 - One header per module (`foo.h`) declaring the public API, with an implementation file `foo.c`. Keep internals `static` in the `.c` file.
 - Use opaque types for encapsulation: `typedef struct foo foo;` in the header and the struct definition in the `.c` file. Callers can only hold `foo *`.
-- Where callers need to allocate on the stack, expose the struct but document which fields are private.
+- Every stateful module type is opaque, including readers, cursors, and iterators: callers get a `foo_create` / `foo_destroy` pair, never the struct layout. Plain data structs (`tuple_id_t`), options structs, and vtables are public. Any other exception needs the user's approval and an entry in `design-choices.md`.
 - Prefix every public symbol with the module name (`foo_open`, `foo_close`), since C has no namespaces.
 - Extern globals should be rare. Pass state through a context struct instead.
 
 ### Object-style patterns
 - Group data and operations: a struct plus `foo_*` functions taking the struct pointer as first argument.
+- Vtables are for places with more than one implementation or a need for injection (I/O, storage engines, callbacks). A concrete type with a single implementation, like a byte buffer, is an opaque handle plus prefixed functions, with no vtable.
 - Use a **vtable of function pointers** for swappable backends (e.g. a storage engine interface, as in Postgres's table access method API) and for callbacks. Always pair a callback with a `void *user_data` argument.
 - Use `typedef` for function-pointer types to keep declarations readable.
 - Use `struct` returns for multiple values (small structs are cheap to return), rather than a pile of out-pointers.
@@ -178,6 +179,7 @@ Makefiles, no CMake.
   - return a pointer or `NULL`
   - return a result struct, e.g. `struct { T value; int error; }`
   - set `errno` for POSIX-style APIs
+- **TielDB convention:** return `0` on success; on failure return `-1` (or `nullptr` from `foo_create`) and set `errno` (`EINVAL`, `ENOMEM`, `EOVERFLOW`, ...). The header documents which `errno` values each module can produce, and tests assert them.
 - Provide `foo_strerror()` or similar so callers can print errors.
 - Don't silently ignore errors. Don't call `exit()` from library code; return an error.
 - Validate arguments at public API boundaries with `assert` for programmer errors and error returns for runtime errors. Remember that `assert` disappears under `NDEBUG`.
@@ -279,6 +281,9 @@ Start with the I/O interface with fault injection, then a first cmocka test for 
 - [ ] Internals `static`; headers self-contained with guards
 - [ ] No unbounded string functions; every buffer carries a length
 - [ ] Options-struct pattern for functions with optional parameters
+- [ ] Stateful module types are opaque; vtables only for swappable implementations
+- [ ] Every failure path sets `errno`, documented in the header and asserted in tests
+- [ ] At most 4 parameters per function (clang-tidy enforces it); use an options struct beyond that
 
 **Tests**
 - [ ] All I/O behind an injectable interface
