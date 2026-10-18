@@ -181,10 +181,10 @@ testdb=> SELECT * FROM user;
   - [ ] Data directory option for the server; flush on clean shutdown and on checkpoint
 
 ### Tests
-- [ ] **Reference-model test for slotted page**
-  - [ ] Random insert/delete operations
-  - [ ] Compare against simple array model
-  - [ ] Log RNG seed for reproducibility
+- [x] **Reference-model test for slotted page**
+  - [x] Random insert/delete operations
+  - [x] Compare against simple array model
+  - [x] Log RNG seed for reproducibility
 - [ ] Unit tests for the type registry and the tuple round trip
 - [ ] Unit tests for buffer pool (pin/unpin, eviction)
 - [ ] Fault injection for heap file and buffer pool I/O (short write, fsync failure) through the injectable `io`
