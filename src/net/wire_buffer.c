@@ -9,6 +9,9 @@
 #include <string.h>
 
 static constexpr size_t WRITER_INITIAL_CAPACITY = 64;
+static constexpr size_t WRITER_MAX_SIZE = INT32_MAX;
+
+static_assert(WRITER_MAX_SIZE <= SIZE_MAX / 2);
 
 struct wire_writer {
     uint8_t *data;
@@ -49,7 +52,7 @@ static int fail_with(int error)
 
 static size_t grown_capacity(size_t capacity, size_t needed)
 {
-    while (capacity < needed && capacity <= SIZE_MAX / 2) {
+    while (capacity < needed) {
         capacity *= 2;
     }
     return capacity;
@@ -57,14 +60,10 @@ static size_t grown_capacity(size_t capacity, size_t needed)
 
 static int writer_reserve(wire_writer_t *writer, size_t extra)
 {
-    if (extra > SIZE_MAX - writer->size) {
+    if (extra > WRITER_MAX_SIZE - writer->size) {
         return fail_with(EOVERFLOW);
     }
-    size_t needed = writer->size + extra;
-    size_t capacity = grown_capacity(writer->capacity, needed);
-    if (capacity < needed) {
-        return fail_with(EOVERFLOW);
-    }
+    size_t capacity = grown_capacity(writer->capacity, writer->size + extra);
     if (capacity == writer->capacity) {
         return 0;
     }
@@ -104,12 +103,37 @@ int wire_writer_put_i16(wire_writer_t *writer, int16_t value)
     return wire_writer_put_bytes(writer, bytes, sizeof(bytes));
 }
 
-int wire_writer_put_i32(wire_writer_t *writer, int32_t value)
+static void encode_i32(uint8_t *out, int32_t value)
 {
     uint32_t bits = (uint32_t) value;
-    const uint8_t bytes[] = {(uint8_t) (bits >> 24), (uint8_t) (bits >> 16), (uint8_t) (bits >> 8),
-                             (uint8_t) bits};
+    out[0] = (uint8_t) (bits >> 24);
+    out[1] = (uint8_t) (bits >> 16);
+    out[2] = (uint8_t) (bits >> 8);
+    out[3] = (uint8_t) bits;
+}
+
+int wire_writer_put_i32(wire_writer_t *writer, int32_t value)
+{
+    uint8_t bytes[4];
+    encode_i32(bytes, value);
     return wire_writer_put_bytes(writer, bytes, sizeof(bytes));
+}
+
+int wire_writer_patch_i32(wire_writer_t *writer, size_t offset, int32_t value)
+{
+    if (writer == nullptr || writer->size < sizeof(int32_t) ||
+        offset > writer->size - sizeof(int32_t)) {
+        return fail_with(EINVAL);
+    }
+    encode_i32(writer->data + offset, value);
+    return 0;
+}
+
+void wire_writer_truncate(wire_writer_t *writer, size_t size)
+{
+    if (writer != nullptr && size < writer->size) {
+        writer->size = size;
+    }
 }
 
 int wire_writer_put_cstring(wire_writer_t *writer, const char *str)

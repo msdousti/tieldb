@@ -56,7 +56,7 @@
  * position unchanged:
  *
  *   EINVAL      a required argument was null
- *   EOVERFLOW   writer: the buffer size would exceed SIZE_MAX
+ *   EOVERFLOW   writer: the buffer would exceed INT32_MAX bytes
  *   EBADMSG     reader: the input is too short, or a string has no terminator
  *   ENOMEM      memory allocation failed
  */
@@ -77,6 +77,16 @@ void wire_writer_destroy(wire_writer_t *writer);
 [[nodiscard]] int wire_writer_put_i16(wire_writer_t *writer, int16_t value);
 [[nodiscard]] int wire_writer_put_i32(wire_writer_t *writer, int32_t value);
 [[nodiscard]] int wire_writer_put_bytes(wire_writer_t *writer, const void *data, size_t size);
+
+/**
+ * Overwrites four bytes that were already written, starting at offset. This is how a message
+ * length is filled in once the body is known: write a placeholder, the body, then patch.
+ * The buffer never exceeds INT32_MAX bytes, so a length measured from the buffer fits an int32.
+ */
+[[nodiscard]] int wire_writer_patch_i32(wire_writer_t *writer, size_t offset, int32_t value);
+
+/** Discards everything after the first size bytes, to undo a half-written message. */
+void wire_writer_truncate(wire_writer_t *writer, size_t size);
 
 /** Writes the string followed by its NUL terminator. */
 [[nodiscard]] int wire_writer_put_cstring(wire_writer_t *writer, const char *str);
