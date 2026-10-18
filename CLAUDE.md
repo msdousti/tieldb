@@ -246,9 +246,8 @@ meson test -C build-asan
 # Run with TSan (for concurrency)
 meson test -C build-tsan
 
-# Run with coverage
-meson test -C build-cov
-ninja coverage -C build-cov
+# Run with coverage (fails below the line-coverage threshold in gcovr.cfg)
+./scripts/coverage.sh
 
 # Run fuzz tests
 ./build-fuzz/fuzz_page_deserialize -max_total_time=60
@@ -428,6 +427,7 @@ Work proceeds as a sequence of small, reviewable pull requests, each leaving `ma
 - **Roadmap upkeep:** each PR updates `ROADMAP.md` in the same PR. Check a task only when every part of it is done.
   If the PR does only part of a step, add sub-items under that step and check only the ones it completes
 - **PR description:** fill in `.github/pull_request_template.md` (`gh pr create --body-file` does not apply it automatically); check only the boxes that are true
+- **Coverage:** CI fails if line coverage of `src/` drops below `fail-under-line` in `gcovr.cfg`. Raise the threshold as tests grow; never lower it without asking the user
 - **Measure before opening:** check `git diff --stat main` and split if the size is over target
 
 ---
