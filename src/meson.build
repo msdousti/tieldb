@@ -5,9 +5,15 @@ io_sources = files(
   'io/io.c',
 )
 
+# Network module
+net_sources = files(
+  'net/wire_buffer.c',
+)
+
 # Build static library
 tieldb_lib = static_library('tieldb',
   io_sources,
+  net_sources,
   include_directories: inc,
   install: false,
 )

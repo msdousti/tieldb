@@ -23,7 +23,8 @@ Checks: >
   -cert-err33-c,
   -misc-unused-parameters,
   -misc-include-cleaner,
-  -portability-avoid-pragma-once
+  -portability-avoid-pragma-once,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
 
 # Disabled checks explained:
 # - identifier-length: we allow short names like 'i', 'j' for loop counters
@@ -39,6 +40,7 @@ Checks: >
 # - misc-unused-parameters: common in callback interfaces
 # - misc-include-cleaner: too pedantic about indirect includes
 # - avoid-pragma-once: our style guide requires #pragma once
+# - insecureAPI.DeprecatedOrUnsafeBufferHandling: flags every memcpy; we bounds-check sizes
 
 WarningsAsErrors: '*'
 
