@@ -76,7 +76,7 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
   - [x] Array of tuples per table (growable, one lock per table; rows are text for now)
   - [ ] Support `INTEGER` and `TEXT` types only
 - [ ] Hardcoded executor
-  - [ ] `CREATE TABLE` → add to catalog
+  - [x] `CREATE TABLE` → add to catalog
   - [ ] `INSERT` → append to tuple array
     - [x] Into the built-in `user` table (values checked against the column types)
     - [ ] Into catalog tables

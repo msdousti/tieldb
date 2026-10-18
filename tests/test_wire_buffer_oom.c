@@ -697,6 +697,23 @@ test_catalog_create_fails_when_the_table_cannot_be_allocated([[maybe_unused]] vo
     assert_int_equal(errno, ENOMEM);
 }
 
+static void test_create_table_fails_when_memory_runs_out([[maybe_unused]] void **state)
+{
+    const char *sql = "CREATE TABLE no_memory (a int)";
+    wire_writer_t *w = create_writer_with_real_allocations();
+
+    will_return(oom_calloc, true);
+    will_return(oom_malloc, true);
+    will_return(oom_calloc, false);
+    errno = 0;
+    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w), -1);
+
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(wire_writer_size(w), 0);
+    assert_null(catalog_find("no_memory"));
+    wire_writer_destroy(w);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_create_fails_when_struct_allocation_fails),
     cmocka_unit_test(test_create_fails_when_buffer_allocation_fails),
@@ -730,6 +747,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_table_response_is_rolled_back_when_a_row_fails),
     cmocka_unit_test(test_insert_fails_when_the_statement_text_cannot_be_copied),
     cmocka_unit_test(test_insert_fails_when_the_row_cannot_be_stored),
+    cmocka_unit_test(test_create_table_fails_when_memory_runs_out),
     cmocka_unit_test(test_query_fails_cleanly_when_the_reader_cannot_be_created),
     cmocka_unit_test(test_connection_fails_when_the_writer_cannot_be_created),
     cmocka_unit_test(test_connection_fails_when_a_packet_cannot_be_buffered),

@@ -40,8 +40,8 @@ static void put_expected_unsupported_response(wire_writer_t *w)
     assert_int_equal(
         protocol_put_error_response(
             w, "ERROR", "0A000",
-            "only SELECT version(), SELECT * FROM <table> and INSERT INTO <table> VALUES (...) "
-            "are supported"),
+            "only SELECT version(), SELECT * FROM <table>, INSERT INTO <table> VALUES (...) and "
+            "CREATE TABLE are supported"),
         0);
     assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
 }
@@ -137,6 +137,43 @@ static void test_insert_with_a_wrong_value_count_is_an_error([[maybe_unused]] vo
     assert_response("INSERT INTO user VALUES (4)", put_expected_wrong_count_response);
 }
 
+static void put_expected_create_table_response(wire_writer_t *w)
+{
+    assert_int_equal(protocol_put_command_complete(w, "CREATE TABLE"), 0);
+    assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
+}
+
+static void put_expected_table_exists_response(wire_writer_t *w)
+{
+    assert_int_equal(
+        protocol_put_error_response(w, "ERROR", "42P07", "relation \"user\" already exists"), 0);
+    assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
+}
+
+static void put_expected_pets_response(wire_writer_t *w)
+{
+    const protocol_column_t columns[] = {{"id", PROTOCOL_TYPE_INT4}, {"name", PROTOCOL_TYPE_TEXT}};
+    const protocol_value_t values[] = {{"7", 1}, {"Rex", 3}};
+
+    assert_int_equal(protocol_put_row_description(w, columns, 2), 0);
+    assert_int_equal(protocol_put_data_row(w, values, 2), 0);
+    assert_int_equal(protocol_put_command_complete(w, "SELECT 1"), 0);
+    assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
+}
+
+static void test_create_table_insert_and_select_work_together([[maybe_unused]] void **state)
+{
+    assert_response("CREATE TABLE pets (id INTEGER, name TEXT);",
+                    put_expected_create_table_response);
+    assert_response("INSERT INTO pets VALUES (7, 'Rex')", put_expected_insert_response);
+    assert_response("SELECT * FROM pets", put_expected_pets_response);
+}
+
+static void test_create_table_for_an_existing_table_is_an_error([[maybe_unused]] void **state)
+{
+    assert_response("CREATE TABLE user (id INTEGER)", put_expected_table_exists_response);
+}
+
 static void test_other_queries_get_an_error_and_stay_usable([[maybe_unused]] void **state)
 {
     assert_response("SELECT 1", put_expected_unsupported_response);
@@ -214,6 +251,8 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_select_star_from_a_missing_table_is_an_error),
     cmocka_unit_test(test_select_star_shows_columns_in_the_display_order),
     cmocka_unit_test(test_insert_with_a_wrong_value_count_is_an_error),
+    cmocka_unit_test(test_create_table_insert_and_select_work_together),
+    cmocka_unit_test(test_create_table_for_an_existing_table_is_an_error),
     cmocka_unit_test(test_other_queries_get_an_error_and_stay_usable),
     cmocka_unit_test(test_response_appends_after_existing_content),
     cmocka_unit_test(test_message_without_a_string_is_rejected),
