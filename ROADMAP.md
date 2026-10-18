@@ -90,7 +90,7 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
 ### Tests
 - [ ] Unit tests for wire protocol parsing
 - [ ] Unit tests for SQL parsing (CREATE, INSERT, SELECT)
-- [ ] Integration test: connect with `psql`, run queries
+- [x] Integration test: connect with `psql`, run queries
 - [ ] Fuzz test for wire protocol messages
 
 ### Deliverables
