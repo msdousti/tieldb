@@ -157,7 +157,7 @@ test('wire_buffer_oom', test_wire_buffer_oom)
 psql = find_program('psql', required: false)
 if psql.found()
   test('psql_session', find_program('bash'),
-    args: [files('psql_session.sh'), tieldb_exe, psql, files('psql_session.expected')],
+    args: [files('psql_session.sh'), tieldb_exe, psql.full_path(), files('psql_session.expected')],
     depends: tieldb_exe,
     suite: 'client',
     timeout: 60,
