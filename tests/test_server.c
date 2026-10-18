@@ -190,14 +190,42 @@ static void test_a_stuck_client_does_not_block_others([[maybe_unused]] void **st
     server_destroy(server);
 }
 
+static void *return_immediately(void *argument)
+{
+    return argument;
+}
+
+// The limit does not apply to root or to processes with CAP_SYS_RESOURCE, so check that it works
+static bool thread_creation_is_blocked(void)
+{
+    pthread_t thread;
+    if (pthread_create(&thread, nullptr, return_immediately, nullptr) != 0) {
+        return true;
+    }
+    assert_int_equal(pthread_join(thread, nullptr), 0);
+    return false;
+}
+
+static bool block_thread_creation(struct rlimit *saved)
+{
+    assert_int_equal(getrlimit(RLIMIT_NPROC, saved), 0);
+    struct rlimit none = {.rlim_cur = 0, .rlim_max = saved->rlim_max};
+    assert_int_equal(setrlimit(RLIMIT_NPROC, &none), 0);
+    if (thread_creation_is_blocked()) {
+        return true;
+    }
+    assert_int_equal(setrlimit(RLIMIT_NPROC, saved), 0);
+    return false;
+}
+
 static void test_serve_fails_when_a_thread_cannot_be_started([[maybe_unused]] void **state)
 {
+    struct rlimit saved;
+    if (!block_thread_creation(&saved)) {
+        skip();
+    }
     server_t *server = create_server();
     int client = connect_client(server);
-    struct rlimit saved;
-    assert_int_equal(getrlimit(RLIMIT_NPROC, &saved), 0);
-    struct rlimit none = {.rlim_cur = 0, .rlim_max = saved.rlim_max};
-    assert_int_equal(setrlimit(RLIMIT_NPROC, &none), 0);
 
     errno = 0;
     int status = server_serve(server, 1);
