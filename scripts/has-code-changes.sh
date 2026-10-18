@@ -9,6 +9,8 @@ head="${2:-HEAD}"
 is_docs_path() {
     case "$1" in
         *.md | docs/* | .claude/*) return 0 ;;
+        # Local tools that CI does not run; coverage.sh and this script are run by CI
+        scripts/dev.sh | scripts/valgrind.sh | scripts/install-hooks.sh | scripts/pre-commit) return 0 ;;
         *) return 1 ;;
     esac
 }
