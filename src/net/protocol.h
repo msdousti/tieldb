@@ -9,6 +9,14 @@
  *     0     1  2  3  4    5  6  7  8
  *    'R'    length = 8    result = 0
  *
+ *   DataRow: one row of values, matching the last RowDescription
+ *
+ *     0     1  2  3  4    5  6    7 ...
+ *    'D'    length        count   one entry per column
+ *
+ *     each entry is an int32 byte length followed by that many bytes of text
+ *     (no terminator); a length of -1 means SQL NULL and no bytes follow
+ *
  *   RowDescription: the columns of the rows that follow
  *
  *     0     1  2  3  4    5  6    7 ...
@@ -42,7 +50,8 @@
  * Each encoder appends one complete message to a wire_writer_t, or nothing on
  * failure. Failures return -1 and set errno as documented in wire_buffer.h;
  * a null writer or an invalid argument gives EINVAL; for RowDescription that
- * includes a type OID other than the PROTOCOL_TYPE_* values.
+ * includes a type OID other than the PROTOCOL_TYPE_* values, and for DataRow a
+ * value longer than INT32_MAX bytes, or with a length but no data.
  */
 
 #pragma once
@@ -68,9 +77,17 @@ typedef struct protocol_column {
     int32_t type_oid;
 } protocol_column_t;
 
+/** One value of a DataRow: length bytes of text, or SQL NULL when data is nullptr (length 0). */
+typedef struct protocol_value {
+    const char *data;
+    size_t length;
+} protocol_value_t;
+
 [[nodiscard]] int protocol_put_authentication_ok(wire_writer_t *writer);
 [[nodiscard]] int protocol_put_row_description(wire_writer_t *writer,
                                                const protocol_column_t *columns, size_t count);
+[[nodiscard]] int protocol_put_data_row(wire_writer_t *writer, const protocol_value_t *values,
+                                        size_t count);
 [[nodiscard]] int protocol_put_command_complete(wire_writer_t *writer, const char *tag);
 [[nodiscard]] int protocol_put_error_response(wire_writer_t *writer, const char *severity,
                                               const char *sqlstate, const char *message);

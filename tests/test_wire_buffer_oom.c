@@ -248,23 +248,71 @@ static void test_row_description_rolls_back_when_column_fields_fail([[maybe_unus
         MESSAGE_HEADER_SIZE + FIELD_COUNT_SIZE + cstring_size("id") + COLUMN_FIXED_SIZE));
 }
 
+static void assert_data_row_fails_leaving(size_t filled)
+{
+    const protocol_value_t values[] = {{"ab", 2}, {nullptr, 0}};
+    wire_writer_t *w = create_writer_filled_to(filled);
+
+    will_return(oom_realloc, false);
+    errno = 0;
+    assert_int_equal(protocol_put_data_row(w, values, 2), -1);
+
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(wire_writer_size(w), filled);
+    wire_writer_destroy(w);
+}
+
+static void test_data_row_rolls_back_when_header_fails([[maybe_unused]] void **state)
+{
+    assert_data_row_fails_leaving(fill_to_overflow_at(MESSAGE_HEADER_SIZE));
+}
+
+static void test_data_row_rolls_back_when_count_fails([[maybe_unused]] void **state)
+{
+    assert_data_row_fails_leaving(fill_to_overflow_at(MESSAGE_HEADER_SIZE + FIELD_COUNT_SIZE));
+}
+
+static void test_data_row_rolls_back_when_value_length_fails([[maybe_unused]] void **state)
+{
+    assert_data_row_fails_leaving(
+        fill_to_overflow_at(MESSAGE_HEADER_SIZE + FIELD_COUNT_SIZE + sizeof(int32_t)));
+}
+
+static void test_data_row_rolls_back_when_value_bytes_fail([[maybe_unused]] void **state)
+{
+    assert_data_row_fails_leaving(fill_to_overflow_at(MESSAGE_HEADER_SIZE + FIELD_COUNT_SIZE +
+                                                      sizeof(int32_t) + strlen("ab")));
+}
+
+static void test_data_row_rolls_back_finished_value_when_next_fails([[maybe_unused]] void **state)
+{
+    assert_data_row_fails_leaving(fill_to_overflow_at(
+        MESSAGE_HEADER_SIZE + FIELD_COUNT_SIZE + sizeof(int32_t) + strlen("ab") + sizeof(int32_t)));
+}
+
+static const struct CMUnitTest tests[] = {
+    cmocka_unit_test(test_create_fails_when_struct_allocation_fails),
+    cmocka_unit_test(test_create_fails_when_buffer_allocation_fails),
+    cmocka_unit_test(test_put_bytes_fails_when_growth_fails),
+    cmocka_unit_test(test_reader_create_fails_when_allocation_fails),
+    cmocka_unit_test(test_command_complete_leaves_writer_unchanged_when_header_fails),
+    cmocka_unit_test(test_command_complete_rolls_back_header_when_tag_fails),
+    cmocka_unit_test(test_error_response_rolls_back_when_header_fails),
+    cmocka_unit_test(test_error_response_rolls_back_when_field_code_fails),
+    cmocka_unit_test(test_error_response_rolls_back_when_field_value_fails),
+    cmocka_unit_test(test_error_response_rolls_back_when_terminator_fails),
+    cmocka_unit_test(test_row_description_rolls_back_when_header_fails),
+    cmocka_unit_test(test_row_description_rolls_back_when_count_fails),
+    cmocka_unit_test(test_row_description_rolls_back_when_name_fails),
+    cmocka_unit_test(test_row_description_rolls_back_when_column_fields_fail),
+    cmocka_unit_test(test_data_row_rolls_back_when_header_fails),
+    cmocka_unit_test(test_data_row_rolls_back_when_count_fails),
+    cmocka_unit_test(test_data_row_rolls_back_when_value_length_fails),
+    cmocka_unit_test(test_data_row_rolls_back_when_value_bytes_fail),
+    cmocka_unit_test(test_data_row_rolls_back_finished_value_when_next_fails),
+};
+
 int main(void)
 {
-    const struct CMUnitTest tests[] = {
-        cmocka_unit_test(test_create_fails_when_struct_allocation_fails),
-        cmocka_unit_test(test_create_fails_when_buffer_allocation_fails),
-        cmocka_unit_test(test_put_bytes_fails_when_growth_fails),
-        cmocka_unit_test(test_reader_create_fails_when_allocation_fails),
-        cmocka_unit_test(test_command_complete_leaves_writer_unchanged_when_header_fails),
-        cmocka_unit_test(test_command_complete_rolls_back_header_when_tag_fails),
-        cmocka_unit_test(test_error_response_rolls_back_when_header_fails),
-        cmocka_unit_test(test_error_response_rolls_back_when_field_code_fails),
-        cmocka_unit_test(test_error_response_rolls_back_when_field_value_fails),
-        cmocka_unit_test(test_error_response_rolls_back_when_terminator_fails),
-        cmocka_unit_test(test_row_description_rolls_back_when_header_fails),
-        cmocka_unit_test(test_row_description_rolls_back_when_count_fails),
-        cmocka_unit_test(test_row_description_rolls_back_when_name_fails),
-        cmocka_unit_test(test_row_description_rolls_back_when_column_fields_fail),
-    };
     return cmocka_run_group_tests(tests, nullptr, nullptr);
 }
