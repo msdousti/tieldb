@@ -428,7 +428,7 @@ Work proceeds as a sequence of small, reviewable pull requests, each leaving `ma
   If the PR does only part of a step, add sub-items under that step and check only the ones it completes
 - **PR description:** fill in `.github/pull_request_template.md` (`gh pr create --body-file` does not apply it automatically); check only the boxes that are true
 - **CI gate:** `main` requires every CI check (including `Detect Code Changes`), for admins too. Docs-only PRs skip the jobs but still report, so they merge normally. Never merge a red PR or ask to bypass; fix the cause
-- **Coverage:** CI fails if line coverage of `src/` drops below `fail-under-line` in `gcovr.cfg`. Raise the threshold as tests grow; never lower it without asking the user
+- **Coverage:** CI currently requires 100% line and branch coverage of `src/` (`gcovr.cfg`). Coverage is a tool, not a goal: do not write tests or contort code just to light up lines, and prefer reference-model, crash, and fuzz tests over coverage-driven ones. If a path is impractical or impossible to cover (crash and recovery code whose coverage data is lost on `kill -9`, concurrency races, I/O failure paths, compiler-generated branches), stop and ask the user to approve lowering the threshold or adding an exclusion in `gcovr.cfg` with a stated reason. Never lower or exclude on your own. Expect to relax the branch threshold (around 90-95%) once WAL and concurrency code arrive
 - **Measure before opening:** check `git diff --stat main` and split if the size is over target
 
 ---
