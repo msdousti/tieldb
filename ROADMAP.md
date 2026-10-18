@@ -227,6 +227,9 @@ psql -h localhost -p 5433 -c "SELECT * FROM user;"
   - [ ] Parse `ALTER TABLE <t> MODIFY <column> <type> AFTER <other column>` and `... FIRST`
   - [ ] Execute it by changing the column's display position (`table_set_display_order`); the stored rows are not touched. The display order already exists in the catalog; `SELECT *` and `INSERT ... VALUES` follow it
   - [ ] Only the column's current type is accepted at first; changing the type needs data conversion and is a separate step
+- [ ] Adding columns: `ALTER TABLE <t> ADD COLUMN <column> <type> [AFTER <other column> | FIRST]` (MariaDB syntax)
+  - [ ] Add the column at the end of the stored row, and give it the requested display position, so existing rows are not rewritten
+  - [ ] Existing rows need a value for the new column: needs NULL or `DEFAULT` support first
 - [ ] Volcano iterator model
   - [ ] SeqScan, Filter, Project, Sort, Limit, HashAgg, NestedLoopJoin, HashJoin operators
   - [ ] `open()`, `next()`, `close()` interface
