@@ -55,18 +55,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install dependencies
-        run: |
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-22 main" | sudo tee /etc/apt/sources.list.d/llvm.list
-          sudo apt-get update
-          sudo apt-get install -y \
-            meson ninja-build clang-22 clang-tidy-22 \
-            libcmocka-dev pkg-config
-          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-22 100
+      - uses: ./.github/actions/setup-clang
+        with:
+          packages: clang-tidy-22
 
       - name: Setup build
-        run: meson setup build -Db_sanitize=address,undefined
+        run: meson setup build --native-file clang.ini -Db_sanitize=address,undefined
 
       - name: Compile (needed for clang-tidy)
         run: ninja -C build
@@ -84,15 +78,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            meson ninja-build clang \
-            libcmocka-dev pkg-config
+      - uses: ./.github/actions/setup-clang
 
       - name: Setup
-        run: meson setup build-asan -Db_sanitize=address,undefined
+        run: meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined
 
       - name: Build
         run: ninja -C build-asan
@@ -115,12 +104,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            meson ninja-build gcovr \
-            libcmocka-dev pkg-config
+      - uses: ./.github/actions/setup-clang
+        with:
+          packages: gcovr llvm-22
 
       - name: Test with coverage (fails below gcovr.cfg threshold)
         run: ./scripts/coverage.sh
@@ -133,15 +119,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            meson ninja-build clang \
-            libcmocka-dev pkg-config
+      - uses: ./.github/actions/setup-clang
 
       - name: Setup
-        run: meson setup build-tsan -Db_sanitize=thread
+        run: meson setup build-tsan --native-file clang.ini -Db_sanitize=thread
 
       - name: Build
         run: ninja -C build-tsan
@@ -164,15 +145,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            meson ninja-build clang \
-            libcmocka-dev pkg-config
+      - uses: ./.github/actions/setup-clang
 
       - name: Setup
-        run: meson setup build-release --buildtype=release
+        run: meson setup build-release --native-file clang.ini --buildtype=release
 
       - name: Build
         run: ninja -C build-release

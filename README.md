@@ -24,9 +24,9 @@ See [ROADMAP.md](ROADMAP.md) for the complete development plan.
 - Meson build system, Ninja, Clang
 - cmocka testing framework
 
-**Build:**
+**Build** (TielDB builds with clang 22 only; `clang.ini` selects it):
 ```bash
-meson setup build-asan -Db_sanitize=address,undefined
+meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined
 ninja -C build-asan
 meson test -C build-asan
 ```
@@ -82,11 +82,11 @@ All code runs under AddressSanitizer and UndefinedBehaviorSanitizer by default:
 meson test -C build-asan
 
 # Thread sanitizer (for concurrent code)
-meson setup build-tsan -Db_sanitize=thread
+meson setup build-tsan --native-file clang.ini -Db_sanitize=thread
 meson test -C build-tsan
 
 # Coverage
-meson setup build-cov -Db_coverage=true
+meson setup build-cov --native-file clang.ini -Db_coverage=true
 meson test -C build-cov
 ninja coverage -C build-cov
 ```

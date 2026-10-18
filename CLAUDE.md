@@ -46,16 +46,20 @@ Before writing any code, familiarize yourself with:
 
 # Install dependencies
 sudo apt update
-sudo apt install -y build-essential meson ninja-build clang \
-    clang-format clang-tidy libcmocka-dev git
+sudo apt install -y meson ninja-build clang-22 clang-format-22 clang-tidy-22 \
+    llvm-22 gcovr libcmocka-dev git
+
+# The compiler is clang 22 or newer, and nothing else: meson.build rejects other compilers.
+# Pass --native-file clang.ini whenever you set up a build directory.
 
 # Clone and build
 cd /path/to/tieldb
-meson setup build-asan -Db_sanitize=address,undefined -Dc_std=c2x
+meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined -Dc_std=c2x
 ninja -C build-asan
 meson test -C build-asan
 
 # Note: c_std=c2x is C23 (c23 not yet supported by all Meson versions)
+# Tools: clang-format-22, clang-tidy-22; coverage uses llvm-cov-22 through gcovr
 ```
 
 ### 3. Code Generation Rules
@@ -272,7 +276,7 @@ build-cov/           # Coverage build
 **Common commands:**
 ```bash
 # Setup (once)
-meson setup build-asan -Db_sanitize=address,undefined
+meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined
 
 # Build
 ninja -C build-asan
@@ -281,7 +285,7 @@ ninja -C build-asan
 meson test -C build-asan
 
 # Clean
-rm -rf build-asan && meson setup build-asan -Db_sanitize=address,undefined
+rm -rf build-asan && meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined
 
 # Format code (before commit)
 clang-format -i src/**/*.{c,h} tests/**/*.{c,h}

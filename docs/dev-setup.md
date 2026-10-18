@@ -49,15 +49,17 @@ sudo apt install -y \
     build-essential \
     meson \
     ninja-build \
-    clang \
-    clang-format \
-    clang-tidy \
+    clang-22 \
+    clang-format-22 \
+    clang-tidy-22 \
+    llvm-22 \
+    gcovr \
     git \
     libcmocka-dev \
     pkg-config
 
 # Verify installations
-clang --version        # Should be 14+
+clang-22 --version     # TielDB is built with clang 22 or newer only; pass --native-file clang.ini to meson setup
 meson --version        # Should be 0.60+
 ```
 
@@ -80,7 +82,7 @@ cd tieldb
 
 ```bash
 # Setup build directory (ASan + UBSan by default)
-meson setup build-asan -Db_sanitize=address,undefined
+meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined
 
 # Build
 ninja -C build-asan
@@ -96,13 +98,13 @@ meson test -C build-asan -v
 
 ```bash
 # Thread sanitizer (for concurrency testing, Phase 6+)
-meson setup build-tsan -Db_sanitize=thread
+meson setup build-tsan --native-file clang.ini -Db_sanitize=thread
 
 # Release build (for benchmarks only)
-meson setup build-release --buildtype=release
+meson setup build-release --native-file clang.ini --buildtype=release
 
 # Coverage build
-meson setup build-cov -Db_coverage=true
+meson setup build-cov --native-file clang.ini -Db_coverage=true
 ```
 
 ---
@@ -202,7 +204,7 @@ sudo apt install meson ninja-build
 ```bash
 # Clean and rebuild
 rm -rf build-asan
-meson setup build-asan -Db_sanitize=address,undefined
+meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined
 ninja -C build-asan
 ```
 
@@ -216,7 +218,7 @@ Tests must run in the Linux VM, not on macOS. The I/O semantics are different.
 
 ```bash
 # Setup (once)
-meson setup build-asan -Db_sanitize=address,undefined
+meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined
 
 # Build
 ninja -C build-asan
@@ -234,7 +236,7 @@ clang-tidy -p build-asan src/*.c
 rm -rf build-asan
 
 # Rebuild
-meson setup build-asan -Db_sanitize=address,undefined && ninja -C build-asan
+meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined && ninja -C build-asan
 ```
 
 ---

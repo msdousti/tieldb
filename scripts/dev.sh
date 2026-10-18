@@ -12,7 +12,7 @@ build_dir=${BUILD_DIR:-build-asan}
 port=${PORT:-5432}
 
 if [ ! -d "$build_dir" ]; then
-    meson setup "$build_dir" -Db_sanitize=address,undefined
+    meson setup "$build_dir" --native-file clang.ini -Db_sanitize=address,undefined
 fi
 ninja -C "$build_dir"
 

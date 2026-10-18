@@ -12,6 +12,12 @@ project('tieldb', 'c',
   ]
 )
 
+cc = meson.get_compiler('c')
+if cc.get_id() != 'clang' or not cc.version().version_compare('>=22')
+  error('TielDB is built with clang 22 or newer. Set up a fresh build directory with: ' +
+        'meson setup <builddir> --native-file clang.ini')
+endif
+
 # Add extra warnings
 add_project_arguments([
   '-Wshadow',

@@ -23,11 +23,11 @@ Makefiles, no CMake.
 
 | Dir | Setup | Use |
 |---|---|---|
-| `build-asan` | `meson setup build-asan -Db_sanitize=address,undefined -Dc_args=-fno-omit-frame-pointer` | **default** for day-to-day work and tests |
-| `build-tsan` | `meson setup build-tsan -Db_sanitize=thread` | once concurrency exists (TSan can't combine with ASan) |
-| `build-release` | `meson setup build-release --buildtype=release` | benchmarks only |
-| `build-fuzz` | `CC=clang meson setup build-fuzz` with `-fsanitize=fuzzer,address` in `c_args`/`c_link_args` | fuzz targets (Meson's `b_sanitize` has no `fuzzer` value, so pass the flag directly) |
-| `build-cov` | `meson setup build-cov -Db_coverage=true` | coverage reports (`ninja coverage`) |
+| `build-asan` | `meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined -Dc_args=-fno-omit-frame-pointer` | **default** for day-to-day work and tests |
+| `build-tsan` | `meson setup build-tsan --native-file clang.ini -Db_sanitize=thread` | once concurrency exists (TSan can't combine with ASan) |
+| `build-release` | `meson setup build-release --native-file clang.ini --buildtype=release` | benchmarks only |
+| `build-fuzz` | `meson setup build-fuzz --native-file clang.ini` with `-fsanitize=fuzzer,address` in `c_args`/`c_link_args` | fuzz targets (Meson's `b_sanitize` has no `fuzzer` value, so pass the flag directly) |
+| `build-cov` | `meson setup build-cov --native-file clang.ini -Db_coverage=true` | coverage reports (`ninja coverage`) |
 
 - Minimal skeleton:
 
