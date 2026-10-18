@@ -192,6 +192,11 @@ meson test -C build-asan
   page_t page = {};  // Zero-initialize
   ```
 
+#### Tool Output
+- Pipe Bash output through `head`, `tail`, or `grep` (e.g. `2>&1 | tail -30` for `ninja` and `meson test`)
+- Never `cat` large files; use Read with offset/limit
+- Prefer summaries like `git diff --stat`; rerun with fuller output only if needed to diagnose
+
 ### 4. Testing Requirements
 
 **Every feature must have tests before it's considered done.**
