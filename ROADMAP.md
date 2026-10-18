@@ -75,6 +75,8 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
 - [ ] Hardcoded executor
   - [ ] `CREATE TABLE` → add to catalog
   - [ ] `INSERT` → append to tuple array
+    - [x] Into the built-in `user` table (values checked against the column types)
+    - [ ] Into catalog tables
   - [ ] `SELECT *` → iterate and return all rows
     - [x] Against a hardcoded `user` table (so results show in psql before INSERT and CREATE TABLE exist)
     - [ ] Against catalog tables

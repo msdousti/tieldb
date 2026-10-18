@@ -7,6 +7,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include <cmocka.h>
@@ -37,23 +38,51 @@ static void put_expected_unsupported_response(wire_writer_t *w)
 {
     assert_int_equal(
         protocol_put_error_response(
-            w, "ERROR", "0A000", "only SELECT version() and SELECT * FROM <table> are supported"),
+            w, "ERROR", "0A000",
+            "only SELECT version(), SELECT * FROM <table> and INSERT INTO <table> VALUES (...) "
+            "are supported"),
         0);
+    assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
+}
+
+static void put_expected_user_rows(wire_writer_t *w, size_t count)
+{
+    const protocol_column_t columns[] = {{"id", PROTOCOL_TYPE_INT4}, {"name", PROTOCOL_TYPE_TEXT}};
+    const char *rows[][2] = {{"1", "Alice"}, {"2", "Bob"}, {"3", "Carol"}, {"4", "Dave"}};
+    char tag[16];
+
+    assert_int_equal(protocol_put_row_description(w, columns, 2), 0);
+    for (size_t i = 0; i < count; i++) {
+        const protocol_value_t values[] = {{rows[i][0], strlen(rows[i][0])},
+                                           {rows[i][1], strlen(rows[i][1])}};
+        assert_int_equal(protocol_put_data_row(w, values, 2), 0);
+    }
+    snprintf(tag, sizeof(tag), "SELECT %zu", count);
+    assert_int_equal(protocol_put_command_complete(w, tag), 0);
     assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
 }
 
 static void put_expected_user_response(wire_writer_t *w)
 {
-    const protocol_column_t columns[] = {{"id", PROTOCOL_TYPE_INT4}, {"name", PROTOCOL_TYPE_TEXT}};
-    const char *rows[][2] = {{"1", "Alice"}, {"2", "Bob"}, {"3", "Carol"}};
+    put_expected_user_rows(w, 3);
+}
 
-    assert_int_equal(protocol_put_row_description(w, columns, 2), 0);
-    for (size_t i = 0; i < 3; i++) {
-        const protocol_value_t values[] = {{rows[i][0], strlen(rows[i][0])},
-                                           {rows[i][1], strlen(rows[i][1])}};
-        assert_int_equal(protocol_put_data_row(w, values, 2), 0);
-    }
-    assert_int_equal(protocol_put_command_complete(w, "SELECT 3"), 0);
+static void put_expected_user_with_dave_response(wire_writer_t *w)
+{
+    put_expected_user_rows(w, 4);
+}
+
+static void put_expected_insert_response(wire_writer_t *w)
+{
+    assert_int_equal(protocol_put_command_complete(w, "INSERT 0 1"), 0);
+    assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
+}
+
+static void put_expected_wrong_count_response(wire_writer_t *w)
+{
+    assert_int_equal(protocol_put_error_response(w, "ERROR", "42601",
+                                                 "INSERT must supply a value for every column"),
+                     0);
     assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
 }
 
@@ -102,6 +131,11 @@ static void test_select_star_from_a_missing_table_is_an_error([[maybe_unused]] v
     assert_response("SELECT * FROM nope", put_expected_missing_table_response);
 }
 
+static void test_insert_with_a_wrong_value_count_is_an_error([[maybe_unused]] void **state)
+{
+    assert_response("INSERT INTO user VALUES (4)", put_expected_wrong_count_response);
+}
+
 static void test_other_queries_get_an_error_and_stay_usable([[maybe_unused]] void **state)
 {
     assert_response("SELECT 1", put_expected_unsupported_response);
@@ -139,15 +173,24 @@ static void test_null_writer_is_rejected([[maybe_unused]] void **state)
     assert_int_equal(errno, EINVAL);
 }
 
+// Runs last: it adds a row to the built-in user table, which the other tests count
+static void test_inserted_row_shows_up_in_select_star([[maybe_unused]] void **state)
+{
+    assert_response("INSERT INTO user VALUES (4, 'Dave');", put_expected_insert_response);
+    assert_response("SELECT * FROM user", put_expected_user_with_dave_response);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_version_query_returns_one_row),
     cmocka_unit_test(test_version_query_ignores_case_semicolon_and_spaces),
     cmocka_unit_test(test_select_star_returns_every_row_of_the_table),
     cmocka_unit_test(test_select_star_from_a_missing_table_is_an_error),
+    cmocka_unit_test(test_insert_with_a_wrong_value_count_is_an_error),
     cmocka_unit_test(test_other_queries_get_an_error_and_stay_usable),
     cmocka_unit_test(test_response_appends_after_existing_content),
     cmocka_unit_test(test_message_without_a_string_is_rejected),
     cmocka_unit_test(test_null_writer_is_rejected),
+    cmocka_unit_test(test_inserted_row_shows_up_in_select_star),
 };
 
 int main(void)
