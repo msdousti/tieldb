@@ -11,10 +11,10 @@
 #include <string.h>
 
 #include "storage/catalog.h"
+#include "types/type_registry.h"
 
 static_assert(SQL_MAX_CREATE_COLUMNS <= TABLE_MAX_COLUMNS);
 
-static constexpr int DECIMAL_BASE = 10;
 static constexpr char MISSING_TABLE_SQLSTATE[] = "42P01";
 static constexpr char MISSING_TABLE_FORMAT[] = "relation \"%s\" does not exist";
 static constexpr char SYNTAX_SQLSTATE[] = "42601";
@@ -33,26 +33,13 @@ static void set_error(executor_error_t *error, const char *sqlstate)
     snprintf(error->sqlstate, sizeof(error->sqlstate), "%s", sqlstate);
 }
 
-static bool is_valid_integer(const char *text)
-{
-    char *end = nullptr;
-    errno = 0;
-    long value = strtol(text, &end, DECIMAL_BASE);
-    return end != text && *end == '\0' && errno == 0 && value >= INT32_MIN && value <= INT32_MAX;
-}
-
-static bool is_valid_cell(column_type_t type, const char *text)
-{
-    return type != COLUMN_TYPE_INTEGER || is_valid_integer(text);
-}
-
 static const char *find_invalid_integer(const table_t *table, const sql_insert_t *insert)
 {
     const char *invalid = nullptr;
     for (size_t i = 0; i < insert->count && invalid == nullptr; i++) {
         const char *text = insert->values[i].text;
-        column_type_t type = table_column(table, table_physical_index(table, i))->type;
-        invalid = is_valid_cell(type, text) ? nullptr : text;
+        const type_info_t *type = table_column(table, table_physical_index(table, i))->type;
+        invalid = type->accepts(text) ? nullptr : text;
     }
     return invalid;
 }
@@ -102,40 +89,14 @@ int executor_insert(const sql_insert_t *insert, executor_error_t *error)
     return status;
 }
 
-typedef struct {
-    const char *name;
-    column_type_t type;
-} type_name_t;
-
-static const type_name_t TYPE_NAMES[] = {
-    {"integer", COLUMN_TYPE_INTEGER},
-    {"int", COLUMN_TYPE_INTEGER},
-    {"int4", COLUMN_TYPE_INTEGER},
-    {"text", COLUMN_TYPE_TEXT},
-};
-
-static bool find_type(const char *name, column_type_t *type)
-{
-    size_t count = sizeof(TYPE_NAMES) / sizeof(TYPE_NAMES[0]);
-    size_t index = 0;
-    while (index < count && strcmp(TYPE_NAMES[index].name, name) != 0) {
-        index++;
-    }
-    if (index == count) {
-        return false;
-    }
-    *type = TYPE_NAMES[index].type;
-    return true;
-}
-
 // Fills columns and returns the first unknown type name, or nullptr if all are known
 static const char *convert_columns(const sql_create_table_t *create, table_column_t *columns)
 {
     const char *unknown = nullptr;
     for (size_t i = 0; i < create->count && unknown == nullptr; i++) {
         columns[i].name = create->columns[i].name;
-        unknown = find_type(create->columns[i].type, &columns[i].type) ? nullptr
-                                                                       : create->columns[i].type;
+        columns[i].type = type_find_by_name(create->columns[i].type);
+        unknown = columns[i].type == nullptr ? create->columns[i].type : nullptr;
     }
     return unknown;
 }

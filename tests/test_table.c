@@ -12,7 +12,7 @@
 
 #include "storage/table.h"
 
-static const table_column_t PAIR_COLUMNS[] = {{"a", COLUMN_TYPE_INTEGER}, {"b", COLUMN_TYPE_TEXT}};
+static const table_column_t PAIR_COLUMNS[] = {{"a", &TYPE_INT4}, {"b", &TYPE_TEXT}};
 
 static table_t *create_pair_table(void)
 {
@@ -27,7 +27,7 @@ static void test_table_copies_its_name_and_column_names([[maybe_unused]] void **
 {
     char name[] = "kept";
     char column_name[] = "col";
-    const table_column_t columns[] = {{column_name, COLUMN_TYPE_TEXT}};
+    const table_column_t columns[] = {{column_name, &TYPE_TEXT}};
     table_t *table = table_create(name, columns, 1);
     if (table == nullptr) {
         fail();
@@ -38,7 +38,7 @@ static void test_table_copies_its_name_and_column_names([[maybe_unused]] void **
 
     assert_string_equal(table_name(table), "kept");
     assert_string_equal(table_column(table, 0)->name, "col");
-    assert_int_equal(table_column(table, 0)->type, COLUMN_TYPE_TEXT);
+    assert_ptr_equal(table_column(table, 0)->type, &TYPE_TEXT);
     table_destroy(table);
 }
 

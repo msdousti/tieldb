@@ -155,6 +155,7 @@ test('server', test_server)
 wire_buffer_oom_lib = static_library('wire_buffer_oom',
   io_sources,
   ds_sources,
+  types_sources,
   net_sources,
   sql_sources,
   storage_sources,

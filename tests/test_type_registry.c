@@ -93,6 +93,13 @@ static void test_invalid_integers_are_rejected([[maybe_unused]] void **state)
     assert_input_fails(type, "2147483648", EINVAL);
 }
 
+static void test_accepts_tells_valid_text_from_invalid([[maybe_unused]] void **state)
+{
+    assert_true(find_or_fail("int")->accepts("-12"));
+    assert_false(find_or_fail("int")->accepts("1.5"));
+    assert_true(find_or_fail("text")->accepts("anything"));
+}
+
 static void test_integer_needs_room_for_four_bytes([[maybe_unused]] void **state)
 {
     char buffer[sizeof(int32_t)];
@@ -164,6 +171,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_storage_sizes),
     cmocka_unit_test(test_integers_are_stored_as_values),
     cmocka_unit_test(test_invalid_integers_are_rejected),
+    cmocka_unit_test(test_accepts_tells_valid_text_from_invalid),
     cmocka_unit_test(test_integer_needs_room_for_four_bytes),
     cmocka_unit_test(test_integer_output_needs_room_for_its_digits),
     cmocka_unit_test(test_integers_compare_by_value),

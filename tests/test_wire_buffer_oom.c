@@ -30,6 +30,7 @@
 #include "storage/catalog.h"
 #include "net/startup.h"
 #include "net/wire_buffer.h"
+#include "types/type_registry.h"
 
 // NOLINTBEGIN(misc-use-internal-linkage): called from wire_buffer.c, a separate translation unit
 void *oom_malloc(size_t size)
@@ -248,7 +249,7 @@ static void test_error_response_rolls_back_when_terminator_fails([[maybe_unused]
 
 static void assert_row_description_fails_leaving(size_t filled)
 {
-    const protocol_column_t columns[] = {{"id", PROTOCOL_TYPE_INT4}, {"name", PROTOCOL_TYPE_TEXT}};
+    const protocol_column_t columns[] = {{"id", TYPE_OID_INT4}, {"name", TYPE_OID_TEXT}};
     wire_writer_t *w = create_writer_filled_to(filled);
 
     will_return(oom_realloc, false);
@@ -572,7 +573,7 @@ test_server_serve_fails_when_a_session_cannot_be_allocated([[maybe_unused]] void
     server_destroy(server);
 }
 
-static const table_column_t PAIR_COLUMNS[] = {{"a", COLUMN_TYPE_INTEGER}, {"b", COLUMN_TYPE_TEXT}};
+static const table_column_t PAIR_COLUMNS[] = {{"a", &TYPE_INT4}, {"b", &TYPE_TEXT}};
 
 static table_t *create_pair_table_with_real_allocations(void)
 {
@@ -660,7 +661,7 @@ static void test_insert_fails_when_the_row_cannot_be_stored([[maybe_unused]] voi
 static void
 test_catalog_create_fails_when_the_table_cannot_be_allocated([[maybe_unused]] void **state)
 {
-    const table_column_t columns[] = {{"a", COLUMN_TYPE_INTEGER}};
+    const table_column_t columns[] = {{"a", &TYPE_INT4}};
 
     will_return(oom_calloc, false);
 
@@ -805,7 +806,7 @@ static int catalog_create_fails_without_memory(const table_column_t *columns)
 // The tests need the user table, so make it once, with real allocations
 static int create_user_table([[maybe_unused]] void **state)
 {
-    const table_column_t columns[] = {{"id", COLUMN_TYPE_INTEGER}, {"name", COLUMN_TYPE_TEXT}};
+    const table_column_t columns[] = {{"id", &TYPE_INT4}, {"name", &TYPE_TEXT}};
     const char *rows[][2] = {{"1", "Alice"}, {"2", "Bob"}, {"3", "Carol"}};
     int status = 0;
 

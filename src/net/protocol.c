@@ -7,6 +7,8 @@
 #include <errno.h>
 #include <string.h>
 
+#include "types/type_registry.h"
+
 static constexpr size_t SQLSTATE_LENGTH = 5;
 
 // We have no table OIDs or column numbers to report, so those two leading fields stay zero
@@ -130,17 +132,14 @@ int protocol_put_error_response(wire_writer_t *writer, const char *severity, con
 
 static int column_type_size(int32_t type_oid, int16_t *type_size)
 {
-    switch (type_oid) {
-        case PROTOCOL_TYPE_INT4:
-            *type_size = sizeof(int32_t);
-            return 0;
-        case PROTOCOL_TYPE_TEXT:
-            *type_size = VARIABLE_TYPE_SIZE;
-            return 0;
-        default:
-            errno = EINVAL;
-            return -1;
+    const type_info_t *type = type_find_by_oid((type_oid_t) type_oid);
+    if (type == nullptr) {
+        errno = EINVAL;
+        return -1;
     }
+    *type_size = type->storage_size == TYPE_VARIABLE_LENGTH ? VARIABLE_TYPE_SIZE
+                                                            : (int16_t) type->storage_size;
+    return 0;
 }
 
 static int put_column(wire_writer_t *writer, const protocol_column_t *column)

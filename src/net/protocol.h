@@ -50,7 +50,7 @@
  * Each encoder appends one complete message to a wire_writer_t, or nothing on
  * failure. Failures return -1 and set errno as documented in wire_buffer.h;
  * a null writer or an invalid argument gives EINVAL; for RowDescription that
- * includes a type OID other than the PROTOCOL_TYPE_* values, and for DataRow a
+ * includes a type OID other than the registered type OIDs (type_registry.h), and for DataRow a
  * value longer than INT32_MAX bytes, or with a length but no data.
  */
 
@@ -64,12 +64,6 @@ typedef enum {
     TRANSACTION_IN_BLOCK = 'T', // in a transaction block
     TRANSACTION_FAILED = 'E',   // in a failed transaction block; queries are rejected
 } transaction_status_t;
-
-/** Postgres type OIDs for the supported column types. */
-enum {
-    PROTOCOL_TYPE_INT4 = 23,
-    PROTOCOL_TYPE_TEXT = 25,
-};
 
 /** One result column: its name and Postgres type OID (the type size follows from the OID). */
 typedef struct protocol_column {

@@ -40,7 +40,7 @@ typedef struct {
 static int put_single_description(wire_writer_t *out, const void *context)
 {
     const single_value_t *single = context;
-    const protocol_column_t column = {single->column, PROTOCOL_TYPE_TEXT};
+    const protocol_column_t column = {single->column, (int32_t) TYPE_OID_TEXT};
     return protocol_put_row_description(out, &column, 1);
 }
 
@@ -62,11 +62,6 @@ static int put_unsupported_error(wire_writer_t *out, [[maybe_unused]] const void
                                        UNSUPPORTED_MESSAGE);
 }
 
-static int32_t type_oid(column_type_t type)
-{
-    return type == COLUMN_TYPE_INTEGER ? PROTOCOL_TYPE_INT4 : PROTOCOL_TYPE_TEXT;
-}
-
 static int put_table_description(wire_writer_t *out, const void *context)
 {
     const table_t *table = context;
@@ -74,7 +69,7 @@ static int put_table_description(wire_writer_t *out, const void *context)
     protocol_column_t columns[TABLE_MAX_COLUMNS];
     for (size_t i = 0; i < count; i++) {
         const table_column_t *column = table_column(table, table_physical_index(table, i));
-        columns[i] = (protocol_column_t){column->name, type_oid(column->type)};
+        columns[i] = (protocol_column_t){column->name, (int32_t) column->type->oid};
     }
     return protocol_put_row_description(out, columns, count);
 }

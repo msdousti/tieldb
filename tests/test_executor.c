@@ -127,7 +127,7 @@ static void test_select_gives_the_locked_table_until_released([[maybe_unused]] v
 
 static void test_insert_values_follow_the_display_order([[maybe_unused]] void **state)
 {
-    const table_column_t columns[] = {{"a", COLUMN_TYPE_INTEGER}, {"b", COLUMN_TYPE_TEXT}};
+    const table_column_t columns[] = {{"a", &TYPE_INT4}, {"b", &TYPE_TEXT}};
     const size_t flipped[] = {1, 0};
     executor_error_t error;
     table_t *table = catalog_create_table("flipped", columns, 2);
@@ -175,10 +175,10 @@ static void test_create_table_makes_a_table_with_the_given_columns([[maybe_unuse
     assert_string_equal(error.sqlstate, "");
     assert_int_equal(table_column_count(made), 4);
     assert_string_equal(table_column(made, 2)->name, "c");
-    assert_int_equal(table_column(made, 0)->type, COLUMN_TYPE_INTEGER);
-    assert_int_equal(table_column(made, 1)->type, COLUMN_TYPE_TEXT);
-    assert_int_equal(table_column(made, 2)->type, COLUMN_TYPE_INTEGER);
-    assert_int_equal(table_column(made, 3)->type, COLUMN_TYPE_INTEGER);
+    assert_ptr_equal(table_column(made, 0)->type, &TYPE_INT4);
+    assert_ptr_equal(table_column(made, 1)->type, &TYPE_TEXT);
+    assert_ptr_equal(table_column(made, 2)->type, &TYPE_INT4);
+    assert_ptr_equal(table_column(made, 3)->type, &TYPE_INT4);
     assert_int_equal(table_row_count(made), 0);
 }
 
@@ -242,7 +242,7 @@ static const struct CMUnitTest tests[] = {
 // The tests share one table: user (id INTEGER, name TEXT) with three rows
 static int create_user_table([[maybe_unused]] void **state)
 {
-    const table_column_t columns[] = {{"id", COLUMN_TYPE_INTEGER}, {"name", COLUMN_TYPE_TEXT}};
+    const table_column_t columns[] = {{"id", &TYPE_INT4}, {"name", &TYPE_TEXT}};
     const char *rows[][2] = {{"1", "Alice"}, {"2", "Bob"}, {"3", "Carol"}};
     table_t *table = catalog_create_table("user", columns, 2);
     int status = table == nullptr;

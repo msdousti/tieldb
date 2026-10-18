@@ -37,6 +37,8 @@ typedef struct {
     type_oid_t oid;
     const char *name;
     size_t storage_size;
+    /** Whether the text is a valid value of the type. */
+    bool (*accepts)(const char *text);
     /** Converts text to the stored form; returns the number of bytes stored. */
     ssize_t (*input)(const char *text, void *buffer, size_t capacity);
     /** Converts a stored value to text with a terminating zero; returns the length without it. */
@@ -44,6 +46,9 @@ typedef struct {
     /** Negative, zero or positive when left is less than, equal to or greater than right. */
     int (*compare)(const void *left, size_t left_length, const void *right, size_t right_length);
 } type_info_t;
+
+extern const type_info_t TYPE_INT4;
+extern const type_info_t TYPE_TEXT;
 
 [[nodiscard]] const type_info_t *type_find_by_name(const char *name);
 [[nodiscard]] const type_info_t *type_find_by_oid(type_oid_t oid);

@@ -16,13 +16,13 @@
 
 #include "storage/catalog.h"
 
-static const table_column_t PAIR_COLUMNS[] = {{"a", COLUMN_TYPE_INTEGER}, {"b", COLUMN_TYPE_TEXT}};
+static const table_column_t PAIR_COLUMNS[] = {{"a", &TYPE_INT4}, {"b", &TYPE_TEXT}};
 
 static void assert_column_is(const table_t *table, size_t index, const char *name,
-                             column_type_t type)
+                             const type_info_t *type)
 {
     assert_string_equal(table_column(table, index)->name, name);
-    assert_int_equal(table_column(table, index)->type, type);
+    assert_ptr_equal(table_column(table, index)->type, type);
 }
 
 static table_t *create_or_fail(const char *name)
@@ -46,7 +46,7 @@ static void test_created_table_can_be_found([[maybe_unused]] void **state)
     assert_ptr_equal(catalog_find("found"), created);
     assert_string_equal(table_name(created), "found");
     assert_int_equal(table_row_count(created), 0);
-    assert_column_is(created, 1, "b", COLUMN_TYPE_TEXT);
+    assert_column_is(created, 1, "b", &TYPE_TEXT);
 }
 
 static void test_creating_an_existing_table_is_an_error([[maybe_unused]] void **state)

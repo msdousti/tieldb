@@ -26,18 +26,14 @@
 #include <stddef.h>
 
 #include "ds/hash_map.h"
+#include "types/type_registry.h"
 
 /** Most columns a table may have. */
 constexpr size_t TABLE_MAX_COLUMNS = 32;
 
-typedef enum {
-    COLUMN_TYPE_INTEGER,
-    COLUMN_TYPE_TEXT,
-} column_type_t;
-
 typedef struct {
     const char *name;
-    column_type_t type;
+    const type_info_t *type;
 } table_column_t;
 
 typedef struct table table_t;
