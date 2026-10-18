@@ -22,6 +22,7 @@
 
 #include <cmocka.h>
 
+#include "ds/hash_map.h"
 #include "net/connection.h"
 #include "net/protocol.h"
 #include "net/query_handler.h"
@@ -716,6 +717,60 @@ static void test_create_table_fails_when_memory_runs_out([[maybe_unused]] void *
     wire_writer_destroy(w);
 }
 
+typedef struct {
+    hash_node_t node;
+    uint32_t key;
+} oom_entry_t;
+
+static size_t oom_hash_key(const void *key)
+{
+    return hash_bytes(key, sizeof(uint32_t));
+}
+
+static bool oom_has_key(const hash_node_t *node, const void *key)
+{
+    const oom_entry_t *entry = HASH_MAP_ENTRY(node, const oom_entry_t, node);
+    return entry->key == *(const uint32_t *) key;
+}
+
+static const hash_map_ops_t OOM_MAP_OPS = {.hash = oom_hash_key, .has_key = oom_has_key};
+
+static void test_hash_map_create_fails_when_memory_runs_out([[maybe_unused]] void **state)
+{
+    will_return(oom_calloc, false);
+    errno = 0;
+    assert_null(hash_map_create(&OOM_MAP_OPS, 8));
+    assert_int_equal(errno, ENOMEM);
+
+    will_return(oom_calloc, true);
+    will_return(oom_calloc, false);
+    errno = 0;
+    assert_null(hash_map_create(&OOM_MAP_OPS, 8));
+    assert_int_equal(errno, ENOMEM);
+}
+
+static void test_hash_map_keeps_working_when_it_cannot_grow([[maybe_unused]] void **state)
+{
+    oom_entry_t entries[7];
+    will_return(oom_calloc, true);
+    will_return(oom_calloc, true);
+    hash_map_t *map = hash_map_create(&OOM_MAP_OPS, 8);
+    if (map == nullptr) {
+        fail();
+    }
+
+    will_return(oom_calloc, false);
+    for (uint32_t i = 0; i < 7; i++) {
+        entries[i].key = i;
+        hash_map_insert(map, &entries[i].node, &entries[i].key);
+    }
+
+    for (uint32_t i = 0; i < 7; i++) {
+        assert_ptr_equal(hash_map_find(map, &i), &entries[i].node);
+    }
+    hash_map_destroy(map);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_create_fails_when_struct_allocation_fails),
     cmocka_unit_test(test_create_fails_when_buffer_allocation_fails),
@@ -754,6 +809,8 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_connection_fails_when_the_writer_cannot_be_created),
     cmocka_unit_test(test_connection_fails_when_a_packet_cannot_be_buffered),
     cmocka_unit_test(test_server_create_fails_when_memory_runs_out),
+    cmocka_unit_test(test_hash_map_create_fails_when_memory_runs_out),
+    cmocka_unit_test(test_hash_map_keeps_working_when_it_cannot_grow),
     cmocka_unit_test(test_table_create_fails_when_memory_runs_out),
     cmocka_unit_test(test_catalog_create_fails_when_the_table_cannot_be_allocated),
     cmocka_unit_test(test_catalog_create_fails_when_the_catalog_cannot_grow),

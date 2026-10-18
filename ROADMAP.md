@@ -70,7 +70,8 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
   - [x] Column display order, separate from the storage order (starts as the definition order; no SQL to change it yet)
   - [ ] Hash map: table name → table definition
     - [x] Lookup by name (a plain array with a linear search for now)
-    - [ ] Hash map
+    - [x] A reusable hash map in `src/ds/` (chaining, entries embed their link, no locking inside)
+    - [ ] The catalog uses it, behind a read-write lock
 - [x] In-memory tuple storage
   - [x] Array of tuples per table (growable, one lock per table; rows are text for now)
   - [x] Support `INTEGER` and `TEXT` types only

@@ -15,6 +15,11 @@ net_sources = files(
   'net/server.c',
 )
 
+# Data structures
+ds_sources = files(
+  'ds/hash_map.c',
+)
+
 # SQL module
 sql_sources = files(
   'sql/simple_sql.c',
@@ -41,6 +46,7 @@ thread_dep = dependency('threads')
 # Build static library
 tieldb_lib = static_library('tieldb',
   io_sources,
+  ds_sources,
   net_sources,
   sql_sources,
   storage_sources,
