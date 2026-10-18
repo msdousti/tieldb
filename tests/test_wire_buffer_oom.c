@@ -18,6 +18,7 @@
 #include <cmocka.h>
 
 #include "net/protocol.h"
+#include "net/query_handler.h"
 #include "net/startup.h"
 #include "net/wire_buffer.h"
 
@@ -352,6 +353,38 @@ static void test_startup_leaves_result_unset_when_decline_write_fails([[maybe_un
     wire_writer_destroy(w);
 }
 
+static void test_query_response_is_rolled_back_when_a_message_fails([[maybe_unused]] void **state)
+{
+    const char *sql = "SELECT version()";
+    size_t row_description_size =
+        MESSAGE_HEADER_SIZE + FIELD_COUNT_SIZE + cstring_size("version") + COLUMN_FIXED_SIZE;
+    size_t filled = fill_to_overflow_at(row_description_size + MESSAGE_HEADER_SIZE);
+    wire_writer_t *w = create_writer_filled_to(filled);
+
+    will_return(oom_calloc, true);
+    will_return(oom_realloc, false);
+    errno = 0;
+    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w), -1);
+
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(wire_writer_size(w), filled);
+    wire_writer_destroy(w);
+}
+
+static void
+test_query_fails_cleanly_when_the_reader_cannot_be_created([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer_with_real_allocations();
+
+    will_return(oom_calloc, false);
+    errno = 0;
+    assert_int_equal(query_handle_message("SELECT 1", sizeof("SELECT 1"), w), -1);
+
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(wire_writer_size(w), 0);
+    wire_writer_destroy(w);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_create_fails_when_struct_allocation_fails),
     cmocka_unit_test(test_create_fails_when_buffer_allocation_fails),
@@ -376,6 +409,8 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_startup_rolls_back_when_authentication_ok_fails),
     cmocka_unit_test(test_startup_rolls_back_when_ready_for_query_fails),
     cmocka_unit_test(test_startup_leaves_result_unset_when_decline_write_fails),
+    cmocka_unit_test(test_query_response_is_rolled_back_when_a_message_fails),
+    cmocka_unit_test(test_query_fails_cleanly_when_the_reader_cannot_be_created),
 };
 
 int main(void)
