@@ -1,5 +1,7 @@
 # TielDB - Educational Database Management System
 
+[![CI](https://github.com/msdousti/tieldb/actions/workflows/ci.yml/badge.svg)](https://github.com/msdousti/tieldb/actions/workflows/ci.yml)
+
 A learning-focused DBMS implementation built from scratch in modern C, modeled after PostgreSQL and MariaDB.
 
 ## Project Status
@@ -28,6 +30,12 @@ meson setup build-asan -Db_sanitize=address,undefined
 ninja -C build-asan
 meson test -C build-asan
 ```
+
+**Install Git Hooks** (recommended):
+```bash
+./scripts/install-hooks.sh
+```
+Enables automatic format checking and linting before commits.
 
 ## Documentation
 

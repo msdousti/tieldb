@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+
+      - name: Check formatting
+        run: |
+          clang-format --version
+          # Check if any files would be reformatted
+          find src tests -name '*.c' -o -name '*.h' | xargs clang-format --dry-run --Werror
+
+  lint:
+    name: Static Analysis (clang-tidy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            meson ninja-build clang clang-tidy \
+            libcmocka-dev pkg-config
+
+      - name: Setup build
+        run: meson setup build -Db_sanitize=address,undefined
+
+      - name: Run clang-tidy
+        run: |
+          clang-tidy --version
+          clang-tidy -p build src/io/*.c
+
+  build-asan:
+    name: Build (ASan + UBSan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            meson ninja-build clang \
+            libcmocka-dev pkg-config
+
+      - name: Setup
+        run: meson setup build-asan -Db_sanitize=address,undefined
+
+      - name: Build
+        run: ninja -C build-asan
+
+      - name: Test
+        run: meson test -C build-asan -v
+
+      - name: Upload test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-asan
+          path: build-asan/meson-logs/
+
+  build-tsan:
+    name: Build (TSan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            meson ninja-build clang \
+            libcmocka-dev pkg-config
+
+      - name: Setup
+        run: meson setup build-tsan -Db_sanitize=thread
+
+      - name: Build
+        run: ninja -C build-tsan
+
+      - name: Test
+        run: meson test -C build-tsan -v
+
+      - name: Upload test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-tsan
+          path: build-tsan/meson-logs/
+
+  build-release:
+    name: Build (Release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            meson ninja-build clang \
+            libcmocka-dev pkg-config
+
+      - name: Setup
+        run: meson setup build-release --buildtype=release
+
+      - name: Build
+        run: ninja -C build-release
+
+      - name: Test
+        run: meson test -C build-release -v
+
+      - name: Upload test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-release
+          path: build-release/meson-logs/

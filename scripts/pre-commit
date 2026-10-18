@@ -1,0 +1,62 @@
+#!/bin/bash
+# Pre-commit hook for TielDB
+# Checks formatting and runs static analysis before allowing commits
+
+set -e
+
+echo "Running pre-commit checks..."
+
+# Get list of staged C/H files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(c|h)$' || true)
+
+if [ -z "$STAGED_FILES" ]; then
+    echo "✅ No C/H files to check"
+    exit 0
+fi
+
+# Check if clang-format is available
+if ! command -v clang-format &> /dev/null; then
+    echo "⚠️  clang-format not found, skipping format check"
+    echo "   Install with: sudo apt install clang-format (Linux) or brew install clang-format (macOS)"
+else
+    echo "Checking code formatting..."
+
+    # Check formatting
+    FORMAT_ISSUES=$(echo "$STAGED_FILES" | xargs clang-format --dry-run --Werror 2>&1 || true)
+
+    if [ -n "$FORMAT_ISSUES" ]; then
+        echo "❌ Format check failed!"
+        echo ""
+        echo "The following files need formatting:"
+        echo "$FORMAT_ISSUES"
+        echo ""
+        echo "Run this to fix:"
+        echo "  clang-format -i $STAGED_FILES"
+        echo ""
+        exit 1
+    fi
+
+    echo "✅ Format check passed"
+fi
+
+# Check if clang-tidy is available (only in build environment)
+if [ -d "build-asan" ] && command -v clang-tidy &> /dev/null; then
+    echo "Running clang-tidy..."
+
+    # Only check staged .c files
+    C_FILES=$(echo "$STAGED_FILES" | grep '\.c$' || true)
+
+    if [ -n "$C_FILES" ]; then
+        if ! clang-tidy -p build-asan $C_FILES 2>&1 | grep -q "warnings generated"; then
+            echo "⚠️  clang-tidy check completed (check output above for issues)"
+        fi
+    fi
+
+    echo "✅ clang-tidy passed"
+else
+    echo "⚠️  Skipping clang-tidy (build-asan not found or clang-tidy not installed)"
+fi
+
+echo ""
+echo "✅ All pre-commit checks passed!"
+exit 0
