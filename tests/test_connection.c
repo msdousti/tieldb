@@ -83,6 +83,8 @@ static wire_writer_t *expected_greeting(void)
     }
     assert_int_equal(wire_writer_put_u8(w, 'N'), 0);
     assert_int_equal(protocol_put_authentication_ok(w), 0);
+    assert_int_equal(protocol_put_parameter_status(w, "server_version", "18.0 (TielDB 0.1.0)"), 0);
+    assert_int_equal(protocol_put_parameter_status(w, "client_encoding", "UTF8"), 0);
     assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
     return w;
 }

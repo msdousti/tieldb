@@ -117,6 +117,44 @@ static void test_command_complete_rejects_null_arguments([[maybe_unused]] void *
     wire_writer_destroy(w);
 }
 
+static void test_parameter_status_matches_postgres_bytes([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+    const uint8_t expected[] = {'S', 0, 0, 0, 8, 'a', 0, 'b', 0};
+
+    assert_int_equal(protocol_put_parameter_status(w, "a", "b"), 0);
+    assert_writer_holds(w, expected, sizeof(expected));
+    wire_writer_destroy(w);
+}
+
+static void test_parameter_status_length_ignores_earlier_content([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+    const uint8_t expected[] = {'R', 0, 0, 0, 8, 0, 0, 0, 0, 'S', 0, 0, 0, 8, 'a', 0, 'b', 0};
+
+    assert_int_equal(protocol_put_authentication_ok(w), 0);
+    assert_int_equal(protocol_put_parameter_status(w, "a", "b"), 0);
+    assert_writer_holds(w, expected, sizeof(expected));
+    wire_writer_destroy(w);
+}
+
+static void test_parameter_status_rejects_null_arguments([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+
+    errno = 0;
+    assert_int_equal(protocol_put_parameter_status(nullptr, "a", "b"), -1);
+    assert_int_equal(errno, EINVAL);
+    errno = 0;
+    assert_int_equal(protocol_put_parameter_status(w, nullptr, "b"), -1);
+    assert_int_equal(errno, EINVAL);
+    errno = 0;
+    assert_int_equal(protocol_put_parameter_status(w, "a", nullptr), -1);
+    assert_int_equal(errno, EINVAL);
+    assert_int_equal(wire_writer_size(w), 0);
+    wire_writer_destroy(w);
+}
+
 static void test_error_response_matches_postgres_bytes([[maybe_unused]] void **state)
 {
     wire_writer_t *w = create_writer();
@@ -307,6 +345,9 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_command_complete_matches_postgres_bytes),
     cmocka_unit_test(test_command_complete_length_ignores_earlier_content),
     cmocka_unit_test(test_command_complete_rejects_null_arguments),
+    cmocka_unit_test(test_parameter_status_matches_postgres_bytes),
+    cmocka_unit_test(test_parameter_status_length_ignores_earlier_content),
+    cmocka_unit_test(test_parameter_status_rejects_null_arguments),
     cmocka_unit_test(test_error_response_matches_postgres_bytes),
     cmocka_unit_test(test_error_response_length_ignores_earlier_content),
     cmocka_unit_test(test_error_response_rejects_invalid_arguments),

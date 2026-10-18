@@ -84,6 +84,8 @@ typedef struct protocol_value {
 } protocol_value_t;
 
 [[nodiscard]] int protocol_put_authentication_ok(wire_writer_t *writer);
+[[nodiscard]] int protocol_put_parameter_status(wire_writer_t *writer, const char *name,
+                                                const char *value);
 [[nodiscard]] int protocol_put_row_description(wire_writer_t *writer,
                                                const protocol_column_t *columns, size_t count);
 [[nodiscard]] int protocol_put_data_row(wire_writer_t *writer, const protocol_value_t *values,

@@ -14,9 +14,33 @@ static constexpr int32_t GSS_ENCRYPTION_REQUEST_CODE =
 static constexpr int32_t CANCEL_REQUEST_CODE = (REQUEST_CODE_MAJOR << VERSION_MAJOR_SHIFT) | 5678;
 static constexpr uint8_t ENCRYPTION_DECLINED = 'N';
 
+typedef struct {
+    const char *name;
+    const char *value;
+} server_parameter_t;
+
+// psql reads server_version to decide which features to use, and warns when its major version
+// differs from its own. TielDB's own version would always trigger that, so the value claims the
+// Postgres version of the psql we develop against and names TielDB in parentheses
+static const server_parameter_t SERVER_PARAMETERS[] = {
+    {"server_version", "18.0 (TielDB 0.1.0)"},
+    {"client_encoding", "UTF8"},
+};
+
+static int put_server_parameters(wire_writer_t *out)
+{
+    int status = 0;
+    for (size_t i = 0; i < sizeof(SERVER_PARAMETERS) / sizeof(SERVER_PARAMETERS[0]) && status == 0;
+         i++) {
+        status = protocol_put_parameter_status(out, SERVER_PARAMETERS[i].name,
+                                               SERVER_PARAMETERS[i].value);
+    }
+    return status;
+}
+
 static int accept_connection(wire_writer_t *out, startup_result_t *result)
 {
-    if (protocol_put_authentication_ok(out) != 0 ||
+    if (protocol_put_authentication_ok(out) != 0 || put_server_parameters(out) != 0 ||
         protocol_put_ready_for_query(out, TRANSACTION_IDLE) != 0) {
         return -1;
     }

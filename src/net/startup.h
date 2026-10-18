@@ -9,7 +9,11 @@
  *   80877103 (1234.5679)  SSLRequest                   'N' (TLS is not supported)
  *   80877104 (1234.5680)  GSSENCRequest                'N' (not supported)
  *   80877102 (1234.5678)  CancelRequest                none; the connection is closed
- *   anything else         StartupMessage (3.x)         AuthenticationOk, ReadyForQuery
+ *   anything else         StartupMessage (3.x)         AuthenticationOk, ParameterStatus x2,
+ *                                                      ReadyForQuery
+ *
+ * The ParameterStatus messages report server_version and client_encoding. psql warns about a
+ * version mismatch when it does not get server_version.
  *
  * After an 'N' the client may send another packet on the same connection, typically the
  * StartupMessage. A StartupMessage also carries parameters such as the user and database name;
