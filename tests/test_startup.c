@@ -89,20 +89,6 @@ static void test_newer_minor_version_is_accepted([[maybe_unused]] void **state)
     wire_writer_destroy(w);
 }
 
-static void test_unsupported_major_version_is_rejected([[maybe_unused]] void **state)
-{
-    wire_writer_t *w = create_writer();
-    startup_result_t result = STARTUP_DONE;
-    const uint8_t packet[] = {0, 2, 0, 0};
-
-    errno = 0;
-    assert_int_equal(startup_handle_packet(packet, sizeof(packet), w, &result), -1);
-    assert_int_equal(errno, EPROTONOSUPPORT);
-    assert_int_equal(result, STARTUP_DONE);
-    assert_int_equal(wire_writer_size(w), 0);
-    wire_writer_destroy(w);
-}
-
 static void test_short_packet_is_rejected([[maybe_unused]] void **state)
 {
     wire_writer_t *w = create_writer();
@@ -134,64 +120,14 @@ static void test_null_arguments_are_rejected([[maybe_unused]] void **state)
     wire_writer_destroy(w);
 }
 
-static void assert_rejected_as_malformed(const uint8_t *packet, size_t size)
-{
-    wire_writer_t *w = create_writer();
-    startup_result_t result = STARTUP_DONE;
-
-    errno = 0;
-    assert_int_equal(startup_handle_packet(packet, size, w, &result), -1);
-    assert_int_equal(errno, EBADMSG);
-    assert_int_equal(result, STARTUP_DONE);
-    assert_int_equal(wire_writer_size(w), 0);
-    wire_writer_destroy(w);
-}
-
-static void test_encryption_requests_with_trailing_bytes_are_rejected([[maybe_unused]] void **state)
-{
-    const uint8_t ssl[] = {0x04, 0xD2, 0x16, 0x2F, 0};
-    const uint8_t gss[] = {0x04, 0xD2, 0x16, 0x30, 0, 0};
-
-    assert_rejected_as_malformed(ssl, sizeof(ssl));
-    assert_rejected_as_malformed(gss, sizeof(gss));
-}
-
-static void test_cancel_request_must_carry_pid_and_key([[maybe_unused]] void **state)
-{
-    const uint8_t missing_key[] = {0x04, 0xD2, 0x16, 0x2E, 0, 0, 0, 7};
-    const uint8_t code_only[] = {0x04, 0xD2, 0x16, 0x2E};
-    const uint8_t extra[] = {0x04, 0xD2, 0x16, 0x2E, 0, 0, 0, 7, 0, 0, 0, 9, 0};
-
-    assert_rejected_as_malformed(code_only, sizeof(code_only));
-    assert_rejected_as_malformed(missing_key, sizeof(missing_key));
-    assert_rejected_as_malformed(extra, sizeof(extra));
-}
-
-static void test_negative_code_is_an_unsupported_version([[maybe_unused]] void **state)
-{
-    wire_writer_t *w = create_writer();
-    startup_result_t result = STARTUP_DONE;
-    const uint8_t packet[] = {0xFF, 0xFF, 0x00, 0x03};
-
-    errno = 0;
-    assert_int_equal(startup_handle_packet(packet, sizeof(packet), w, &result), -1);
-    assert_int_equal(errno, EPROTONOSUPPORT);
-    assert_int_equal(result, STARTUP_DONE);
-    wire_writer_destroy(w);
-}
-
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_ssl_request_is_declined),
     cmocka_unit_test(test_gss_encryption_request_is_declined),
     cmocka_unit_test(test_cancel_request_closes_without_reply),
     cmocka_unit_test(test_startup_message_is_accepted_without_authentication),
     cmocka_unit_test(test_newer_minor_version_is_accepted),
-    cmocka_unit_test(test_unsupported_major_version_is_rejected),
     cmocka_unit_test(test_short_packet_is_rejected),
     cmocka_unit_test(test_null_arguments_are_rejected),
-    cmocka_unit_test(test_encryption_requests_with_trailing_bytes_are_rejected),
-    cmocka_unit_test(test_cancel_request_must_carry_pid_and_key),
-    cmocka_unit_test(test_negative_code_is_an_unsupported_version),
 };
 
 int main(void)

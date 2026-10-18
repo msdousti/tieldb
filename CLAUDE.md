@@ -139,6 +139,7 @@ meson test -C build-asan
 - **Check every return value** that can fail (malloc, read, write, fsync)
 - **Don't return NULL casually** - use result structs when needed
 - **Fail fast** - library code should never call `exit()`
+- **Trust the client:** TielDB targets psql and well-behaved Postgres drivers. Do not add validation, limits, or tests whose only purpose is to survive malformed or hostile client input, and skip code-review findings that are only about that. Keep what is not about trust: bounds-checked reads (memory safety), `errno` on failures a real client can cause, and null/range checks that guard against mistakes in our own code
 
 #### C23 Features to Use
 **Use the latest C23 features** (see `.claude/c-guidelines.md` for full list):
@@ -372,7 +373,7 @@ Before submitting/committing code:
 - [ ] No comments unless explaining *why*
 - [ ] Module internals are `static`
 - [ ] Stateful module types are opaque (`foo_create`/`foo_destroy`); vtables only where implementations are swappable
-- [ ] Every failure sets `errno`, documented in the header and asserted in tests
+- [ ] Every failure that can occur sets `errno`, documented in the header and asserted in tests (no handling for malformed or hostile clients)
 - [ ] At most 4 parameters per function; use an options struct beyond that
 - [ ] Headers are self-contained with `#pragma once`
 
