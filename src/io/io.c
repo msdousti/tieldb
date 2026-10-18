@@ -98,9 +98,14 @@ const io_ops_t io_real_ops = {
  */
 
 static bool
-should_inject_fault(void)
+should_inject_fault(io_fault_type_t expected_type)
 {
     if (fault_state.type == IO_FAULT_NONE) {
+        return false;
+    }
+
+    // Only count calls for the fault type we're injecting
+    if (fault_state.type != expected_type) {
         return false;
     }
 
@@ -116,7 +121,7 @@ should_inject_fault(void)
 static ssize_t
 fault_write(int fd, const void *buf, size_t count)
 {
-    if (should_inject_fault()) {
+    if (should_inject_fault(IO_FAULT_TORN_WRITE) || should_inject_fault(IO_FAULT_WRITE_ERROR)) {
         switch (fault_state.type) {
         case IO_FAULT_TORN_WRITE:
             // Write only half the data (simulate power loss)
@@ -137,7 +142,7 @@ fault_write(int fd, const void *buf, size_t count)
 static ssize_t
 fault_pwrite(int fd, const void *buf, size_t count, off_t offset)
 {
-    if (should_inject_fault()) {
+    if (should_inject_fault(IO_FAULT_TORN_WRITE) || should_inject_fault(IO_FAULT_WRITE_ERROR)) {
         switch (fault_state.type) {
         case IO_FAULT_TORN_WRITE:
             return pwrite(fd, buf, count / 2, offset);
@@ -157,7 +162,7 @@ fault_pwrite(int fd, const void *buf, size_t count, off_t offset)
 static int
 fault_fsync(int fd)
 {
-    if (should_inject_fault()) {
+    if (should_inject_fault(IO_FAULT_FSYNC_FAIL) || should_inject_fault(IO_FAULT_FSYNC_DROP)) {
         switch (fault_state.type) {
         case IO_FAULT_FSYNC_FAIL:
             errno = EIO;
@@ -178,7 +183,7 @@ fault_fsync(int fd)
 static ssize_t
 fault_read(int fd, void *buf, size_t count)
 {
-    if (should_inject_fault() && fault_state.type == IO_FAULT_READ_ERROR) {
+    if (should_inject_fault(IO_FAULT_READ_ERROR)) {
         errno = EIO;
         return -1;
     }
@@ -189,7 +194,7 @@ fault_read(int fd, void *buf, size_t count)
 static ssize_t
 fault_pread(int fd, void *buf, size_t count, off_t offset)
 {
-    if (should_inject_fault() && fault_state.type == IO_FAULT_READ_ERROR) {
+    if (should_inject_fault(IO_FAULT_READ_ERROR)) {
         errno = EIO;
         return -1;
     }
