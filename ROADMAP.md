@@ -145,12 +145,13 @@ testdb=> SELECT * FROM user;
   - [x] Slotted page layout (slot array + tuples)
   - [x] Page-level operations (insert, delete, get tuple)
   - [ ] Page deserialization fuzz target
-- [ ] Tuple format
-  - [ ] Fixed-length header (null bitmap, optional xmin/xmax)
+- [ ] Row codec, independent of the storage engine (a future LSM engine reuses it)
+  - [ ] Null bitmap, then the values of the columns in the stored format of their type, encoded and decoded through the type registry
   - [ ] Variable-length data (length prefix for TEXT), with a spare bit in the prefix reserved for the overflow pointer of Phase 8+
   - [ ] A row that does not fit in one page is an error (errno `EFBIG`) that the SQL layer reports; no overflow storage yet
-  - [ ] Encode and decode through the type registry
-  - [ ] Tuple ID (TID): page + slot
+- [ ] Heap tuple header, specific to the heap engine
+  - [ ] Header in front of the encoded row: flags, optional xmin/xmax
+  - [ ] Tuple ID (TID): page + slot; it stays inside the heap engine and is not exposed to the executor
 - [ ] Heap file management
   - [ ] Create/open/close heap files, all I/O through `io->`
   - [ ] Allocate new pages
@@ -160,16 +161,22 @@ testdb=> SELECT * FROM user;
   - [ ] Clock replacement policy
   - [ ] Dirty page tracking
   - [ ] Page ID (file number + page number)
+  - [ ] Generic over files and page numbers, with no heap assumptions: an LSM engine keeps its own file formats and block cache
   - [ ] Zero outstanding pins asserted at teardown
 - [ ] Free space map (bitmap or simple list)
+- [ ] Storage engine interface (the vtable from `CLAUDE.md`), so that an LSM engine can be added in Phase 8+
+  - [ ] Operations on rows and cursors, not on pages or TIDs: insert, and a scan cursor (open, next, close)
+  - [ ] Separate the catalog entry (name, columns, engine, engine metadata) from the storage of the rows; `table_t` is both today
+  - [ ] The heap engine is the first implementation
 - [ ] Integrate with executor
-  - [ ] Tables keep their rows in heap files through the buffer pool
+  - [ ] Tables keep their rows in heap files through the buffer pool, behind the engine interface
   - [ ] INSERT → find a page with space, add tuple, mark dirty
   - [ ] SELECT → pin pages, iterate tuples, unpin
 - [ ] Persistent catalog
   - [ ] Special system tables (pg_class-like)
   - [ ] Bootstrap: create catalog files on first run
   - [ ] Load catalog at startup
+  - [ ] Store the engine of each table and its engine-specific metadata (an opaque blob to the catalog)
   - [ ] Store each column's type by id and its display position next to its definition, so a reordering survives a restart
   - [ ] Data directory option for the server; flush on clean shutdown and on checkpoint
 
