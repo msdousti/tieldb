@@ -4,8 +4,11 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+# Unoptimized: inlining and _FORTIFY_SOURCE add compiler-generated branches that no test can reach
 if [ ! -d build-cov ]; then
-    meson setup build-cov -Db_coverage=true
+    meson setup build-cov -Db_coverage=true -Dbuildtype=debug
+else
+    meson configure build-cov -Db_coverage=true -Dbuildtype=debug
 fi
 
 find build-cov -name '*.gcda' -delete
