@@ -14,9 +14,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #include <cmocka.h>
 
+#include "net/connection.h"
 #include "net/protocol.h"
 #include "net/query_handler.h"
 #include "net/startup.h"
@@ -385,6 +388,33 @@ test_query_fails_cleanly_when_the_reader_cannot_be_created([[maybe_unused]] void
     wire_writer_destroy(w);
 }
 
+static void test_connection_fails_when_the_writer_cannot_be_created([[maybe_unused]] void **state)
+{
+    will_return(oom_calloc, false);
+
+    errno = 0;
+    assert_int_equal(connection_serve(-1), -1);
+    assert_int_equal(errno, ENOMEM);
+}
+
+static void test_connection_fails_when_a_packet_cannot_be_buffered([[maybe_unused]] void **state)
+{
+    const uint8_t ssl_request[] = {0, 0, 0, 8, 0x04, 0xD2, 0x16, 0x2F};
+    int pair[2];
+    assert_int_equal(socketpair(AF_UNIX, SOCK_STREAM, 0, pair), 0);
+    assert_int_equal(write(pair[1], ssl_request, sizeof(ssl_request)),
+                     (ssize_t) sizeof(ssl_request));
+    will_return(oom_calloc, true);
+    will_return(oom_malloc, true);
+    will_return(oom_malloc, false);
+
+    errno = 0;
+    assert_int_equal(connection_serve(pair[0]), -1);
+    assert_int_equal(errno, ENOMEM);
+    close(pair[0]);
+    close(pair[1]);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_create_fails_when_struct_allocation_fails),
     cmocka_unit_test(test_create_fails_when_buffer_allocation_fails),
@@ -411,6 +441,8 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_startup_leaves_result_unset_when_decline_write_fails),
     cmocka_unit_test(test_query_response_is_rolled_back_when_a_message_fails),
     cmocka_unit_test(test_query_fails_cleanly_when_the_reader_cannot_be_created),
+    cmocka_unit_test(test_connection_fails_when_the_writer_cannot_be_created),
+    cmocka_unit_test(test_connection_fails_when_a_packet_cannot_be_buffered),
 };
 
 int main(void)
