@@ -4,11 +4,11 @@
 
 #include "net/query_handler.h"
 
-#include <ctype.h>
 #include <errno.h>
 #include <string.h>
 
-static constexpr char VERSION_QUERY[] = "select version()";
+#include "sql/simple_sql.h"
+
 static constexpr char SERVER_VERSION[] = "TielDB 0.1.0";
 static constexpr char VERSION_COLUMN[] = "version";
 static constexpr char SELECT_ONE_TAG[] = "SELECT 1";
@@ -50,49 +50,6 @@ static const response_step_t VERSION_RESPONSE[] = {put_version_description, put_
                                                    put_select_tag, put_ready};
 static const response_step_t UNSUPPORTED_RESPONSE[] = {put_unsupported_error, put_ready};
 
-static const char *skip_spaces(const char *text)
-{
-    while (isspace((unsigned char) *text)) {
-        text++;
-    }
-    return text;
-}
-
-static char to_lower(char c)
-{
-    if (c >= 'A' && c <= 'Z') {
-        return (char) (c - 'A' + 'a');
-    }
-    return c;
-}
-
-static bool consume_ignoring_case(const char **cursor, const char *word)
-{
-    const char *text = *cursor;
-    while (*word != '\0' && to_lower(*text) == *word) {
-        word++;
-        text++;
-    }
-    if (*word != '\0') {
-        return false;
-    }
-    *cursor = text;
-    return true;
-}
-
-static bool is_version_query(const char *sql)
-{
-    const char *cursor = skip_spaces(sql);
-    if (!consume_ignoring_case(&cursor, VERSION_QUERY)) {
-        return false;
-    }
-    cursor = skip_spaces(cursor);
-    if (*cursor == ';') {
-        cursor = skip_spaces(cursor + 1);
-    }
-    return *cursor == '\0';
-}
-
 static int run_steps(wire_writer_t *out, const response_step_t *steps, size_t count)
 {
     int result = 0;
@@ -104,7 +61,7 @@ static int run_steps(wire_writer_t *out, const response_step_t *steps, size_t co
 
 static int respond(const char *sql, wire_writer_t *out)
 {
-    if (is_version_query(sql)) {
+    if (sql_is_version_query(sql)) {
         return run_steps(out, VERSION_RESPONSE,
                          sizeof(VERSION_RESPONSE) / sizeof(VERSION_RESPONSE[0]));
     }
