@@ -95,12 +95,25 @@ static void test_put_bytes_fails_when_growth_fails([[maybe_unused]] void **state
     wire_writer_destroy(w);
 }
 
+static void test_reader_create_fails_when_allocation_fails([[maybe_unused]] void **state)
+{
+    const uint8_t input[] = {1};
+    will_return(oom_calloc, false);
+    errno = 0;
+
+    wire_reader_t *r = wire_reader_create(input, sizeof(input));
+
+    assert_null(r);
+    assert_int_equal(errno, ENOMEM);
+}
+
 int main(void)
 {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_create_fails_when_struct_allocation_fails),
         cmocka_unit_test(test_create_fails_when_buffer_allocation_fails),
         cmocka_unit_test(test_put_bytes_fails_when_growth_fails),
+        cmocka_unit_test(test_reader_create_fails_when_allocation_fails),
     };
     return cmocka_run_group_tests(tests, nullptr, nullptr);
 }
