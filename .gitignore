@@ -1,0 +1,39 @@
+# Build directories
+build-*/
+compile_commands.json
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test artifacts
+*.log
+/tmp/
+
+# Compiled objects
+*.o
+*.a
+*.so
+*.dylib
+
+# Coverage
+*.gcda
+*.gcno
+*.gcov
+htmlcov/
+
+# Sanitizer outputs
+*.san
+
+# Core dumps
+core
+core.*
+
+# Database files (when running)
+*.db
+*.wal
+data/

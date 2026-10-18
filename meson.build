@@ -1,0 +1,44 @@
+# TielDB - Educational Database Management System
+# Main Meson build configuration
+
+project('tieldb', 'c',
+  version: '0.1.0',
+  license: 'Educational',
+  default_options: [
+    'c_std=c2x',           # C23 standard
+    'warning_level=3',     # -Wall -Wextra -Wpedantic
+    'werror=true',         # Warnings are errors
+    'buildtype=debugoptimized',
+  ]
+)
+
+# Add extra warnings
+add_project_arguments([
+  '-Wshadow',
+  '-Wconversion',
+  '-Wstrict-prototypes',
+  '-Wformat=2',
+], language: 'c')
+
+# Dependencies
+cmocka_dep = dependency('cmocka', required: false)
+
+# Include directories
+inc = include_directories('include', 'src')
+
+# Subdirectories
+subdir('src')
+subdir('tests')
+
+# Summary
+summary({
+  'prefix': get_option('prefix'),
+  'libdir': get_option('libdir'),
+  'datadir': get_option('datadir'),
+}, section: 'Directories')
+
+summary({
+  'c_std': get_option('c_std'),
+  'buildtype': get_option('buildtype'),
+  'werror': get_option('werror'),
+}, section: 'Build Options')
