@@ -20,6 +20,11 @@ ds_sources = files(
   'ds/hash_map.c',
 )
 
+# Type registry
+types_sources = files(
+  'types/type_registry.c',
+)
+
 # SQL module
 sql_sources = files(
   'sql/simple_sql.c',
@@ -47,6 +52,7 @@ thread_dep = dependency('threads')
 tieldb_lib = static_library('tieldb',
   io_sources,
   ds_sources,
+  types_sources,
   net_sources,
   sql_sources,
   storage_sources,

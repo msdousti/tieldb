@@ -78,6 +78,15 @@ test_hash_map = executable('test_hash_map',
 
 test('hash_map', test_hash_map)
 
+# Test: type registry
+test_type_registry = executable('test_type_registry',
+  'test_type_registry.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('type_registry', test_type_registry)
+
 # Test: catalog
 test_catalog = executable('test_catalog',
   'test_catalog.c',
