@@ -413,7 +413,7 @@ if (condition) {
 ### Phase 1 Components
 
 1. **Postgres wire protocol** (`src/net/protocol.{h,c}`)
-   - Startup, authentication
+   - Startup (no authentication or TLS)
    - Simple query protocol
    - Response messages
 

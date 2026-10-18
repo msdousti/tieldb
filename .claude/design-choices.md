@@ -288,7 +288,7 @@ Design decisions for the educational DBMS, ordered by implementation priority. E
 
 **First:** Subset of Postgres protocol
 - Simple query protocol (text queries)
-- Basic authentication (trust or md5)
+- No authentication or other security features, for simplicity: every connection is accepted (trust) and answered with `AuthenticationOk`; no passwords, roles, or permissions
 - No TLS, for simplicity: an `SSLRequest` is answered with a single `N`, and the client continues in plaintext (psql's default `sslmode=prefer` does this)
 
 **Later:** Extended protocol
