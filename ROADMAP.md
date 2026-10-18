@@ -53,7 +53,7 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
     - [x] Startup packet decoding (version check; parameters ignored)
     - [x] Decline `SSLRequest` with `N` (no TLS)
     - [ ] Parse startup parameters (user, database)
-  - [ ] Simple query protocol (text queries)
+  - [x] Simple query protocol (text queries)
     - [x] Decode the Query message and answer `SELECT version()` (hardcoded)
     - [x] Per-connection message loop (Query, Terminate)
   - [x] Response messages: RowDescription, DataRow, CommandComplete, ReadyForQuery
