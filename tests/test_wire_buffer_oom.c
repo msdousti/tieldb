@@ -22,6 +22,7 @@
 #include "net/connection.h"
 #include "net/protocol.h"
 #include "net/query_handler.h"
+#include "net/server.h"
 #include "net/startup.h"
 #include "net/wire_buffer.h"
 
@@ -415,6 +416,15 @@ static void test_connection_fails_when_a_packet_cannot_be_buffered([[maybe_unuse
     close(pair[1]);
 }
 
+static void test_server_create_fails_when_memory_runs_out([[maybe_unused]] void **state)
+{
+    will_return(oom_calloc, false);
+
+    errno = 0;
+    assert_null(server_create(0));
+    assert_int_equal(errno, ENOMEM);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_create_fails_when_struct_allocation_fails),
     cmocka_unit_test(test_create_fails_when_buffer_allocation_fails),
@@ -443,6 +453,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_query_fails_cleanly_when_the_reader_cannot_be_created),
     cmocka_unit_test(test_connection_fails_when_the_writer_cannot_be_created),
     cmocka_unit_test(test_connection_fails_when_a_packet_cannot_be_buffered),
+    cmocka_unit_test(test_server_create_fails_when_memory_runs_out),
 };
 
 int main(void)

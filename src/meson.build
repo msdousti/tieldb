@@ -12,6 +12,7 @@ net_sources = files(
   'net/startup.c',
   'net/query_handler.c',
   'net/connection.c',
+  'net/server.c',
 )
 
 # Build static library
