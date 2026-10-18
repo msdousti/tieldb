@@ -69,6 +69,15 @@ test_table = executable('test_table',
 
 test('table', test_table)
 
+# Test: hash map
+test_hash_map = executable('test_hash_map',
+  'test_hash_map.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('hash_map', test_hash_map)
+
 # Test: catalog
 test_catalog = executable('test_catalog',
   'test_catalog.c',
@@ -136,6 +145,7 @@ test('server', test_server)
 # time with its allocation calls renamed to the mocks in the test, so only that file is affected.
 wire_buffer_oom_lib = static_library('wire_buffer_oom',
   io_sources,
+  ds_sources,
   net_sources,
   sql_sources,
   storage_sources,
