@@ -1,14 +1,15 @@
 /**
- * TCP listener that serves client connections one after another.
+ * TCP listener that serves each client connection on its own thread.
  *
- * A server listens on the loopback interface. server_serve accepts a connection, runs it to
- * completion with connection_serve, closes it, and moves on to the next. There is no
- * concurrency yet: a second client waits in the kernel's accept queue until the first is done.
+ * A server listens on the loopback interface. server_serve accepts connections, runs each one
+ * with connection_serve on a new thread, and closes it when its session ends. Sessions are
+ * independent: a slow or stuck client does not hold up the others. There is no limit on the
+ * number of concurrent sessions yet.
  *
  * A client that disconnects abruptly ends only its own session; the server keeps accepting.
  *
  * Errors return nullptr or -1 and set errno: ENOMEM when memory runs out, otherwise the error of
- * the failed socket call (for example EADDRINUSE when the port is taken).
+ * the failed socket or thread call (for example EADDRINUSE when the port is taken).
  */
 
 #pragma once
@@ -23,5 +24,8 @@ typedef struct server server_t;
 void server_destroy(server_t *server);
 [[nodiscard]] uint16_t server_port(const server_t *server);
 
-/** Serves up to max_connections clients in turn. Returns -1 if accepting a connection fails. */
+/**
+ * Accepts up to max_connections clients, then waits for all their sessions to end. Returns -1 if
+ * accepting a connection or starting its thread fails; sessions already started still finish.
+ */
 [[nodiscard]] int server_serve(server_t *server, size_t max_connections);

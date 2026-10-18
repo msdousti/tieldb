@@ -8,6 +8,8 @@
  */
 
 #include <errno.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -510,6 +512,30 @@ static void test_server_create_fails_when_memory_runs_out([[maybe_unused]] void 
     assert_int_equal(errno, ENOMEM);
 }
 
+static void
+test_server_serve_fails_when_a_session_cannot_be_allocated([[maybe_unused]] void **state)
+{
+    will_return(oom_calloc, true);
+    server_t *server = server_create(0);
+    int client = socket(AF_INET, SOCK_STREAM, 0);
+    if (client < 0) {
+        fail();
+    }
+    struct sockaddr_in address = {
+        .sin_family = AF_INET,
+        .sin_port = htons(server_port(server)),
+        .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
+    };
+    assert_int_equal(connect(client, (const struct sockaddr *) &address, sizeof(address)), 0);
+    will_return(oom_malloc, false);
+
+    errno = 0;
+    assert_int_equal(server_serve(server, 1), -1);
+    assert_int_equal(errno, ENOMEM);
+    close(client);
+    server_destroy(server);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_create_fails_when_struct_allocation_fails),
     cmocka_unit_test(test_create_fails_when_buffer_allocation_fails),
@@ -544,6 +570,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_connection_fails_when_the_writer_cannot_be_created),
     cmocka_unit_test(test_connection_fails_when_a_packet_cannot_be_buffered),
     cmocka_unit_test(test_server_create_fails_when_memory_runs_out),
+    cmocka_unit_test(test_server_serve_fails_when_a_session_cannot_be_allocated),
 };
 
 int main(void)

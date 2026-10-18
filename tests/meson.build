@@ -90,7 +90,7 @@ test('tieldb', test_tieldb, args: [tieldb_exe], depends: tieldb_exe)
 # Test: TCP listener
 test_server = executable('test_server',
   'test_server.c',
-  dependencies: [tieldb_dep, cmocka_dep],
+  dependencies: [tieldb_dep, cmocka_dep, thread_dep],
   include_directories: inc,
 )
 
@@ -107,7 +107,7 @@ wire_buffer_oom_lib = static_library('wire_buffer_oom',
 
 test_wire_buffer_oom = executable('test_wire_buffer_oom',
   'test_wire_buffer_oom.c',
-  dependencies: [cmocka_dep],
+  dependencies: [cmocka_dep, thread_dep],
   include_directories: inc,
   link_with: wire_buffer_oom_lib,
 )
