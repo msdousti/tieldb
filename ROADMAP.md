@@ -47,8 +47,15 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
   - [x] Output buffer (big-endian writer)
   - [x] Input buffer (bounds-checked reader)
   - [ ] Startup message (authentication, database selection)
+    - [x] AuthenticationOk response
+    - [ ] Startup packet decoding
+    - [ ] Decline `SSLRequest` with `N` (no TLS)
   - [ ] Simple query protocol (text queries)
   - [ ] Response messages: RowDescription, DataRow, CommandComplete, ReadyForQuery
+    - [x] ReadyForQuery
+    - [ ] CommandComplete
+    - [ ] RowDescription
+    - [ ] DataRow
   - [ ] Error handling (ErrorResponse)
 - [ ] Parse simple SQL (CREATE TABLE, INSERT, SELECT *)
   - [ ] Use existing parser (e.g., `libpg_query` or hand-write for just these 3)

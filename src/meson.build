@@ -8,6 +8,7 @@ io_sources = files(
 # Network module
 net_sources = files(
   'net/wire_buffer.c',
+  'net/protocol.c',
 )
 
 # Build static library
