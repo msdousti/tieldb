@@ -78,6 +78,21 @@ static void test_writer_rejects_size_overflow(void **state)
     wire_writer_destroy(w);
 }
 
+static void test_writer_rejects_capacity_overflow(void **state)
+{
+    (void) state;
+    wire_writer_t *w = wire_writer_create();
+    assert_non_null(w);
+    uint8_t byte = 1;
+
+    errno = 0;
+    assert_int_equal(wire_writer_put_bytes(w, &byte, SIZE_MAX / 2 + 100), -1);
+    assert_int_equal(errno, EOVERFLOW);
+
+    assert_int_equal(wire_writer_size(w), 0);
+    wire_writer_destroy(w);
+}
+
 static void test_writer_encodes_negative_values(void **state)
 {
     (void) state;
@@ -132,6 +147,7 @@ int main(void)
         cmocka_unit_test(test_writer_cstring_includes_terminator),
         cmocka_unit_test(test_writer_grows_past_initial_capacity),
         cmocka_unit_test(test_writer_rejects_size_overflow),
+        cmocka_unit_test(test_writer_rejects_capacity_overflow),
         cmocka_unit_test(test_writer_encodes_negative_values),
         cmocka_unit_test(test_writer_accepts_empty_bytes),
         cmocka_unit_test(test_writer_rejects_null_input),
