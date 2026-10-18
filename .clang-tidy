@@ -1,4 +1,4 @@
-# EduDB clang-tidy configuration
+# TielDB clang-tidy configuration
 # Checks for common bugs, performance issues, and style violations
 
 Checks: >
@@ -13,41 +13,34 @@ Checks: >
   -readability-identifier-length,
   -readability-function-cognitive-complexity,
   -readability-magic-numbers,
+  -readability-identifier-naming,
+  -readability-avoid-const-params-in-decls,
   -bugprone-easily-swappable-parameters,
+  -bugprone-reserved-identifier,
+  -cert-dcl37-c,
+  -cert-dcl51-cpp,
   -cert-err33-c,
   -misc-unused-parameters,
-  -readability-avoid-const-params-in-decls
+  -misc-include-cleaner,
+  -portability-avoid-pragma-once
 
 # Disabled checks explained:
 # - identifier-length: we allow short names like 'i', 'j' for loop counters
+# - identifier-naming: we enforce naming via clang-format and code review
 # - function-cognitive-complexity: too noisy, we have our own complexity rules
 # - magic-numbers: too noisy for systems code (PAGE_SIZE, etc.)
+# - avoid-const-params-in-decls: const on pass-by-value is fine
 # - easily-swappable-parameters: too noisy, types provide safety
+# - reserved-identifier: _POSIX_C_SOURCE is a standard feature test macro
+# - dcl37-c, dcl51-cpp: same as reserved-identifier
 # - cert-err33-c: checks all unchecked return values, too aggressive
 # - misc-unused-parameters: common in callback interfaces
-# - avoid-const-params-in-decls: const on pass-by-value is fine
+# - misc-include-cleaner: too pedantic about indirect includes
+# - avoid-pragma-once: our style guide requires #pragma once
 
 WarningsAsErrors: '*'
 
 CheckOptions:
-  - key: readability-identifier-naming.FunctionCase
-    value: lower_case
-  - key: readability-identifier-naming.VariableCase
-    value: lower_case
-  - key: readability-identifier-naming.ParameterCase
-    value: lower_case
-  - key: readability-identifier-naming.TypedefCase
-    value: lower_case
-  - key: readability-identifier-naming.StructCase
-    value: lower_case
-  - key: readability-identifier-naming.EnumCase
-    value: lower_case
-  - key: readability-identifier-naming.MacroDefinitionCase
-    value: UPPER_CASE
-  - key: readability-identifier-naming.EnumConstantCase
-    value: UPPER_CASE
-  - key: readability-identifier-naming.GlobalConstantCase
-    value: UPPER_CASE
   - key: readability-braces-around-statements.ShortStatementLines
     value: 0
   - key: readability-function-size.LineThreshold

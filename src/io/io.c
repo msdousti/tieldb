@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 // Global I/O operations pointer
@@ -102,11 +103,7 @@ static bool should_inject_fault(io_fault_type_t expected_type)
 
     fault_state.call_count++;
 
-    if (fault_state.nth_call > 0 && fault_state.call_count == fault_state.nth_call) {
-        return true;
-    }
-
-    return false;
+    return fault_state.nth_call > 0 && fault_state.call_count == fault_state.nth_call;
 }
 
 static ssize_t fault_write(int fd, const void *buf, size_t count)
