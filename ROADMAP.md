@@ -140,10 +140,10 @@ testdb=> SELECT * FROM user;
   - [x] The executor and the wire protocol layer look types up through it; this replaces the type-name table in the executor and the type-to-OID mapping in the query handler
   - [x] Values are stored in their type's own format (an integer as 4 bytes), converted from and to text only at the edges; this replaces the `column_type_t` enum and fixes integers being stored as written (`007`)
 - [ ] Page abstraction
-  - [ ] 8 KB pages
-  - [ ] Page header (LSN, checksum, page type, free space)
-  - [ ] Slotted page layout (slot array + tuples)
-  - [ ] Page-level operations (insert, delete, get tuple)
+  - [x] 8 KB pages
+  - [ ] Page header (LSN, checksum, page type, free space): the fields and the page type are in place; the checksum is computed and the LSN set when pages are written (heap file, WAL)
+  - [x] Slotted page layout (slot array + tuples)
+  - [x] Page-level operations (insert, delete, get tuple)
   - [ ] Page deserialization fuzz target
 - [ ] Tuple format
   - [ ] Fixed-length header (null bitmap, optional xmin/xmax)
@@ -174,10 +174,10 @@ testdb=> SELECT * FROM user;
   - [ ] Data directory option for the server; flush on clean shutdown and on checkpoint
 
 ### Tests
-- [ ] **Reference-model test for slotted page**
-  - [ ] Random insert/delete operations
-  - [ ] Compare against simple array model
-  - [ ] Log RNG seed for reproducibility
+- [x] **Reference-model test for slotted page**
+  - [x] Random insert/delete operations
+  - [x] Compare against simple array model
+  - [x] Log RNG seed for reproducibility
 - [ ] Unit tests for the type registry and the tuple round trip
 - [ ] Unit tests for buffer pool (pin/unpin, eviction)
 - [ ] Fault injection for heap file and buffer pool I/O (short write, fsync failure) through the injectable `io`

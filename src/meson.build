@@ -39,6 +39,7 @@ executor_sources = files(
 storage_sources = files(
   'storage/table.c',
   'storage/catalog.c',
+  'storage/page.c',
 )
 
 # Command-line options
