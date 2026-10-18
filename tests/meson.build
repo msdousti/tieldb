@@ -69,6 +69,24 @@ test_connection = executable('test_connection',
 
 test('connection', test_connection)
 
+# Test: command-line options
+test_options = executable('test_options',
+  'test_options.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('options', test_options)
+
+# Test: the tieldb binary, started as a real process
+test_tieldb = executable('test_tieldb',
+  'test_tieldb.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('tieldb', test_tieldb, args: [tieldb_exe], depends: tieldb_exe)
+
 # Test: TCP listener
 test_server = executable('test_server',
   'test_server.c',

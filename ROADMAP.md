@@ -75,9 +75,9 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
   - [ ] `INSERT` → append to tuple array
   - [ ] `SELECT *` → iterate and return all rows
 - [ ] Network server
-  - [ ] Listen on port (default 5432, like Postgres)
+  - [x] Listen on port (default 5432, like Postgres)
     - [x] Listener on the loopback interface (`server_create`)
-    - [ ] `tieldb` binary with `--port` and `--once`
+    - [x] `tieldb` binary with `--port` and `--once`
   - [x] Accept connections (one at a time)
   - [ ] Per-connection thread (or event loop)
 

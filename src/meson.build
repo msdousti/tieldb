@@ -15,16 +15,29 @@ net_sources = files(
   'net/server.c',
 )
 
+# Command-line options
+cli_sources = files(
+  'options.c',
+)
+
 # Build static library
 tieldb_lib = static_library('tieldb',
   io_sources,
   net_sources,
+  cli_sources,
   include_directories: inc,
   install: false,
 )
 
 # Dependency for tests
 tieldb_dep = declare_dependency(
+  link_with: tieldb_lib,
+  include_directories: inc,
+)
+
+# The server executable
+tieldb_exe = executable('tieldb',
+  'main.c',
   link_with: tieldb_lib,
   include_directories: inc,
 )
