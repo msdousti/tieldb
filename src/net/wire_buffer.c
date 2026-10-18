@@ -155,11 +155,17 @@ int wire_writer_put_cstring(wire_writer_t *writer, const char *str)
 
 const uint8_t *wire_writer_data(const wire_writer_t *writer)
 {
+    if (writer == nullptr) {
+        return nullptr;
+    }
     return writer->data;
 }
 
 size_t wire_writer_size(const wire_writer_t *writer)
 {
+    if (writer == nullptr) {
+        return 0;
+    }
     return writer->size;
 }
 

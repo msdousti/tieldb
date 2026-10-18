@@ -58,7 +58,7 @@ typedef struct io_ops {
 
 /**
  * Global I/O operations pointer
- * Set to io_real for production, io_fault_inject for testing
+ * Real syscalls by default; io_init selects io_real_ops or io_fault_inject_ops
  */
 extern const io_ops_t *io;
 
