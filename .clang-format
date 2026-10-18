@@ -69,12 +69,18 @@ BreakBeforeTernaryOperators: true
 SortIncludes: true
 IncludeBlocks: Regroup
 IncludeCategories:
-  # System headers
-  - Regex:           '<[a-z_]+\.h>'
+  # Standard C headers (must come before cmocka)
+  - Regex:           '<(fcntl|setjmp|stdarg|stddef|stdint|stdio|stdlib|string|unistd|sys/.*)\.h>'
     Priority:        1
+  # Testing framework (needs types from standard headers)
+  - Regex:           '<cmocka\.h>'
+    Priority:        2
+  # Other system headers
+  - Regex:           '<.*\.h>'
+    Priority:        3
   # Project headers
   - Regex:           '".*"'
-    Priority:        2
+    Priority:        4
 
 # Other
 KeepEmptyLinesAtTheStartOfBlocks: false
