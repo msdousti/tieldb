@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { WRITER_INITIAL_CAPACITY = 64 };
+static constexpr size_t WRITER_INITIAL_CAPACITY = 64;
 
 struct wire_writer {
     uint8_t *data;
@@ -67,6 +67,9 @@ static int writer_reserve(wire_writer_t *writer, size_t extra)
 
 int wire_writer_put_bytes(wire_writer_t *writer, const void *data, size_t size)
 {
+    if (writer == nullptr || (data == nullptr && size > 0)) {
+        return -1;
+    }
     if (writer_reserve(writer, size) != 0) {
         return -1;
     }
@@ -99,6 +102,9 @@ int wire_writer_put_i32(wire_writer_t *writer, int32_t value)
 
 int wire_writer_put_cstring(wire_writer_t *writer, const char *str)
 {
+    if (str == nullptr) {
+        return -1;
+    }
     return wire_writer_put_bytes(writer, str, strlen(str) + 1);
 }
 
