@@ -68,6 +68,7 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
   - [x] Stopgap hand-written matchers for `SELECT version()`, `SELECT * FROM <table>`, `INSERT INTO <table> VALUES (...)` and `CREATE TABLE <table> (<column> <type>, ...)`, until a real parser replaces them
 - [ ] In-memory catalog
   - [x] Table metadata (columns, types)
+  - [x] Column display order, separate from the storage order (starts as the definition order; no SQL to change it yet)
   - [ ] Hash map: table name → table definition
     - [x] Lookup by name (a plain array with a linear search for now)
     - [ ] Hash map

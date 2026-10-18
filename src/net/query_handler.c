@@ -62,7 +62,7 @@ static int put_table_description(wire_writer_t *out, const void *context)
     size_t count = table_column_count(table);
     protocol_column_t columns[TABLE_MAX_COLUMNS];
     for (size_t i = 0; i < count; i++) {
-        const table_column_t *column = table_column(table, i);
+        const table_column_t *column = table_column(table, table_physical_index(table, i));
         columns[i] = (protocol_column_t){column->name, type_oid(column->type)};
     }
     return protocol_put_row_description(out, columns, count);
@@ -73,7 +73,7 @@ static int put_table_row(wire_writer_t *out, const table_t *table, size_t row)
     size_t count = table_column_count(table);
     protocol_value_t values[TABLE_MAX_COLUMNS];
     for (size_t i = 0; i < count; i++) {
-        const char *cell = table_cell(table, row, i);
+        const char *cell = table_cell(table, row, table_physical_index(table, i));
         values[i] = (protocol_value_t){cell, strlen(cell)};
     }
     return protocol_put_data_row(out, values, count);

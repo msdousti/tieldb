@@ -124,6 +124,38 @@ static void test_select_gives_the_locked_table_until_released([[maybe_unused]] v
     assert_int_equal(table_insert(catalog_find("user"), row, 2), 0);
 }
 
+static void test_insert_values_follow_the_display_order([[maybe_unused]] void **state)
+{
+    const table_column_t columns[] = {{"a", COLUMN_TYPE_INTEGER}, {"b", COLUMN_TYPE_TEXT}};
+    const size_t flipped[] = {1, 0};
+    executor_error_t error;
+    table_t *table = catalog_create_table("flipped", columns, 2);
+    if (table == nullptr) {
+        fail();
+    }
+    assert_int_equal(table_set_display_order(table, flipped, 2), 0);
+
+    run_insert("INSERT INTO flipped VALUES ('x', 5)", &error);
+
+    assert_string_equal(error.sqlstate, "");
+    assert_string_equal(table_cell(table, 0, 0), "5");
+    assert_string_equal(table_cell(table, 0, 1), "x");
+}
+
+static void test_integer_check_uses_the_column_shown_at_that_position([[maybe_unused]] void **state)
+{
+    const size_t flipped[] = {1, 0};
+    executor_error_t error;
+    table_t *table = catalog_find("flipped");
+
+    assert_int_equal(table_set_display_order(table, flipped, 2), 0);
+    run_insert("INSERT INTO flipped VALUES (5, 'x')", &error);
+
+    assert_string_equal(error.sqlstate, "22P02");
+    assert_string_equal(error.message, "invalid input syntax for type integer: \"x\"");
+    assert_int_equal(table_row_count(table), 1);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_insert_into_a_missing_table_is_an_error),
     cmocka_unit_test(test_insert_with_the_wrong_number_of_values_is_an_error),
@@ -133,6 +165,8 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_valid_insert_adds_a_row),
     cmocka_unit_test(test_number_in_a_text_column_is_stored_as_text),
     cmocka_unit_test(test_select_gives_the_locked_table_until_released),
+    cmocka_unit_test(test_insert_values_follow_the_display_order),
+    cmocka_unit_test(test_integer_check_uses_the_column_shown_at_that_position),
 };
 
 int main(void)
