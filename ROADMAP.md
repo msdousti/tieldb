@@ -46,9 +46,16 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
 - [ ] Implement Postgres wire protocol
   - [x] Output buffer (big-endian writer)
   - [x] Input buffer (bounds-checked reader)
-  - [ ] Startup message (authentication, database selection)
+  - [ ] Startup message (accept every connection, database selection; no authentication)
+    - [x] AuthenticationOk response
+    - [ ] Startup packet decoding
+    - [ ] Decline `SSLRequest` with `N` (no TLS)
   - [ ] Simple query protocol (text queries)
   - [ ] Response messages: RowDescription, DataRow, CommandComplete, ReadyForQuery
+    - [x] ReadyForQuery
+    - [ ] CommandComplete
+    - [ ] RowDescription
+    - [ ] DataRow
   - [ ] Error handling (ErrorResponse)
 - [ ] Parse simple SQL (CREATE TABLE, INSERT, SELECT *)
   - [ ] Use existing parser (e.g., `libpg_query` or hand-write for just these 3)
