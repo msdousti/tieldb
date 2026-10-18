@@ -21,3 +21,24 @@ constexpr size_t SQL_IDENTIFIER_CAPACITY = 64;
  * do not fit in capacity bytes (with the terminator) are not recognized.
  */
 [[nodiscard]] bool sql_parse_select_all(const char *sql, char *table, size_t capacity);
+
+/** Most values an INSERT statement may list; the same as the most columns of a table. */
+constexpr size_t SQL_MAX_INSERT_VALUES = 32;
+
+/** One literal of a VALUES list: an integer such as -5, or a quoted string such as 'it''s'. */
+typedef struct {
+    const char *text; // for a string, without the quotes and with '' turned into '
+    bool is_quoted;
+} sql_literal_t;
+
+typedef struct {
+    char table[SQL_IDENTIFIER_CAPACITY];
+    sql_literal_t values[SQL_MAX_INSERT_VALUES];
+    size_t count;
+} sql_insert_t;
+
+/**
+ * Matches "INSERT INTO <table> VALUES (<literal>, ...)". The literal texts point into scratch,
+ * which must have room for strlen(sql) + 1 bytes and stay alive while insert is used.
+ */
+[[nodiscard]] bool sql_parse_insert(const char *sql, char *scratch, sql_insert_t *insert);
