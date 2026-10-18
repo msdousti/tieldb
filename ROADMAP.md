@@ -147,7 +147,8 @@ testdb=> SELECT * FROM user;
   - [ ] Page deserialization fuzz target
 - [ ] Tuple format
   - [ ] Fixed-length header (null bitmap, optional xmin/xmax)
-  - [ ] Variable-length data (length prefix for TEXT)
+  - [ ] Variable-length data (length prefix for TEXT), with a spare bit in the prefix reserved for the overflow pointer of Phase 8+
+  - [ ] A row that does not fit in one page is an error (errno `EFBIG`) that the SQL layer reports; no overflow storage yet
   - [ ] Encode and decode through the type registry
   - [ ] Tuple ID (TID): page + slot
 - [ ] Heap file management
@@ -572,6 +573,13 @@ Hash Join  (cost=24.50..89.75 rows=1000)
   - [ ] Composite types: `CREATE TYPE ... AS (a int, b text)`
   - [ ] Domains: a base type plus a constraint
   - [ ] Extra base types registered at compile time. Loading user-written shared libraries (what Postgres extensions do) is out of scope
+
+### Overflow Storage for Large Values (like Postgres TOAST)
+- [ ] A flag in the variable-length prefix marks a value stored out of line; the tuple keeps a pointer
+- [ ] Side heap file per table holding the value in chunks (about 2 KB each), found by value id and chunk number
+- [ ] Fetch the chunks when the value is read; delete them when the row is deleted
+- [ ] Remove the one-page row limit of Phase 2
+- [ ] Optional: compress large values before moving them out of line
 
 ### Checkpointing Improvements
 - [ ] Incremental checkpointing
