@@ -9,11 +9,17 @@
  *
  * On success the error's sqlstate is empty. Integer values are checked to be valid 32-bit
  * integers and are stored as written.
+ *
+ * executor_select_all runs SELECT * FROM <table>. It cannot fail except by a wrong statement
+ * (unknown table), reported in the result's error. On success the result gives the table to read
+ * from, locked so the rows cannot change; the caller must call executor_select_release when it
+ * is done reading, and must not insert into that table before then.
  */
 
 #pragma once
 
 #include "sql/simple_sql.h"
+#include "storage/table.h"
 
 constexpr size_t EXECUTOR_SQLSTATE_CAPACITY = 6;
 constexpr size_t EXECUTOR_MESSAGE_CAPACITY = 128;
@@ -24,3 +30,11 @@ typedef struct {
 } executor_error_t;
 
 [[nodiscard]] int executor_insert(const sql_insert_t *insert, executor_error_t *error);
+
+typedef struct {
+    executor_error_t error;
+    table_t *table; // nullptr when the statement failed; otherwise locked until released
+} executor_select_t;
+
+void executor_select_all(const char *table_name, executor_select_t *select);
+void executor_select_release(executor_select_t *select);

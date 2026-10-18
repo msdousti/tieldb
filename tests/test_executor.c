@@ -95,13 +95,44 @@ static void test_number_in_a_text_column_is_stored_as_text([[maybe_unused]] void
     assert_string_equal(table_cell(user, 4, 1), "42");
 }
 
+static void test_select_from_a_missing_table_is_an_error([[maybe_unused]] void **state)
+{
+    executor_select_t select;
+
+    executor_select_all("nope", &select);
+
+    assert_null(select.table);
+    assert_string_equal(select.error.sqlstate, "42P01");
+    assert_string_equal(select.error.message, "relation \"nope\" does not exist");
+    executor_select_release(&select);
+}
+
+static void test_select_gives_the_locked_table_until_released([[maybe_unused]] void **state)
+{
+    executor_select_t select;
+    const char *row[] = {"9", "Zed"};
+
+    executor_select_all("user", &select);
+
+    assert_string_equal(select.error.sqlstate, "");
+    if (select.table == nullptr) {
+        fail();
+    }
+    assert_int_equal(table_column_count(select.table), 2);
+    executor_select_release(&select);
+    assert_null(select.table);
+    assert_int_equal(table_insert(table_find("user"), row, 2), 0);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_insert_into_a_missing_table_is_an_error),
     cmocka_unit_test(test_insert_with_the_wrong_number_of_values_is_an_error),
     cmocka_unit_test(test_text_in_an_integer_column_is_an_error),
     cmocka_unit_test(test_integers_outside_32_bits_are_an_error),
+    cmocka_unit_test(test_select_from_a_missing_table_is_an_error),
     cmocka_unit_test(test_valid_insert_adds_a_row),
     cmocka_unit_test(test_number_in_a_text_column_is_stored_as_text),
+    cmocka_unit_test(test_select_gives_the_locked_table_until_released),
 };
 
 int main(void)

@@ -57,13 +57,18 @@ static int insert_row(table_t *table, const sql_insert_t *insert)
     return table_insert(table, cells, insert->count);
 }
 
+static void set_missing_table_error(executor_error_t *error, const char *table_name)
+{
+    set_error(error, MISSING_TABLE_SQLSTATE);
+    snprintf(error->message, sizeof(error->message), MISSING_TABLE_FORMAT, table_name);
+}
+
 int executor_insert(const sql_insert_t *insert, executor_error_t *error)
 {
     *error = (executor_error_t){};
     table_t *table = table_find(insert->table);
     if (table == nullptr) {
-        set_error(error, MISSING_TABLE_SQLSTATE);
-        snprintf(error->message, sizeof(error->message), MISSING_TABLE_FORMAT, insert->table);
+        set_missing_table_error(error, insert->table);
         return 0;
     }
     if (insert->count != table_column_count(table)) {
@@ -78,4 +83,23 @@ int executor_insert(const sql_insert_t *insert, executor_error_t *error)
         return 0;
     }
     return insert_row(table, insert);
+}
+
+void executor_select_all(const char *table_name, executor_select_t *select)
+{
+    *select = (executor_select_t){};
+    select->table = table_find(table_name);
+    if (select->table == nullptr) {
+        set_missing_table_error(&select->error, table_name);
+        return;
+    }
+    table_lock(select->table);
+}
+
+void executor_select_release(executor_select_t *select)
+{
+    if (select->table != nullptr) {
+        table_unlock(select->table);
+        select->table = nullptr;
+    }
 }
