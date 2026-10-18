@@ -14,53 +14,6 @@
 
 #include "net/wire_buffer.h"
 
-static int allocations_until_failure = -1;
-
-void *__real_malloc(size_t size);
-void *__real_calloc(size_t count, size_t size);
-void *__real_realloc(void *ptr, size_t size);
-
-static bool should_fail_allocation(void)
-{
-    if (allocations_until_failure < 0) {
-        return false;
-    }
-    return allocations_until_failure-- == 0;
-}
-
-// The linker resolves --wrap symbols by name, so these cannot be static
-// NOLINTNEXTLINE(misc-use-internal-linkage)
-void *__wrap_malloc(size_t size)
-{
-    if (should_fail_allocation()) {
-        errno = ENOMEM;
-        return nullptr;
-    }
-    return __real_malloc(size);
-}
-
-// The linker resolves --wrap symbols by name, so these cannot be static
-// NOLINTNEXTLINE(misc-use-internal-linkage)
-void *__wrap_calloc(size_t count, size_t size)
-{
-    if (should_fail_allocation()) {
-        errno = ENOMEM;
-        return nullptr;
-    }
-    return __real_calloc(count, size);
-}
-
-// The linker resolves --wrap symbols by name, so these cannot be static
-// NOLINTNEXTLINE(misc-use-internal-linkage)
-void *__wrap_realloc(void *ptr, size_t size)
-{
-    if (should_fail_allocation()) {
-        errno = ENOMEM;
-        return nullptr;
-    }
-    return __real_realloc(ptr, size);
-}
-
 static wire_writer_t *create_writer(void)
 {
     wire_writer_t *writer = wire_writer_create();
@@ -176,47 +129,9 @@ static void test_writer_rejects_null_input([[maybe_unused]] void **state)
     wire_writer_destroy(w);
 }
 
-static void test_writer_create_reports_struct_allocation_failure([[maybe_unused]] void **state)
-{
-    allocations_until_failure = 0;
-    errno = 0;
-
-    wire_writer_t *w = wire_writer_create();
-
-    allocations_until_failure = -1;
-    assert_null(w);
-    assert_int_equal(errno, ENOMEM);
-}
-
-static void test_writer_create_reports_buffer_allocation_failure([[maybe_unused]] void **state)
-{
-    allocations_until_failure = 1;
-    errno = 0;
-
-    wire_writer_t *w = wire_writer_create();
-
-    allocations_until_failure = -1;
-    assert_null(w);
-    assert_int_equal(errno, ENOMEM);
-}
-
 static void test_writer_destroy_accepts_null([[maybe_unused]] void **state)
 {
     wire_writer_destroy(nullptr);
-}
-
-static void test_writer_growth_reports_allocation_failure([[maybe_unused]] void **state)
-{
-    wire_writer_t *w = create_writer();
-    uint8_t chunk[200] = {};
-
-    allocations_until_failure = 0;
-    errno = 0;
-    assert_failed_with(wire_writer_put_bytes(w, chunk, sizeof(chunk)), ENOMEM);
-
-    allocations_until_failure = -1;
-    assert_int_equal(wire_writer_size(w), 0);
-    wire_writer_destroy(w);
 }
 
 int main(void)
@@ -230,10 +145,7 @@ int main(void)
         cmocka_unit_test(test_writer_encodes_negative_values),
         cmocka_unit_test(test_writer_accepts_empty_bytes),
         cmocka_unit_test(test_writer_rejects_null_input),
-        cmocka_unit_test(test_writer_create_reports_struct_allocation_failure),
-        cmocka_unit_test(test_writer_create_reports_buffer_allocation_failure),
         cmocka_unit_test(test_writer_destroy_accepts_null),
-        cmocka_unit_test(test_writer_growth_reports_allocation_failure),
     };
     return cmocka_run_group_tests(tests, nullptr, nullptr);
 }

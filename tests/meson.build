@@ -20,7 +20,23 @@ test_wire_buffer = executable('test_wire_buffer',
   'test_wire_buffer.c',
   dependencies: [tieldb_dep, cmocka_dep],
   include_directories: inc,
-  link_args: ['-Wl,--wrap=malloc', '-Wl,--wrap=calloc', '-Wl,--wrap=realloc'],
 )
 
 test('wire_buffer', test_wire_buffer)
+
+# Test: wire protocol output buffer, out-of-memory paths. wire_buffer.c is compiled a second
+# time with its allocation calls renamed to the mocks in the test, so only that file is affected.
+wire_buffer_oom_lib = static_library('wire_buffer_oom',
+  net_sources,
+  include_directories: inc,
+  c_args: ['-Dmalloc=oom_malloc', '-Dcalloc=oom_calloc', '-Drealloc=oom_realloc'],
+)
+
+test_wire_buffer_oom = executable('test_wire_buffer_oom',
+  'test_wire_buffer_oom.c',
+  dependencies: [cmocka_dep],
+  include_directories: inc,
+  link_with: wire_buffer_oom_lib,
+)
+
+test('wire_buffer_oom', test_wire_buffer_oom)
