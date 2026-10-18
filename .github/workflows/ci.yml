@@ -63,7 +63,7 @@ jobs:
       - name: Run clang-tidy
         run: |
           clang-tidy --version
-          find src -name '*.c' -exec clang-tidy -p build {} \;
+          find src -name '*.c' -print0 | xargs -0 -n1 clang-tidy -p build
 
   build-asan:
     name: Build (ASan + UBSan)
