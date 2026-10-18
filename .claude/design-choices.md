@@ -289,6 +289,7 @@ Design decisions for the educational DBMS, ordered by implementation priority. E
 **First:** Subset of Postgres protocol
 - Simple query protocol (text queries)
 - No authentication or other security features, for simplicity: every connection is accepted (trust) and answered with `AuthenticationOk`; no passwords, roles, or permissions
+- Clients are psql and well-behaved Postgres drivers only. The server does not defend against malformed or hostile clients: no packet-size or version validation, no limits on what a client may send. This keeps the focus on DBMS internals. Parsers are still bounds-checked, because reading out of bounds is a memory-safety bug and not a policy
 - No TLS, for simplicity: an `SSLRequest` is answered with a single `N`, and the client continues in plaintext (psql's default `sslmode=prefer` does this)
 
 **Later:** Extended protocol
