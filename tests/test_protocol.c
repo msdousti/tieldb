@@ -82,6 +82,41 @@ static void test_encoders_reject_null_writer([[maybe_unused]] void **state)
     assert_int_equal(errno, EINVAL);
 }
 
+static void test_command_complete_matches_postgres_bytes([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+    const uint8_t expected[] = {'C', 0, 0, 0, 13, 'S', 'E', 'L', 'E', 'C', 'T', ' ', '1', 0};
+
+    assert_int_equal(protocol_put_command_complete(w, "SELECT 1"), 0);
+    assert_writer_holds(w, expected, sizeof(expected));
+    wire_writer_destroy(w);
+}
+
+static void test_command_complete_length_ignores_earlier_content([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+    const uint8_t expected[] = {'R', 0, 0, 0, 8, 0, 0, 0, 0, 'C', 0, 0, 0, 6, 'X', 0};
+
+    assert_int_equal(protocol_put_authentication_ok(w), 0);
+    assert_int_equal(protocol_put_command_complete(w, "X"), 0);
+    assert_writer_holds(w, expected, sizeof(expected));
+    wire_writer_destroy(w);
+}
+
+static void test_command_complete_rejects_null_arguments([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+
+    errno = 0;
+    assert_int_equal(protocol_put_command_complete(nullptr, "SELECT 1"), -1);
+    assert_int_equal(errno, EINVAL);
+    errno = 0;
+    assert_int_equal(protocol_put_command_complete(w, nullptr), -1);
+    assert_int_equal(errno, EINVAL);
+    assert_int_equal(wire_writer_size(w), 0);
+    wire_writer_destroy(w);
+}
+
 int main(void)
 {
     const struct CMUnitTest tests[] = {
@@ -90,6 +125,9 @@ int main(void)
         cmocka_unit_test(test_messages_append_after_existing_content),
         cmocka_unit_test(test_ready_for_query_rejects_unknown_status),
         cmocka_unit_test(test_encoders_reject_null_writer),
+        cmocka_unit_test(test_command_complete_matches_postgres_bytes),
+        cmocka_unit_test(test_command_complete_length_ignores_earlier_content),
+        cmocka_unit_test(test_command_complete_rejects_null_arguments),
     };
     return cmocka_run_group_tests(tests, nullptr, nullptr);
 }
