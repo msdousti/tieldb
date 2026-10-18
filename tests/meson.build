@@ -60,6 +60,15 @@ test_simple_sql = executable('test_simple_sql',
 
 test('simple_sql', test_simple_sql)
 
+# Test: in-memory tables
+test_table = executable('test_table',
+  'test_table.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('table', test_table)
+
 # Test: simple-query handler
 test_query_handler = executable('test_query_handler',
   'test_query_handler.c',
@@ -111,6 +120,7 @@ wire_buffer_oom_lib = static_library('wire_buffer_oom',
   io_sources,
   net_sources,
   sql_sources,
+  storage_sources,
   include_directories: inc,
   c_args: ['-Dmalloc=oom_malloc', '-Dcalloc=oom_calloc', '-Drealloc=oom_realloc'],
 )
