@@ -52,11 +52,11 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
     - [ ] Startup packet decoding
     - [ ] Decline `SSLRequest` with `N` (no TLS)
   - [ ] Simple query protocol (text queries)
-  - [ ] Response messages: RowDescription, DataRow, CommandComplete, ReadyForQuery
+  - [x] Response messages: RowDescription, DataRow, CommandComplete, ReadyForQuery
     - [x] ReadyForQuery
     - [x] CommandComplete
     - [x] RowDescription
-    - [ ] DataRow
+    - [x] DataRow
   - [x] Error handling (ErrorResponse)
 - [ ] Parse simple SQL (CREATE TABLE, INSERT, SELECT *)
   - [ ] Use existing parser (e.g., `libpg_query` or hand-write for just these 3)

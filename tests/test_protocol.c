@@ -239,25 +239,76 @@ static void test_row_description_rejects_unknown_type([[maybe_unused]] void **st
     wire_writer_destroy(w);
 }
 
+static void test_data_row_matches_postgres_bytes([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+    const protocol_value_t values[] = {{"1", 1}, {"ab", 2}, {nullptr, 0}, {"", 0}};
+    const uint8_t expected[] = {
+        'D',  0,    0,    0,    25,  0,   4, // type, length, 4 values
+        0,    0,    0,    1,    '1',         // "1"
+        0,    0,    0,    2,    'a', 'b',    // "ab"
+        0xFF, 0xFF, 0xFF, 0xFF,              // NULL: length -1, no bytes
+        0,    0,    0,    0,                 // "": length 0, no bytes
+    };
+
+    assert_int_equal(protocol_put_authentication_ok(w), 0);
+    assert_int_equal(protocol_put_data_row(w, values, 4), 0);
+    assert_int_equal(wire_writer_size(w), 9 + sizeof(expected));
+    assert_memory_equal(wire_writer_data(w) + 9, expected, sizeof(expected));
+    wire_writer_destroy(w);
+}
+
+static void test_data_row_allows_zero_values([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+    const uint8_t expected[] = {'D', 0, 0, 0, 6, 0, 0};
+
+    assert_int_equal(protocol_put_data_row(w, nullptr, 0), 0);
+    assert_writer_holds(w, expected, sizeof(expected));
+    wire_writer_destroy(w);
+}
+
+static void test_data_row_rejects_invalid_arguments([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+    const protocol_value_t value = {"x", 1};
+    const protocol_value_t too_long = {"x", (size_t) INT32_MAX + 1};
+
+    errno = 0;
+    assert_int_equal(protocol_put_data_row(nullptr, &value, 1), -1);
+    assert_int_equal(errno, EINVAL);
+    assert_int_equal(protocol_put_data_row(w, nullptr, 1), -1);
+    assert_int_equal(protocol_put_data_row(w, &value, (size_t) INT16_MAX + 1), -1);
+    errno = 0;
+    assert_int_equal(protocol_put_data_row(w, &too_long, 1), -1);
+    assert_int_equal(errno, EINVAL);
+    assert_int_equal(wire_writer_size(w), 0);
+    wire_writer_destroy(w);
+}
+
+static const struct CMUnitTest tests[] = {
+    cmocka_unit_test(test_authentication_ok_matches_postgres_bytes),
+    cmocka_unit_test(test_ready_for_query_encodes_each_status),
+    cmocka_unit_test(test_messages_append_after_existing_content),
+    cmocka_unit_test(test_ready_for_query_rejects_unknown_status),
+    cmocka_unit_test(test_encoders_reject_null_writer),
+    cmocka_unit_test(test_command_complete_matches_postgres_bytes),
+    cmocka_unit_test(test_command_complete_length_ignores_earlier_content),
+    cmocka_unit_test(test_command_complete_rejects_null_arguments),
+    cmocka_unit_test(test_error_response_matches_postgres_bytes),
+    cmocka_unit_test(test_error_response_length_ignores_earlier_content),
+    cmocka_unit_test(test_error_response_rejects_invalid_arguments),
+    cmocka_unit_test(test_row_description_matches_postgres_bytes),
+    cmocka_unit_test(test_row_description_encodes_several_columns),
+    cmocka_unit_test(test_row_description_allows_zero_columns),
+    cmocka_unit_test(test_row_description_rejects_invalid_arguments),
+    cmocka_unit_test(test_row_description_rejects_unknown_type),
+    cmocka_unit_test(test_data_row_matches_postgres_bytes),
+    cmocka_unit_test(test_data_row_allows_zero_values),
+    cmocka_unit_test(test_data_row_rejects_invalid_arguments),
+};
+
 int main(void)
 {
-    const struct CMUnitTest tests[] = {
-        cmocka_unit_test(test_authentication_ok_matches_postgres_bytes),
-        cmocka_unit_test(test_ready_for_query_encodes_each_status),
-        cmocka_unit_test(test_messages_append_after_existing_content),
-        cmocka_unit_test(test_ready_for_query_rejects_unknown_status),
-        cmocka_unit_test(test_encoders_reject_null_writer),
-        cmocka_unit_test(test_command_complete_matches_postgres_bytes),
-        cmocka_unit_test(test_command_complete_length_ignores_earlier_content),
-        cmocka_unit_test(test_command_complete_rejects_null_arguments),
-        cmocka_unit_test(test_error_response_matches_postgres_bytes),
-        cmocka_unit_test(test_error_response_length_ignores_earlier_content),
-        cmocka_unit_test(test_error_response_rejects_invalid_arguments),
-        cmocka_unit_test(test_row_description_matches_postgres_bytes),
-        cmocka_unit_test(test_row_description_encodes_several_columns),
-        cmocka_unit_test(test_row_description_allows_zero_columns),
-        cmocka_unit_test(test_row_description_rejects_invalid_arguments),
-        cmocka_unit_test(test_row_description_rejects_unknown_type),
-    };
     return cmocka_run_group_tests(tests, nullptr, nullptr);
 }

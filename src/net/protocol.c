@@ -16,6 +16,7 @@ static constexpr size_t COLUMN_TYPE_MODIFIER_OFFSET = COLUMN_TYPE_SIZE_OFFSET + 
 static constexpr size_t COLUMN_FIXED_SIZE =
     COLUMN_TYPE_MODIFIER_OFFSET + sizeof(int32_t) + sizeof(int16_t);
 static constexpr int16_t VARIABLE_TYPE_SIZE = -1;
+static constexpr int32_t NULL_VALUE_LENGTH = -1;
 static constexpr int32_t NO_TYPE_MODIFIER = -1;
 
 typedef struct error_field {
@@ -154,6 +155,45 @@ int protocol_put_row_description(wire_writer_t *writer, const protocol_column_t 
     size_t start = wire_writer_size(writer);
     if (begin_message(writer, 'T') != 0 || wire_writer_put_i16(writer, (int16_t) count) != 0 ||
         put_columns(writer, columns, count) != 0) {
+        wire_writer_truncate(writer, start);
+        return -1;
+    }
+    return end_message(writer, start);
+}
+
+static int put_value(wire_writer_t *writer, const protocol_value_t *value)
+{
+    if (value->data == nullptr) {
+        return wire_writer_put_i32(writer, NULL_VALUE_LENGTH);
+    }
+    if (value->length > INT32_MAX) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (wire_writer_put_i32(writer, (int32_t) value->length) != 0) {
+        return -1;
+    }
+    return wire_writer_put_bytes(writer, value->data, value->length);
+}
+
+static int put_values(wire_writer_t *writer, const protocol_value_t *values, size_t count)
+{
+    int result = 0;
+    for (size_t i = 0; i < count && result == 0; i++) {
+        result = put_value(writer, &values[i]);
+    }
+    return result;
+}
+
+int protocol_put_data_row(wire_writer_t *writer, const protocol_value_t *values, size_t count)
+{
+    if (writer == nullptr || count > INT16_MAX || (values == nullptr && count > 0)) {
+        errno = EINVAL;
+        return -1;
+    }
+    size_t start = wire_writer_size(writer);
+    if (begin_message(writer, 'D') != 0 || wire_writer_put_i16(writer, (int16_t) count) != 0 ||
+        put_values(writer, values, count) != 0) {
         wire_writer_truncate(writer, start);
         return -1;
     }
