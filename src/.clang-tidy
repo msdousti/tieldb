@@ -1,0 +1,5 @@
+# Stricter rules for production code, on top of the root .clang-tidy.
+# Tests are exempt: their literal expected bytes are the point.
+InheritParentConfig: true
+Checks: >
+  readability-magic-numbers

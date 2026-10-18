@@ -160,6 +160,85 @@ static void test_error_response_rejects_invalid_arguments([[maybe_unused]] void 
     wire_writer_destroy(w);
 }
 
+static void test_row_description_matches_postgres_bytes([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+    const protocol_column_t columns[] = {{"id", PROTOCOL_TYPE_INT4}};
+    const uint8_t expected[] = {
+        'T',  0,    0,    0,    27, // type, length
+        0,    1,                    // one column
+        'i',  'd',  0,              // name
+        0,    0,    0,    0,        // table OID
+        0,    0,                    // attribute number
+        0,    0,    0,    23,       // type OID (int4)
+        0,    4,                    // type size
+        0xFF, 0xFF, 0xFF, 0xFF,     // type modifier (-1)
+        0,    0,                    // format code (text)
+    };
+
+    assert_int_equal(protocol_put_row_description(w, columns, 1), 0);
+    assert_writer_holds(w, expected, sizeof(expected));
+    wire_writer_destroy(w);
+}
+
+static void test_row_description_encodes_several_columns([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+    const protocol_column_t columns[] = {{"id", PROTOCOL_TYPE_INT4}, {"name", PROTOCOL_TYPE_TEXT}};
+    const uint8_t expected[] = {
+        'R',  0,    0,    0,    8,    0,    0, 0, 0,                    // AuthenticationOk
+        'T',  0,    0,    0,    50,   0,    2,                          // RowDescription, 2 columns
+        'i',  'd',  0,    0,    0,    0,    0, 0, 0, 0, 0, 0, 23, 0, 4, // id: int4, size 4
+        0xFF, 0xFF, 0xFF, 0xFF, 0,    0,                                // modifier -1, text format
+        'n',  'a',  'm',  'e',  0,    0,    0, 0, 0, 0, 0, 0, 0,  0, 25, // name: text
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, // size -1, modifier -1, text
+    };
+
+    assert_int_equal(protocol_put_authentication_ok(w), 0);
+    assert_int_equal(protocol_put_row_description(w, columns, 2), 0);
+    assert_writer_holds(w, expected, sizeof(expected));
+    wire_writer_destroy(w);
+}
+
+static void test_row_description_allows_zero_columns([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+    const uint8_t expected[] = {'T', 0, 0, 0, 6, 0, 0};
+
+    assert_int_equal(protocol_put_row_description(w, nullptr, 0), 0);
+    assert_writer_holds(w, expected, sizeof(expected));
+    wire_writer_destroy(w);
+}
+
+static void test_row_description_rejects_invalid_arguments([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+    const protocol_column_t column = {"id", PROTOCOL_TYPE_INT4};
+    const protocol_column_t unnamed = {nullptr, PROTOCOL_TYPE_INT4};
+
+    errno = 0;
+    assert_int_equal(protocol_put_row_description(nullptr, &column, 1), -1);
+    assert_int_equal(errno, EINVAL);
+    assert_int_equal(protocol_put_row_description(w, nullptr, 1), -1);
+    assert_int_equal(protocol_put_row_description(w, &column, (size_t) INT16_MAX + 1), -1);
+    assert_int_equal(protocol_put_row_description(w, &unnamed, 1), -1);
+    assert_int_equal(errno, EINVAL);
+    assert_int_equal(wire_writer_size(w), 0);
+    wire_writer_destroy(w);
+}
+
+static void test_row_description_rejects_unknown_type([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+    const protocol_column_t columns[] = {{"id", PROTOCOL_TYPE_INT4}, {"x", 9999}};
+
+    errno = 0;
+    assert_int_equal(protocol_put_row_description(w, columns, 2), -1);
+    assert_int_equal(errno, EINVAL);
+    assert_int_equal(wire_writer_size(w), 0);
+    wire_writer_destroy(w);
+}
+
 int main(void)
 {
     const struct CMUnitTest tests[] = {
@@ -174,6 +253,11 @@ int main(void)
         cmocka_unit_test(test_error_response_matches_postgres_bytes),
         cmocka_unit_test(test_error_response_length_ignores_earlier_content),
         cmocka_unit_test(test_error_response_rejects_invalid_arguments),
+        cmocka_unit_test(test_row_description_matches_postgres_bytes),
+        cmocka_unit_test(test_row_description_encodes_several_columns),
+        cmocka_unit_test(test_row_description_allows_zero_columns),
+        cmocka_unit_test(test_row_description_rejects_invalid_arguments),
+        cmocka_unit_test(test_row_description_rejects_unknown_type),
     };
     return cmocka_run_group_tests(tests, nullptr, nullptr);
 }

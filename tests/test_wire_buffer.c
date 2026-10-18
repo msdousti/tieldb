@@ -181,6 +181,16 @@ static void test_writer_destroy_accepts_null([[maybe_unused]] void **state)
     wire_writer_destroy(nullptr);
 }
 
+static void test_encode_functions_write_big_endian([[maybe_unused]] void **state)
+{
+    uint8_t buf[6] = {};
+    const uint8_t expected[] = {0xFF, 0xFE, 0x12, 0x34, 0x56, 0x78};
+
+    wire_encode_i16(buf, -2);
+    wire_encode_i32(buf + 2, 0x12345678);
+    assert_memory_equal(buf, expected, sizeof(expected));
+}
+
 int main(void)
 {
     const struct CMUnitTest tests[] = {
@@ -193,6 +203,7 @@ int main(void)
         cmocka_unit_test(test_writer_back_patches_message_length),
         cmocka_unit_test(test_writer_truncate_discards_tail),
         cmocka_unit_test(test_writer_encodes_negative_values),
+        cmocka_unit_test(test_encode_functions_write_big_endian),
         cmocka_unit_test(test_writer_accepts_empty_bytes),
         cmocka_unit_test(test_writer_rejects_null_input),
         cmocka_unit_test(test_writer_destroy_accepts_null),

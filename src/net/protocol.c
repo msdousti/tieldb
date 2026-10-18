@@ -9,6 +9,15 @@
 
 static constexpr size_t SQLSTATE_LENGTH = 5;
 
+// We have no table OIDs or column numbers to report, so those two leading fields stay zero
+static constexpr size_t COLUMN_TYPE_OID_OFFSET = sizeof(int32_t) + sizeof(int16_t);
+static constexpr size_t COLUMN_TYPE_SIZE_OFFSET = COLUMN_TYPE_OID_OFFSET + sizeof(int32_t);
+static constexpr size_t COLUMN_TYPE_MODIFIER_OFFSET = COLUMN_TYPE_SIZE_OFFSET + sizeof(int16_t);
+static constexpr size_t COLUMN_FIXED_SIZE =
+    COLUMN_TYPE_MODIFIER_OFFSET + sizeof(int32_t) + sizeof(int16_t);
+static constexpr int16_t VARIABLE_TYPE_SIZE = -1;
+static constexpr int32_t NO_TYPE_MODIFIER = -1;
+
 typedef struct error_field {
     char code;
     const char *value;
@@ -89,6 +98,62 @@ int protocol_put_error_response(wire_writer_t *writer, const char *severity, con
     size_t start = wire_writer_size(writer);
     if (begin_message(writer, 'E') != 0 ||
         put_error_fields(writer, fields, sizeof(fields) / sizeof(fields[0])) != 0) {
+        wire_writer_truncate(writer, start);
+        return -1;
+    }
+    return end_message(writer, start);
+}
+
+static int column_type_size(int32_t type_oid, int16_t *type_size)
+{
+    switch (type_oid) {
+        case PROTOCOL_TYPE_INT4:
+            *type_size = sizeof(int32_t);
+            return 0;
+        case PROTOCOL_TYPE_TEXT:
+            *type_size = VARIABLE_TYPE_SIZE;
+            return 0;
+        default:
+            errno = EINVAL;
+            return -1;
+    }
+}
+
+static int put_column(wire_writer_t *writer, const protocol_column_t *column)
+{
+    uint8_t fixed[COLUMN_FIXED_SIZE] = {};
+    int16_t type_size = 0;
+    if (column_type_size(column->type_oid, &type_size) != 0) {
+        return -1;
+    }
+    wire_encode_i32(fixed + COLUMN_TYPE_OID_OFFSET, column->type_oid);
+    wire_encode_i16(fixed + COLUMN_TYPE_SIZE_OFFSET, type_size);
+    wire_encode_i32(fixed + COLUMN_TYPE_MODIFIER_OFFSET, NO_TYPE_MODIFIER);
+    if (wire_writer_put_cstring(writer, column->name) != 0) {
+        return -1;
+    }
+    return wire_writer_put_bytes(writer, fixed, sizeof(fixed));
+}
+
+static int put_columns(wire_writer_t *writer, const protocol_column_t *columns, size_t count)
+{
+    int result = 0;
+    for (size_t i = 0; i < count && result == 0; i++) {
+        result = put_column(writer, &columns[i]);
+    }
+    return result;
+}
+
+int protocol_put_row_description(wire_writer_t *writer, const protocol_column_t *columns,
+                                 size_t count)
+{
+    if (writer == nullptr || count > INT16_MAX || (columns == nullptr && count > 0)) {
+        errno = EINVAL;
+        return -1;
+    }
+    size_t start = wire_writer_size(writer);
+    if (begin_message(writer, 'T') != 0 || wire_writer_put_i16(writer, (int16_t) count) != 0 ||
+        put_columns(writer, columns, count) != 0) {
         wire_writer_truncate(writer, start);
         return -1;
     }

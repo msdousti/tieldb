@@ -31,7 +31,7 @@ Checks: >
 # - identifier-naming: we enforce naming via clang-format and code review
 # - implicit-bool-conversion: idiomatic C, no explicit casts needed
 # - function-cognitive-complexity: too noisy, we have our own complexity rules
-# - magic-numbers: too noisy for systems code (PAGE_SIZE, etc.)
+# - magic-numbers: off here because tests use literal bytes; enabled for src/ in src/.clang-tidy
 # - avoid-const-params-in-decls: const on pass-by-value is fine
 # - easily-swappable-parameters: too noisy, types provide safety
 # - reserved-identifier: _POSIX_C_SOURCE is a standard feature test macro

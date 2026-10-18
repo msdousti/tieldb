@@ -9,6 +9,16 @@
  *     0     1  2  3  4    5  6  7  8
  *    'R'    length = 8    result = 0
  *
+ *   RowDescription: the columns of the rows that follow
+ *
+ *     0     1  2  3  4    5  6    7 ...
+ *    'T'    length        count   one entry per column
+ *
+ *     each column entry is the name (NUL-terminated) followed by 18 bytes:
+ *       table OID (int32, 0), column number (int16, 0), type OID (int32),
+ *       type size (int16; -1 for variable length), type modifier (int32, -1),
+ *       format code (int16, 0 = text; only text is supported)
+ *
  *   ErrorResponse: a command failed; psql prints it as "ERROR:  message"
  *
  *     0     1  2  3  4    5 ...
@@ -31,7 +41,8 @@
  *
  * Each encoder appends one complete message to a wire_writer_t, or nothing on
  * failure. Failures return -1 and set errno as documented in wire_buffer.h;
- * a null writer or an invalid argument gives EINVAL.
+ * a null writer or an invalid argument gives EINVAL; for RowDescription that
+ * includes a type OID other than the PROTOCOL_TYPE_* values.
  */
 
 #pragma once
@@ -45,7 +56,21 @@ typedef enum {
     TRANSACTION_FAILED = 'E',   // in a failed transaction block; queries are rejected
 } transaction_status_t;
 
+/** Postgres type OIDs for the supported column types. */
+enum {
+    PROTOCOL_TYPE_INT4 = 23,
+    PROTOCOL_TYPE_TEXT = 25,
+};
+
+/** One result column: its name and Postgres type OID (the type size follows from the OID). */
+typedef struct protocol_column {
+    const char *name;
+    int32_t type_oid;
+} protocol_column_t;
+
 [[nodiscard]] int protocol_put_authentication_ok(wire_writer_t *writer);
+[[nodiscard]] int protocol_put_row_description(wire_writer_t *writer,
+                                               const protocol_column_t *columns, size_t count);
 [[nodiscard]] int protocol_put_command_complete(wire_writer_t *writer, const char *tag);
 [[nodiscard]] int protocol_put_error_response(wire_writer_t *writer, const char *severity,
                                               const char *sqlstate, const char *message);
