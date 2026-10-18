@@ -136,7 +136,7 @@ testdb=> SELECT * FROM user;
 
 ### Tasks
 - [ ] Type registry (like Postgres's `pg_type`), so types are data and not special cases in the code
-  - [ ] Registry module: name, OID, text input and output functions, storage size (fixed or variable length) and comparison function; `INTEGER` and `TEXT` are its first entries
+  - [x] Registry module: name, OID, text input and output functions, storage size (fixed or variable length) and comparison function; `INTEGER` and `TEXT` are its first entries
   - [ ] The executor and the wire protocol layer look types up through it; this replaces the type-name table in the executor and the type-to-OID mapping in the query handler
   - [ ] Values are stored in their type's own format (an integer as 4 bytes), converted from and to text only at the edges; this replaces the `column_type_t` enum and fixes integers being stored as written (`007`)
 - [ ] Page abstraction
