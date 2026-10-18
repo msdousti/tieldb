@@ -14,6 +14,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -25,7 +26,7 @@
 #include "net/protocol.h"
 #include "net/query_handler.h"
 #include "net/server.h"
-#include "storage/table.h"
+#include "storage/catalog.h"
 #include "net/startup.h"
 #include "net/wire_buffer.h"
 
@@ -463,11 +464,12 @@ static void test_query_response_is_rolled_back_when_a_message_fails([[maybe_unus
     wire_writer_destroy(w);
 }
 
-// The built-in user table is created on first use: the table itself, room for its cells, and a
-// copy of each of the 6 cells of its 3 rows
+// The built-in user table is created on first use: the table, a slot for it in the catalog, room
+// for its cells, and a copy of each of the 6 cells of its 3 rows
 static void expect_user_table_creation(void)
 {
     will_return(oom_calloc, true);
+    will_return(oom_realloc, true);
     will_return(oom_realloc, true);
     for (size_t i = 0; i < 6; i++) {
         will_return(oom_malloc, true);
@@ -647,8 +649,52 @@ static void test_insert_fails_when_the_row_cannot_be_stored([[maybe_unused]] voi
 
     assert_int_equal(errno, ENOMEM);
     assert_int_equal(wire_writer_size(w), 0);
-    assert_int_equal(table_row_count(table_find("user")), 3);
+    assert_int_equal(table_row_count(catalog_find("user")), 3);
     wire_writer_destroy(w);
+}
+
+// Mirrors the catalog's initial capacity: the built-in table plus 7 more fill it
+static constexpr size_t CATALOG_CAPACITY = 8;
+
+static void create_filler_table(size_t index)
+{
+    char name[16];
+    const table_column_t columns[] = {{"a", COLUMN_TYPE_INTEGER}};
+
+    snprintf(name, sizeof(name), "fill%zu", index);
+    will_return(oom_calloc, true);
+    if (catalog_create_table(name, columns, 1) == nullptr) {
+        fail();
+    }
+}
+
+static void test_catalog_create_fails_when_the_catalog_cannot_grow([[maybe_unused]] void **state)
+{
+    const table_column_t columns[] = {{"a", COLUMN_TYPE_INTEGER}};
+
+    for (size_t i = 1; i < CATALOG_CAPACITY; i++) {
+        create_filler_table(i);
+    }
+    will_return(oom_calloc, true);
+    will_return(oom_realloc, false);
+
+    errno = 0;
+    assert_null(catalog_create_table("overflow", columns, 1));
+
+    assert_int_equal(errno, ENOMEM);
+    assert_null(catalog_find("overflow"));
+}
+
+static void
+test_catalog_create_fails_when_the_table_cannot_be_allocated([[maybe_unused]] void **state)
+{
+    const table_column_t columns[] = {{"a", COLUMN_TYPE_INTEGER}};
+
+    will_return(oom_calloc, false);
+
+    errno = 0;
+    assert_null(catalog_create_table("nomemory", columns, 1));
+    assert_int_equal(errno, ENOMEM);
 }
 
 static const struct CMUnitTest tests[] = {
@@ -689,6 +735,8 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_connection_fails_when_a_packet_cannot_be_buffered),
     cmocka_unit_test(test_server_create_fails_when_memory_runs_out),
     cmocka_unit_test(test_table_create_fails_when_memory_runs_out),
+    cmocka_unit_test(test_catalog_create_fails_when_the_table_cannot_be_allocated),
+    cmocka_unit_test(test_catalog_create_fails_when_the_catalog_cannot_grow),
     cmocka_unit_test(test_table_insert_fails_when_the_cells_cannot_grow),
     cmocka_unit_test(test_table_insert_undoes_a_partly_copied_row),
     cmocka_unit_test(test_server_serve_fails_when_a_session_cannot_be_allocated),
@@ -698,7 +746,7 @@ static const struct CMUnitTest tests[] = {
 static int create_user_table_once([[maybe_unused]] void **state)
 {
     expect_user_table_creation();
-    return table_find("user") == nullptr;
+    return catalog_find("user") == nullptr;
 }
 
 int main(void)

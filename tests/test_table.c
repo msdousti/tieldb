@@ -12,38 +12,6 @@
 
 #include "storage/table.h"
 
-static void test_unknown_table_is_not_found([[maybe_unused]] void **state)
-{
-    assert_null(table_find("nope"));
-}
-
-static void assert_column_is(const table_t *table, size_t index, const char *name,
-                             column_type_t type)
-{
-    assert_string_equal(table_column(table, index)->name, name);
-    assert_int_equal(table_column(table, index)->type, type);
-}
-
-static void test_user_table_has_two_columns([[maybe_unused]] void **state)
-{
-    const table_t *user = table_find("user");
-
-    assert_int_equal(table_column_count(user), 2);
-    assert_column_is(user, 0, "id", COLUMN_TYPE_INTEGER);
-    assert_column_is(user, 1, "name", COLUMN_TYPE_TEXT);
-}
-
-static void test_user_table_has_three_rows([[maybe_unused]] void **state)
-{
-    const table_t *user = table_find("user");
-
-    assert_int_equal(table_row_count(user), 3);
-    assert_string_equal(table_cell(user, 0, 0), "1");
-    assert_string_equal(table_cell(user, 0, 1), "Alice");
-    assert_string_equal(table_cell(user, 2, 0), "3");
-    assert_string_equal(table_cell(user, 2, 1), "Carol");
-}
-
 static const table_column_t PAIR_COLUMNS[] = {{"a", COLUMN_TYPE_INTEGER}, {"b", COLUMN_TYPE_TEXT}};
 
 static table_t *create_pair_table(void)
@@ -53,6 +21,25 @@ static table_t *create_pair_table(void)
         fail();
     }
     return table;
+}
+
+static void test_table_copies_its_name_and_column_names([[maybe_unused]] void **state)
+{
+    char name[] = "kept";
+    char column_name[] = "col";
+    const table_column_t columns[] = {{column_name, COLUMN_TYPE_TEXT}};
+    table_t *table = table_create(name, columns, 1);
+    if (table == nullptr) {
+        fail();
+    }
+
+    name[0] = 'X';
+    column_name[0] = 'X';
+
+    assert_string_equal(table_name(table), "kept");
+    assert_string_equal(table_column(table, 0)->name, "col");
+    assert_int_equal(table_column(table, 0)->type, COLUMN_TYPE_TEXT);
+    table_destroy(table);
 }
 
 static void test_new_table_is_empty([[maybe_unused]] void **state)
@@ -148,14 +135,12 @@ static void test_concurrent_inserts_are_all_kept([[maybe_unused]] void **state)
 }
 
 static const struct CMUnitTest tests[] = {
+    cmocka_unit_test(test_table_copies_its_name_and_column_names),
     cmocka_unit_test(test_new_table_is_empty),
     cmocka_unit_test(test_inserted_rows_are_copied_and_kept_in_order),
     cmocka_unit_test(test_table_grows_past_its_initial_capacity),
     cmocka_unit_test(test_insert_rejects_bad_arguments),
     cmocka_unit_test(test_concurrent_inserts_are_all_kept),
-    cmocka_unit_test(test_unknown_table_is_not_found),
-    cmocka_unit_test(test_user_table_has_two_columns),
-    cmocka_unit_test(test_user_table_has_three_rows),
 };
 
 int main(void)

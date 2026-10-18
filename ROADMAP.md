@@ -67,8 +67,10 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
   - [ ] AST representation
   - [x] Stopgap hand-written matchers for `SELECT version()`, `SELECT * FROM <table>`, `INSERT INTO <table> VALUES (...)` and `CREATE TABLE <table> (<column> <type>, ...)`, until a real parser replaces them
 - [ ] In-memory catalog
-  - [ ] Table metadata (columns, types)
+  - [x] Table metadata (columns, types)
   - [ ] Hash map: table name → table definition
+    - [x] Lookup by name (a plain array with a linear search for now)
+    - [ ] Hash map
 - [ ] In-memory tuple storage
   - [x] Array of tuples per table (growable, one lock per table; rows are text for now)
   - [ ] Support `INTEGER` and `TEXT` types only

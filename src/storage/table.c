@@ -10,30 +10,53 @@
 #include <string.h>
 
 static constexpr size_t INITIAL_CELL_CAPACITY = 16;
-static constexpr char USER_TABLE_NAME[] = "user";
-static constexpr size_t USER_COLUMN_COUNT = 2;
-static constexpr size_t USER_ROW_COUNT = 3;
 
 struct table {
     const char *name;
-    const table_column_t *columns;
     size_t column_count;
     char **cells;
     size_t cell_count;
     size_t cell_capacity;
     pthread_mutex_t lock;
+    table_column_t columns[]; // followed in the same allocation by the table and column names
 };
+
+static size_t owned_size(const char *name, const table_column_t *columns, size_t column_count)
+{
+    size_t size = (column_count * sizeof(table_column_t)) + strlen(name) + 1;
+    for (size_t i = 0; i < column_count; i++) {
+        size += strlen(columns[i].name) + 1;
+    }
+    return size;
+}
+
+static char *copy_into(char *destination, const char *text)
+{
+    size_t size = strlen(text) + 1;
+    memcpy(destination, text, size);
+    return destination + size;
+}
+
+static void fill_owned(table_t *table, const char *name, const table_column_t *columns)
+{
+    char *strings = (char *) &table->columns[table->column_count];
+    table->name = strings;
+    strings = copy_into(strings, name);
+    for (size_t i = 0; i < table->column_count; i++) {
+        table->columns[i] = (table_column_t){.name = strings, .type = columns[i].type};
+        strings = copy_into(strings, columns[i].name);
+    }
+}
 
 table_t *table_create(const char *name, const table_column_t *columns, size_t column_count)
 {
-    table_t *table = calloc(1, sizeof(*table));
+    table_t *table = calloc(1, sizeof(*table) + owned_size(name, columns, column_count));
     if (table == nullptr) {
         return nullptr;
     }
-    table->name = name;
-    table->columns = columns;
     table->column_count = column_count;
     table->lock = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
+    fill_owned(table, name, columns);
     return table;
 }
 
@@ -118,6 +141,11 @@ void table_unlock(table_t *table)
     pthread_mutex_unlock(&table->lock);
 }
 
+const char *table_name(const table_t *table)
+{
+    return table->name;
+}
+
 size_t table_column_count(const table_t *table)
 {
     return table->column_count;
@@ -136,34 +164,4 @@ size_t table_row_count(const table_t *table)
 const char *table_cell(const table_t *table, size_t row, size_t column)
 {
     return table->cells[(row * table->column_count) + column];
-}
-
-static const table_column_t USER_COLUMNS[USER_COLUMN_COUNT] = {
-    {"id", COLUMN_TYPE_INTEGER},
-    {"name", COLUMN_TYPE_TEXT},
-};
-
-static const char *const USER_ROWS[USER_ROW_COUNT][USER_COLUMN_COUNT] = {
-    {"1", "Alice"},
-    {"2", "Bob"},
-    {"3", "Carol"},
-};
-
-static pthread_once_t user_table_once = PTHREAD_ONCE_INIT;
-static table_t *user_table;
-
-// An allocation failure this early would leave the process unusable anyway, so the inserts are
-// not checked; table_find then reports a table that is missing or has fewer rows
-static void create_user_table(void)
-{
-    user_table = table_create(USER_TABLE_NAME, USER_COLUMNS, USER_COLUMN_COUNT);
-    for (size_t i = 0; i < USER_ROW_COUNT; i++) {
-        (void) table_insert(user_table, USER_ROWS[i], USER_COLUMN_COUNT);
-    }
-}
-
-table_t *table_find(const char *name)
-{
-    pthread_once(&user_table_once, create_user_table);
-    return strcmp(name, USER_TABLE_NAME) == 0 ? user_table : nullptr;
 }

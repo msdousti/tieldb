@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "storage/table.h"
+#include "storage/catalog.h"
 
 static constexpr int DECIMAL_BASE = 10;
 static constexpr char MISSING_TABLE_SQLSTATE[] = "42P01";
@@ -66,7 +66,7 @@ static void set_missing_table_error(executor_error_t *error, const char *table_n
 int executor_insert(const sql_insert_t *insert, executor_error_t *error)
 {
     *error = (executor_error_t){};
-    table_t *table = table_find(insert->table);
+    table_t *table = catalog_find(insert->table);
     if (table == nullptr) {
         set_missing_table_error(error, insert->table);
         return 0;
@@ -88,7 +88,7 @@ int executor_insert(const sql_insert_t *insert, executor_error_t *error)
 void executor_select_all(const char *table_name, executor_select_t *select)
 {
     *select = (executor_select_t){};
-    select->table = table_find(table_name);
+    select->table = catalog_find(table_name);
     if (select->table == nullptr) {
         set_missing_table_error(&select->error, table_name);
         return;
