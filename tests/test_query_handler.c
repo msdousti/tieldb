@@ -195,11 +195,23 @@ static void test_create_table_for_an_existing_table_is_an_error([[maybe_unused]]
     assert_response("CREATE TABLE user (id INTEGER)", put_expected_table_exists_response);
 }
 
+static void put_expected_empty_response(wire_writer_t *w)
+{
+    assert_int_equal(protocol_put_empty_query_response(w), 0);
+    assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
+}
+
+static void test_a_query_without_a_statement_gets_an_empty_response([[maybe_unused]] void **state)
+{
+    assert_response("", put_expected_empty_response);
+    assert_response(";", put_expected_empty_response);
+    assert_response(" ;; \n", put_expected_empty_response);
+}
+
 static void test_other_queries_get_an_error_and_stay_usable([[maybe_unused]] void **state)
 {
     assert_response("SELECT 1", put_expected_unsupported_response);
     assert_response("SELECT version() FROM t", put_expected_unsupported_response);
-    assert_response("", put_expected_unsupported_response);
 }
 
 static void test_response_appends_after_existing_content([[maybe_unused]] void **state)
@@ -275,6 +287,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_create_table_insert_and_select_work_together),
     cmocka_unit_test(test_table_without_columns_can_be_created_and_selected),
     cmocka_unit_test(test_create_table_for_an_existing_table_is_an_error),
+    cmocka_unit_test(test_a_query_without_a_statement_gets_an_empty_response),
     cmocka_unit_test(test_other_queries_get_an_error_and_stay_usable),
     cmocka_unit_test(test_response_appends_after_existing_content),
     cmocka_unit_test(test_message_without_a_string_is_rejected),

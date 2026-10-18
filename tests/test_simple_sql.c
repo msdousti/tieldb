@@ -27,6 +27,15 @@ static void assert_not_select_all(const char *sql)
     assert_false(sql_parse_select_all(sql, table, sizeof(table)));
 }
 
+static void test_text_without_a_statement_is_empty([[maybe_unused]] void **state)
+{
+    assert_true(sql_is_empty(""));
+    assert_true(sql_is_empty(";"));
+    assert_true(sql_is_empty("  ; ;;\n\t; "));
+    assert_false(sql_is_empty("SELECT 1"));
+    assert_false(sql_is_empty(" ; x ;"));
+}
+
 static void test_version_query_is_recognized([[maybe_unused]] void **state)
 {
     assert_true(sql_is_version_query("SELECT version()"));
@@ -247,6 +256,7 @@ static void test_create_table_with_too_many_columns_is_rejected([[maybe_unused]]
 }
 
 static const struct CMUnitTest tests[] = {
+    cmocka_unit_test(test_text_without_a_statement_is_empty),
     cmocka_unit_test(test_version_query_is_recognized),
     cmocka_unit_test(test_other_text_is_not_a_version_query),
     cmocka_unit_test(test_select_star_gives_the_lower_cased_table_name),

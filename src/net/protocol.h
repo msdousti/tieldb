@@ -93,4 +93,6 @@ typedef struct protocol_value {
 [[nodiscard]] int protocol_put_command_complete(wire_writer_t *writer, const char *tag);
 [[nodiscard]] int protocol_put_error_response(wire_writer_t *writer, const char *severity,
                                               const char *sqlstate, const char *message);
+/** The reply to a query string that holds no statement, such as ";". */
+[[nodiscard]] int protocol_put_empty_query_response(wire_writer_t *writer);
 [[nodiscard]] int protocol_put_ready_for_query(wire_writer_t *writer, transaction_status_t status);

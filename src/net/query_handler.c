@@ -113,6 +113,11 @@ static int put_executor_error(wire_writer_t *out, const void *context)
     return protocol_put_error_response(out, ERROR_SEVERITY, error->sqlstate, error->message);
 }
 
+static int put_empty_query(wire_writer_t *out, [[maybe_unused]] const void *context)
+{
+    return protocol_put_empty_query_response(out);
+}
+
 static int put_ready(wire_writer_t *out, [[maybe_unused]] const void *context)
 {
     return protocol_put_ready_for_query(out, TRANSACTION_IDLE);
@@ -123,6 +128,7 @@ static const response_step_t VERSION_RESPONSE[] = {put_version_description, put_
 static const response_step_t TABLE_RESPONSE[] = {put_table_description, put_table_rows,
                                                  put_table_tag, put_ready};
 static const response_step_t INSERT_RESPONSE[] = {put_insert_tag, put_ready};
+static const response_step_t EMPTY_RESPONSE[] = {put_empty_query, put_ready};
 static const response_step_t CREATE_TABLE_RESPONSE[] = {put_create_table_tag, put_ready};
 static const response_step_t EXECUTOR_ERROR_RESPONSE[] = {put_executor_error, put_ready};
 static const response_step_t UNSUPPORTED_RESPONSE[] = {put_unsupported_error, put_ready};
@@ -201,6 +207,9 @@ static int respond(const char *sql, wire_writer_t *out)
     int result = 0;
     sql_create_table_t create;
     char table_name[SQL_IDENTIFIER_CAPACITY];
+    if (sql_is_empty(sql)) {
+        return run_steps(out, EMPTY_RESPONSE, STEP_COUNT(EMPTY_RESPONSE), nullptr);
+    }
     if (sql_is_version_query(sql)) {
         return run_steps(out, VERSION_RESPONSE, STEP_COUNT(VERSION_RESPONSE), nullptr);
     }

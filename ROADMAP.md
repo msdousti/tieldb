@@ -61,6 +61,7 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
     - [x] CommandComplete
     - [x] RowDescription
     - [x] DataRow
+    - [x] EmptyQueryResponse, for a query string with no statement (`;`)
   - [x] Error handling (ErrorResponse)
 - [ ] Parse simple SQL (CREATE TABLE, INSERT, SELECT *)
   - [ ] Use existing parser (e.g., `libpg_query` or hand-write for just these 3)
