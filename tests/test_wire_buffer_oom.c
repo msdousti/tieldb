@@ -13,9 +13,11 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <cmocka.h>
 
+#include "net/protocol.h"
 #include "net/wire_buffer.h"
 
 // NOLINTBEGIN(misc-use-internal-linkage): called from wire_buffer.c, a separate translation unit
@@ -107,6 +109,38 @@ static void test_reader_create_fails_when_allocation_fails([[maybe_unused]] void
     assert_int_equal(errno, ENOMEM);
 }
 
+static void
+test_command_complete_leaves_writer_unchanged_when_header_fails([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer_with_real_allocations();
+    uint8_t filler[60] = {};
+    assert_int_equal(wire_writer_put_bytes(w, filler, sizeof(filler)), 0);
+
+    will_return(oom_realloc, false);
+    errno = 0;
+    assert_int_equal(protocol_put_command_complete(w, "SELECT 1"), -1);
+
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(wire_writer_size(w), sizeof(filler));
+    wire_writer_destroy(w);
+}
+
+static void test_command_complete_rolls_back_header_when_tag_fails([[maybe_unused]] void **state)
+{
+    char tag[100];
+    memset(tag, 'x', sizeof(tag) - 1);
+    tag[sizeof(tag) - 1] = '\0';
+    wire_writer_t *w = create_writer_with_real_allocations();
+
+    will_return(oom_realloc, false);
+    errno = 0;
+    assert_int_equal(protocol_put_command_complete(w, tag), -1);
+
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(wire_writer_size(w), 0);
+    wire_writer_destroy(w);
+}
+
 int main(void)
 {
     const struct CMUnitTest tests[] = {
@@ -114,6 +148,8 @@ int main(void)
         cmocka_unit_test(test_create_fails_when_buffer_allocation_fails),
         cmocka_unit_test(test_put_bytes_fails_when_growth_fails),
         cmocka_unit_test(test_reader_create_fails_when_allocation_fails),
+        cmocka_unit_test(test_command_complete_leaves_writer_unchanged_when_header_fails),
+        cmocka_unit_test(test_command_complete_rolls_back_header_when_tag_fails),
     };
     return cmocka_run_group_tests(tests, nullptr, nullptr);
 }

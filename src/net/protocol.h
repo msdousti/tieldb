@@ -9,6 +9,11 @@
  *     0     1  2  3  4    5  6  7  8
  *    'R'    length = 8    result = 0
  *
+ *   CommandComplete: a command finished; the tag names it, e.g. "SELECT 5"
+ *
+ *     0     1  2  3  4    5 ...
+ *    'C'    length        tag, then a NUL byte
+ *
  *   ReadyForQuery: the server is idle and waiting for the next query
  *
  *     0     1  2  3  4    5
@@ -31,4 +36,5 @@ typedef enum {
 } transaction_status_t;
 
 [[nodiscard]] int protocol_put_authentication_ok(wire_writer_t *writer);
+[[nodiscard]] int protocol_put_command_complete(wire_writer_t *writer, const char *tag);
 [[nodiscard]] int protocol_put_ready_for_query(wire_writer_t *writer, transaction_status_t status);

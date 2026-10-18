@@ -54,7 +54,7 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
   - [ ] Simple query protocol (text queries)
   - [ ] Response messages: RowDescription, DataRow, CommandComplete, ReadyForQuery
     - [x] ReadyForQuery
-    - [ ] CommandComplete
+    - [x] CommandComplete
     - [ ] RowDescription
     - [ ] DataRow
   - [ ] Error handling (ErrorResponse)
