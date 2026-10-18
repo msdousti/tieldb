@@ -12,6 +12,7 @@
 #include <cmocka.h>
 
 #include "storage/page.h"
+#include "test_random.h"
 
 static constexpr size_t HEADER_SIZE = 24;
 static constexpr size_t SLOT_SIZE = 4;
@@ -159,14 +160,6 @@ static void test_scattered_free_space_is_gathered_when_needed([[maybe_unused]] v
         memset(tuple, (int) ('a' + i), sizeof(tuple));
         assert_tuple_is(i, tuple, sizeof(tuple));
     }
-}
-
-static uint64_t next_random(uint64_t *state)
-{
-    *state ^= *state << 13;
-    *state ^= *state >> 7;
-    *state ^= *state << 17;
-    return *state;
 }
 
 static constexpr size_t MODEL_SLOTS = 2048;
