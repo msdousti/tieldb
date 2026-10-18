@@ -123,54 +123,73 @@ testdb=> SELECT * FROM user;
 
 **Goal:** Restart the server and your data survives.
 
+**Decisions:**
+- The catalog is stored in real system tables (pg_class-like) on the same heap machinery as user
+  tables, with a bootstrap on first run.
+- Durability before the WAL (Phase 5): dirty pages are flushed on clean shutdown and on an explicit
+  checkpoint. After `kill -9` only data flushed before the kill is guaranteed.
+- Locking: the per-table mutex stays; the buffer pool has its own internal lock. Page latches and
+  MVCC wait for Phase 6.
+- New modules: `src/types`, `src/storage` (page, tuple, heap file, free space map, catalog) and
+  `src/buffer`. The catalog stays in `src/storage`.
+- Each step below is one small PR (about 100-300 lines), in this order.
+
 ### Tasks
+- [ ] Type registry (like Postgres's `pg_type`), so types are data and not special cases in the code
+  - [ ] Registry module: name, OID, text input and output functions, storage size (fixed or variable length) and comparison function; `INTEGER` and `TEXT` are its first entries
+  - [ ] The executor and the wire protocol layer look types up through it; this replaces the type-name table in the executor and the type-to-OID mapping in the query handler
+  - [ ] Values are stored in their type's own format (an integer as 4 bytes), converted from and to text only at the edges; this replaces the `column_type_t` enum and fixes integers being stored as written (`007`)
 - [ ] Page abstraction
   - [ ] 8 KB pages
   - [ ] Page header (LSN, checksum, page type, free space)
   - [ ] Slotted page layout (slot array + tuples)
   - [ ] Page-level operations (insert, delete, get tuple)
+  - [ ] Page deserialization fuzz target
+- [ ] Tuple format
+  - [ ] Fixed-length header (null bitmap, optional xmin/xmax)
+  - [ ] Variable-length data (length prefix for TEXT)
+  - [ ] Encode and decode through the type registry
+  - [ ] Tuple ID (TID): page + slot
+- [ ] Heap file management
+  - [ ] Create/open/close heap files, all I/O through `io->`
+  - [ ] Allocate new pages
 - [ ] Buffer pool
   - [ ] Fixed-size pool (e.g., 1000 pages)
   - [ ] Pin/unpin interface
   - [ ] Clock replacement policy
   - [ ] Dirty page tracking
   - [ ] Page ID (file number + page number)
-- [ ] Heap file management
-  - [ ] Create/open/close heap files
-  - [ ] Allocate new pages
-  - [ ] Free space map (bitmap or simple list)
+  - [ ] Zero outstanding pins asserted at teardown
+- [ ] Free space map (bitmap or simple list)
+- [ ] Integrate with executor
+  - [ ] Tables keep their rows in heap files through the buffer pool
+  - [ ] INSERT → find a page with space, add tuple, mark dirty
+  - [ ] SELECT → pin pages, iterate tuples, unpin
 - [ ] Persistent catalog
   - [ ] Special system tables (pg_class-like)
   - [ ] Bootstrap: create catalog files on first run
   - [ ] Load catalog at startup
-  - [ ] Store each column's display position next to its definition, so a reordering survives a restart
-- [ ] Type registry (like Postgres's `pg_type`), so types are data and not special cases in the code
-  - [ ] Each type has a name, an OID, text input and output functions, a storage size (fixed or variable length) and a comparison function
-  - [ ] `INTEGER` and `TEXT` become entries of the registry; the executor, the wire protocol layer and the tuple format look types up through it. This replaces the `column_type_t` enum, the type-name table in the executor and the type-to-OID mapping in the query handler
-  - [ ] Values are stored in their type's own format (an integer as 4 bytes), converted from and to text only at the edges; this also fixes integers being stored as written (`007`)
-  - [ ] The persistent catalog stores each column's type by id
-- [ ] Tuple format
-  - [ ] Fixed-length header (null bitmap, optional xmin/xmax)
-  - [ ] Variable-length data (length prefix for TEXT)
-  - [ ] Tuple ID (TID): page + slot
-- [ ] Integrate with executor
-  - [ ] INSERT → allocate page, add tuple, mark dirty
-  - [ ] SELECT → pin pages, iterate tuples, unpin
+  - [ ] Store each column's type by id and its display position next to its definition, so a reordering survives a restart
+  - [ ] Data directory option for the server; flush on clean shutdown and on checkpoint
 
 ### Tests
 - [ ] **Reference-model test for slotted page**
   - [ ] Random insert/delete operations
   - [ ] Compare against simple array model
   - [ ] Log RNG seed for reproducibility
+- [ ] Unit tests for the type registry and the tuple round trip
 - [ ] Unit tests for buffer pool (pin/unpin, eviction)
-- [ ] Crash test: write data, kill -9, restart, verify data survives
+- [ ] Fault injection for heap file and buffer pool I/O (short write, fsync failure) through the injectable `io`
+- [ ] Crash test: write data, flush, kill -9, restart, verify the flushed data survives
 - [ ] Fuzz test for page deserialization
 
 ### Deliverables
+- `src/types/type_registry.{h,c}` - Type registry
 - `src/storage/page.{h,c}` - Slotted page implementation
-- `src/buffer/buffer_pool.{h,c}` - Buffer pool
+- `src/storage/tuple.{h,c}` - Tuple format
 - `src/storage/heap_file.{h,c}` - Heap file management
-- `src/catalog/catalog.{h,c}` - Persistent catalog (updated)
+- `src/buffer/buffer_pool.{h,c}` - Buffer pool
+- `src/storage/catalog.{h,c}` - Persistent catalog (updated)
 
 ### Completion Criteria
 ```bash
