@@ -51,7 +51,7 @@
  * failure. Failures return -1 and set errno as documented in wire_buffer.h;
  * a null writer or an invalid argument gives EINVAL; for RowDescription that
  * includes a type OID other than the PROTOCOL_TYPE_* values, and for DataRow a
- * value longer than INT32_MAX bytes.
+ * value longer than INT32_MAX bytes, or with a length but no data.
  */
 
 #pragma once
@@ -77,7 +77,7 @@ typedef struct protocol_column {
     int32_t type_oid;
 } protocol_column_t;
 
-/** One value of a DataRow: length bytes of text, or SQL NULL when data is nullptr. */
+/** One value of a DataRow: length bytes of text, or SQL NULL when data is nullptr (length 0). */
 typedef struct protocol_value {
     const char *data;
     size_t length;

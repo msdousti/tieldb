@@ -286,6 +286,18 @@ static void test_data_row_rejects_invalid_arguments([[maybe_unused]] void **stat
     wire_writer_destroy(w);
 }
 
+static void test_data_row_rejects_length_without_data([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+    const protocol_value_t values[] = {{"ok", 2}, {nullptr, 5}};
+
+    errno = 0;
+    assert_int_equal(protocol_put_data_row(w, values, 2), -1);
+    assert_int_equal(errno, EINVAL);
+    assert_int_equal(wire_writer_size(w), 0);
+    wire_writer_destroy(w);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_authentication_ok_matches_postgres_bytes),
     cmocka_unit_test(test_ready_for_query_encodes_each_status),
@@ -306,6 +318,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_data_row_matches_postgres_bytes),
     cmocka_unit_test(test_data_row_allows_zero_values),
     cmocka_unit_test(test_data_row_rejects_invalid_arguments),
+    cmocka_unit_test(test_data_row_rejects_length_without_data),
 };
 
 int main(void)

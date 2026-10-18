@@ -30,6 +30,8 @@ static int begin_message(wire_writer_t *writer, uint8_t type)
     return wire_writer_put_bytes(writer, header, sizeof(header));
 }
 
+// Cannot fail: start was just written, and the writer never exceeds INT32_MAX bytes, so the
+// length fits an int32. Callers therefore need no rollback for it.
 static int end_message(wire_writer_t *writer, size_t start)
 {
     size_t length = wire_writer_size(writer) - start - 1;
@@ -163,12 +165,13 @@ int protocol_put_row_description(wire_writer_t *writer, const protocol_column_t 
 
 static int put_value(wire_writer_t *writer, const protocol_value_t *value)
 {
-    if (value->data == nullptr) {
-        return wire_writer_put_i32(writer, NULL_VALUE_LENGTH);
-    }
-    if (value->length > INT32_MAX) {
+    bool has_length_without_data = value->data == nullptr && value->length > 0;
+    if (has_length_without_data || value->length > INT32_MAX) {
         errno = EINVAL;
         return -1;
+    }
+    if (value->data == nullptr) {
+        return wire_writer_put_i32(writer, NULL_VALUE_LENGTH);
     }
     if (wire_writer_put_i32(writer, (int32_t) value->length) != 0) {
         return -1;

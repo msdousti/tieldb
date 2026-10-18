@@ -284,6 +284,12 @@ static void test_data_row_rolls_back_when_value_bytes_fail([[maybe_unused]] void
                                                       sizeof(int32_t) + strlen("ab")));
 }
 
+static void test_data_row_rolls_back_finished_value_when_next_fails([[maybe_unused]] void **state)
+{
+    assert_data_row_fails_leaving(fill_to_overflow_at(
+        MESSAGE_HEADER_SIZE + FIELD_COUNT_SIZE + sizeof(int32_t) + strlen("ab") + sizeof(int32_t)));
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_create_fails_when_struct_allocation_fails),
     cmocka_unit_test(test_create_fails_when_buffer_allocation_fails),
@@ -303,6 +309,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_data_row_rolls_back_when_count_fails),
     cmocka_unit_test(test_data_row_rolls_back_when_value_length_fails),
     cmocka_unit_test(test_data_row_rolls_back_when_value_bytes_fail),
+    cmocka_unit_test(test_data_row_rolls_back_finished_value_when_next_fails),
 };
 
 int main(void)
