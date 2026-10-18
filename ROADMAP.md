@@ -46,6 +46,7 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
 - [ ] Implement Postgres wire protocol
   - [x] Output buffer (big-endian writer)
   - [x] Input buffer (bounds-checked reader)
+  - [x] Writer length patching and size cap (support for variable-length messages)
   - [ ] Startup message (accept every connection, database selection; no authentication)
     - [x] AuthenticationOk response
     - [ ] Startup packet decoding

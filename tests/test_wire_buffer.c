@@ -72,26 +72,73 @@ static void test_writer_grows_past_initial_capacity([[maybe_unused]] void **stat
     wire_writer_destroy(w);
 }
 
-static void test_writer_rejects_size_overflow([[maybe_unused]] void **state)
+static void test_writer_rejects_size_over_protocol_limit([[maybe_unused]] void **state)
 {
     wire_writer_t *w = create_writer();
     uint8_t byte = 1;
 
     assert_int_equal(wire_writer_put_u8(w, byte), 0);
     errno = 0;
+    assert_failed_with(wire_writer_put_bytes(w, &byte, INT32_MAX), EOVERFLOW);
+    errno = 0;
     assert_failed_with(wire_writer_put_bytes(w, &byte, SIZE_MAX), EOVERFLOW);
     assert_int_equal(wire_writer_size(w), 1);
     wire_writer_destroy(w);
 }
 
-static void test_writer_rejects_capacity_overflow([[maybe_unused]] void **state)
+static void test_writer_patches_bytes_in_place([[maybe_unused]] void **state)
 {
     wire_writer_t *w = create_writer();
-    uint8_t byte = 1;
+    const uint8_t expected[] = {0, 0, 0x01, 0x02, 0x03, 0x04, 0};
+
+    assert_int_equal(wire_writer_put_bytes(w, "\0\0\0\0\0\0\0", 7), 0);
+    assert_int_equal(wire_writer_patch_i32(w, 2, 0x01020304), 0);
+    assert_writer_holds(w, expected, sizeof(expected));
+    assert_int_equal(wire_writer_patch_i32(w, 3, -2), 0);
+    assert_int_equal(wire_writer_data(w)[3], 0xFF);
+    wire_writer_destroy(w);
+}
+
+static void test_writer_patch_rejects_out_of_range([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
 
     errno = 0;
-    assert_failed_with(wire_writer_put_bytes(w, &byte, SIZE_MAX / 2 + 100), EOVERFLOW);
-    assert_int_equal(wire_writer_size(w), 0);
+    assert_failed_with(wire_writer_patch_i32(nullptr, 0, 1), EINVAL);
+    errno = 0;
+    assert_failed_with(wire_writer_patch_i32(w, 0, 1), EINVAL);
+    assert_int_equal(wire_writer_put_i32(w, 7), 0);
+    errno = 0;
+    assert_failed_with(wire_writer_patch_i32(w, 1, 1), EINVAL);
+    assert_int_equal(wire_writer_patch_i32(w, 0, 1), 0);
+    wire_writer_destroy(w);
+}
+
+static void test_writer_back_patches_message_length([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+    const uint8_t expected[] = {'C', 0, 0, 0, 11, 'S', 'E', 'L', 'E', 'C', 'T', 0};
+
+    assert_int_equal(wire_writer_put_u8(w, 'C'), 0);
+    assert_int_equal(wire_writer_put_i32(w, 0), 0);
+    assert_int_equal(wire_writer_put_cstring(w, "SELECT"), 0);
+    assert_int_equal(wire_writer_patch_i32(w, 1, (int32_t) (wire_writer_size(w) - 1)), 0);
+    assert_writer_holds(w, expected, sizeof(expected));
+    wire_writer_destroy(w);
+}
+
+static void test_writer_truncate_discards_tail([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+    const uint8_t expected[] = {1, 2, 9};
+
+    assert_int_equal(wire_writer_put_bytes(w, "\1\2\3\4", 4), 0);
+    wire_writer_truncate(w, 2);
+    wire_writer_truncate(w, 100);
+    wire_writer_truncate(nullptr, 0);
+    assert_int_equal(wire_writer_size(w), 2);
+    assert_int_equal(wire_writer_put_u8(w, 9), 0);
+    assert_writer_holds(w, expected, sizeof(expected));
     wire_writer_destroy(w);
 }
 
@@ -140,8 +187,11 @@ int main(void)
         cmocka_unit_test(test_writer_encodes_big_endian),
         cmocka_unit_test(test_writer_cstring_includes_terminator),
         cmocka_unit_test(test_writer_grows_past_initial_capacity),
-        cmocka_unit_test(test_writer_rejects_size_overflow),
-        cmocka_unit_test(test_writer_rejects_capacity_overflow),
+        cmocka_unit_test(test_writer_rejects_size_over_protocol_limit),
+        cmocka_unit_test(test_writer_patches_bytes_in_place),
+        cmocka_unit_test(test_writer_patch_rejects_out_of_range),
+        cmocka_unit_test(test_writer_back_patches_message_length),
+        cmocka_unit_test(test_writer_truncate_discards_tail),
         cmocka_unit_test(test_writer_encodes_negative_values),
         cmocka_unit_test(test_writer_accepts_empty_bytes),
         cmocka_unit_test(test_writer_rejects_null_input),
