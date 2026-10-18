@@ -87,6 +87,15 @@ test_type_registry = executable('test_type_registry',
 
 test('type_registry', test_type_registry)
 
+# Test: slotted page
+test_page = executable('test_page',
+  'test_page.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('page', test_page)
+
 # Test: catalog
 test_catalog = executable('test_catalog',
   'test_catalog.c',
