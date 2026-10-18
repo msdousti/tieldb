@@ -2,42 +2,35 @@
  * The catalog: every table, found by name.
  */
 
+// Read-write locks are declared only when POSIX features are asked for
+#define _POSIX_C_SOURCE 200809L
+
 #include "storage/catalog.h"
 
 #include <errno.h>
 #include <pthread.h>
-#include <stdlib.h>
 #include <string.h>
 
-static constexpr size_t INITIAL_TABLE_CAPACITY = 8;
+static constexpr size_t INITIAL_BUCKETS = 64;
 
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-static table_t **tables;
-static size_t table_count;
-static size_t table_capacity;
+static pthread_rwlock_t lock = PTHREAD_RWLOCK_INITIALIZER;
+static hash_map_t *tables; // created with the first table
+
+static size_t hash_name(const void *name)
+{
+    return hash_bytes(name, strlen(name));
+}
+
+static bool has_name(const hash_node_t *node, const void *name)
+{
+    return strcmp(table_name(table_from_node(node)), name) == 0;
+}
+
+static const hash_map_ops_t TABLE_OPS = {.hash = hash_name, .has_key = has_name};
 
 static table_t *find_locked(const char *name)
 {
-    table_t *found = nullptr;
-    for (size_t i = 0; i < table_count && found == nullptr; i++) {
-        found = strcmp(table_name(tables[i]), name) == 0 ? tables[i] : nullptr;
-    }
-    return found;
-}
-
-static int reserve_slot_locked(void)
-{
-    if (table_count < table_capacity) {
-        return 0;
-    }
-    size_t capacity = table_capacity == 0 ? INITIAL_TABLE_CAPACITY : table_capacity * 2;
-    table_t **grown = (table_t **) realloc((void *) tables, capacity * sizeof(*grown));
-    if (grown == nullptr) {
-        return -1;
-    }
-    tables = grown;
-    table_capacity = capacity;
-    return 0;
+    return tables == nullptr ? nullptr : table_from_node(hash_map_find(tables, name));
 }
 
 static table_t *create_locked(const char *name, const table_column_t *columns, size_t count)
@@ -46,32 +39,28 @@ static table_t *create_locked(const char *name, const table_column_t *columns, s
         errno = EEXIST;
         return nullptr;
     }
-    table_t *table = table_create(name, columns, count);
-    if (table == nullptr) {
-        return nullptr;
+    if (tables == nullptr) {
+        tables = hash_map_create(&TABLE_OPS, INITIAL_BUCKETS);
     }
-    if (reserve_slot_locked() != 0) {
-        int saved_errno = errno;
-        table_destroy(table);
-        errno = saved_errno;
-        return nullptr;
+    table_t *table = tables == nullptr ? nullptr : table_create(name, columns, count);
+    if (table != nullptr) {
+        hash_map_insert(tables, table_node(table), table_name(table));
     }
-    tables[table_count++] = table;
     return table;
 }
 
 table_t *catalog_find(const char *name)
 {
-    pthread_mutex_lock(&lock);
+    pthread_rwlock_rdlock(&lock);
     table_t *table = find_locked(name);
-    pthread_mutex_unlock(&lock);
+    pthread_rwlock_unlock(&lock);
     return table;
 }
 
 table_t *catalog_create_table(const char *name, const table_column_t *columns, size_t column_count)
 {
-    pthread_mutex_lock(&lock);
+    pthread_rwlock_wrlock(&lock);
     table_t *table = create_locked(name, columns, column_count);
-    pthread_mutex_unlock(&lock);
+    pthread_rwlock_unlock(&lock);
     return table;
 }

@@ -467,12 +467,13 @@ static void test_query_response_is_rolled_back_when_a_message_fails([[maybe_unus
     wire_writer_destroy(w);
 }
 
-// Making the user table takes the table, a slot for it in the catalog, room for its cells, and a
-// copy of each of the 6 cells of its 3 rows
+// Making the user table takes the catalog's hash map (its struct and its buckets), the table, room
+// for its cells, and a copy of each of the 6 cells of its 3 rows
 static void expect_user_table_creation(void)
 {
     will_return(oom_calloc, true);
-    will_return(oom_realloc, true);
+    will_return(oom_calloc, true);
+    will_return(oom_calloc, true);
     will_return(oom_realloc, true);
     for (size_t i = 0; i < 6; i++) {
         will_return(oom_malloc, true);
@@ -656,38 +657,6 @@ static void test_insert_fails_when_the_row_cannot_be_stored([[maybe_unused]] voi
     wire_writer_destroy(w);
 }
 
-// Mirrors the catalog's initial capacity: the built-in table plus 7 more fill it
-static constexpr size_t CATALOG_CAPACITY = 8;
-
-static void create_filler_table(size_t index)
-{
-    char name[16];
-    const table_column_t columns[] = {{"a", COLUMN_TYPE_INTEGER}};
-
-    snprintf(name, sizeof(name), "fill%zu", index);
-    will_return(oom_calloc, true);
-    if (catalog_create_table(name, columns, 1) == nullptr) {
-        fail();
-    }
-}
-
-static void test_catalog_create_fails_when_the_catalog_cannot_grow([[maybe_unused]] void **state)
-{
-    const table_column_t columns[] = {{"a", COLUMN_TYPE_INTEGER}};
-
-    for (size_t i = 1; i < CATALOG_CAPACITY; i++) {
-        create_filler_table(i);
-    }
-    will_return(oom_calloc, true);
-    will_return(oom_realloc, false);
-
-    errno = 0;
-    assert_null(catalog_create_table("overflow", columns, 1));
-
-    assert_int_equal(errno, ENOMEM);
-    assert_null(catalog_find("overflow"));
-}
-
 static void
 test_catalog_create_fails_when_the_table_cannot_be_allocated([[maybe_unused]] void **state)
 {
@@ -813,11 +782,25 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_hash_map_keeps_working_when_it_cannot_grow),
     cmocka_unit_test(test_table_create_fails_when_memory_runs_out),
     cmocka_unit_test(test_catalog_create_fails_when_the_table_cannot_be_allocated),
-    cmocka_unit_test(test_catalog_create_fails_when_the_catalog_cannot_grow),
     cmocka_unit_test(test_table_insert_fails_when_the_cells_cannot_grow),
     cmocka_unit_test(test_table_insert_undoes_a_partly_copied_row),
     cmocka_unit_test(test_server_serve_fails_when_a_session_cannot_be_allocated),
 };
+
+// The catalog makes its hash map with the first table; it must report failing to
+static int catalog_create_fails_without_memory(const table_column_t *columns)
+{
+    int status = 0;
+
+    will_return(oom_calloc, false);
+    errno = 0;
+    status |= catalog_create_table("user", columns, 2) != nullptr || errno != ENOMEM;
+    will_return(oom_calloc, true);
+    will_return(oom_calloc, false);
+    errno = 0;
+    status |= catalog_create_table("user", columns, 2) != nullptr || errno != ENOMEM;
+    return status;
+}
 
 // The tests need the user table, so make it once, with real allocations
 static int create_user_table([[maybe_unused]] void **state)
@@ -826,6 +809,10 @@ static int create_user_table([[maybe_unused]] void **state)
     const char *rows[][2] = {{"1", "Alice"}, {"2", "Bob"}, {"3", "Carol"}};
     int status = 0;
 
+    status = catalog_create_fails_without_memory(columns);
+    if (status != 0) {
+        return status;
+    }
     expect_user_table_creation();
     table_t *table = catalog_create_table("user", columns, 2);
     status = table == nullptr;

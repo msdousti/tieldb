@@ -65,13 +65,10 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
   - [x] Error handling (ErrorResponse)
 - [x] Parse simple SQL (CREATE TABLE, INSERT, SELECT *)
   - [x] Stopgap hand-written matchers for `SELECT version()`, `SELECT * FROM <table>`, `INSERT INTO <table> VALUES (...)` and `CREATE TABLE <table> (<column> <type>, ...)`, until the real parser replaces them (see Phase 3: SQL parser and syntax tree)
-- [ ] In-memory catalog
+- [x] In-memory catalog
   - [x] Table metadata (columns, types)
   - [x] Column display order, separate from the storage order (starts as the definition order; no SQL to change it yet)
-  - [ ] Hash map: table name → table definition
-    - [x] Lookup by name (a plain array with a linear search for now)
-    - [x] A reusable hash map in `src/ds/` (chaining, entries embed their link, no locking inside)
-    - [ ] The catalog uses it, behind a read-write lock
+  - [x] Hash map: table name → table definition (a reusable map in `src/ds/`; the catalog keeps it behind a read-write lock)
 - [x] In-memory tuple storage
   - [x] Array of tuples per table (growable, one lock per table; rows are text for now)
   - [x] Support `INTEGER` and `TEXT` types only
@@ -94,8 +91,8 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
 
 ### Deliverables
 - `src/net/protocol.{h,c}` - Postgres wire protocol
-- `src/sql/parser.{h,c}` - SQL parser (or wrapper around library)
-- `src/catalog/catalog.{h,c}` - In-memory catalog
+- `src/sql/simple_sql.{h,c}` - Stopgap SQL matchers (the real parser is a Phase 3 task: `src/sql/parser.{h,c}`)
+- `src/storage/catalog.{h,c}` - In-memory catalog, on top of `src/ds/hash_map.{h,c}`
 - `src/executor/executor.{h,c}` - Hardcoded executor
 - `src/net/server.{h,c}` - Network server
 

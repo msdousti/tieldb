@@ -17,6 +17,7 @@ typedef struct {
 } column_slot_t;
 
 struct table {
+    hash_node_t node; // for the catalog's hash map
     const char *name;
     size_t column_count;
     char **cells;
@@ -204,6 +205,16 @@ void table_unlock(table_t *table)
 const char *table_name(const table_t *table)
 {
     return table->name;
+}
+
+hash_node_t *table_node(table_t *table)
+{
+    return &table->node;
+}
+
+table_t *table_from_node(const hash_node_t *node)
+{
+    return HASH_MAP_ENTRY(node, table_t, node);
 }
 
 size_t table_column_count(const table_t *table)

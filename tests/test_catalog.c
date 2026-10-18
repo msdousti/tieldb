@@ -100,12 +100,53 @@ static void test_exactly_one_concurrent_create_wins([[maybe_unused]] void **stat
     assert_string_equal(table_name(catalog_find("race")), "race");
 }
 
+static constexpr size_t TABLES_PER_THREAD = 50;
+
+typedef struct {
+    size_t thread;
+    int failures;
+} worker_t;
+
+static void *create_and_find_own_tables(void *argument)
+{
+    worker_t *worker = argument;
+    char name[24];
+
+    for (size_t i = 0; i < TABLES_PER_THREAD; i++) {
+        snprintf(name, sizeof(name), "busy_%zu_%zu", worker->thread, i);
+        table_t *created = catalog_create_table(name, PAIR_COLUMNS, 2);
+        worker->failures += created == nullptr || catalog_find(name) != created;
+    }
+    return nullptr;
+}
+
+static void test_creating_and_finding_at_the_same_time_works([[maybe_unused]] void **state)
+{
+    pthread_t threads[CREATING_THREADS];
+    worker_t workers[CREATING_THREADS] = {};
+    int failures = 0;
+
+    for (size_t i = 0; i < CREATING_THREADS; i++) {
+        workers[i].thread = i;
+        assert_int_equal(
+            pthread_create(&threads[i], nullptr, create_and_find_own_tables, &workers[i]), 0);
+    }
+    for (size_t i = 0; i < CREATING_THREADS; i++) {
+        assert_int_equal(pthread_join(threads[i], nullptr), 0);
+        failures += workers[i].failures;
+    }
+
+    assert_int_equal(failures, 0);
+    assert_string_equal(table_name(catalog_find("busy_3_49")), "busy_3_49");
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_unknown_table_is_not_found),
     cmocka_unit_test(test_created_table_can_be_found),
     cmocka_unit_test(test_creating_an_existing_table_is_an_error),
     cmocka_unit_test(test_many_tables_can_be_created),
     cmocka_unit_test(test_exactly_one_concurrent_create_wins),
+    cmocka_unit_test(test_creating_and_finding_at_the_same_time_works),
 };
 
 int main(void)
