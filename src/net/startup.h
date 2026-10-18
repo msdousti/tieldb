@@ -6,9 +6,9 @@
  *
  *   code                  meaning                      server reply
  *   -------------------   --------------------------   -----------------------------------
- *   80877103              SSLRequest                   'N' (TLS is not supported)
- *   80877104              GSSENCRequest                'N' (not supported)
- *   80877102              CancelRequest                none; the connection is closed
+ *   80877103 (1234.5679)  SSLRequest                   'N' (TLS is not supported)
+ *   80877104 (1234.5680)  GSSENCRequest                'N' (not supported)
+ *   80877102 (1234.5678)  CancelRequest                none; the connection is closed
  *   3.x (0x0003xxxx)      StartupMessage               AuthenticationOk, ReadyForQuery
  *
  * After an 'N' the client may send another packet on the same connection, typically the
@@ -16,8 +16,9 @@
  * TielDB has no authentication or databases yet, so it accepts every connection and ignores them.
  *
  * Errors return -1 and set errno: EINVAL for a null argument, EBADMSG for a packet too short to
- * hold a code, EPROTONOSUPPORT for a protocol major version other than 3. On failure the output
- * writer is left unchanged and *result is not meaningful.
+ * hold a code or whose size is wrong for its kind (an SSLRequest or GSSENCRequest is exactly the
+ * code; a CancelRequest is the code, a process ID and a secret key), EPROTONOSUPPORT for a protocol
+ * major version other than 3. On failure the output writer and *result are left unchanged.
  */
 
 #pragma once
