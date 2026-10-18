@@ -219,3 +219,4 @@ void io_init(bool use_real)
     io = use_real ? &io_real_ops : &io_fault_inject_ops;
     io_reset_faults();
 }
+// test
