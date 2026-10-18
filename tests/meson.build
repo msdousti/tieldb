@@ -14,3 +14,12 @@ test_io = executable('test_io',
 )
 
 test('io', test_io)
+
+# Test: wire protocol byte buffer
+test_wire_buffer = executable('test_wire_buffer',
+  'test_wire_buffer.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('wire_buffer', test_wire_buffer)

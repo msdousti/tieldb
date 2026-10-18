@@ -44,6 +44,8 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
 
 ### Tasks
 - [ ] Implement Postgres wire protocol
+  - [x] Output buffer (big-endian writer)
+  - [ ] Input buffer (bounds-checked reader)
   - [ ] Startup message (authentication, database selection)
   - [ ] Simple query protocol (text queries)
   - [ ] Response messages: RowDescription, DataRow, CommandComplete, ReadyForQuery
