@@ -13,6 +13,7 @@
 #include <cmocka.h>
 
 #include "net/query_handler.h"
+#include "storage/catalog.h"
 
 static wire_writer_t *create_writer(void)
 {
@@ -173,6 +174,32 @@ static void test_null_writer_is_rejected([[maybe_unused]] void **state)
     assert_int_equal(errno, EINVAL);
 }
 
+static void put_expected_flipped_response(wire_writer_t *w)
+{
+    const protocol_column_t columns[] = {{"b", PROTOCOL_TYPE_TEXT}, {"a", PROTOCOL_TYPE_INT4}};
+    const protocol_value_t values[] = {{"one", 3}, {"1", 1}};
+
+    assert_int_equal(protocol_put_row_description(w, columns, 2), 0);
+    assert_int_equal(protocol_put_data_row(w, values, 2), 0);
+    assert_int_equal(protocol_put_command_complete(w, "SELECT 1"), 0);
+    assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
+}
+
+static void test_select_star_shows_columns_in_the_display_order([[maybe_unused]] void **state)
+{
+    const table_column_t columns[] = {{"a", COLUMN_TYPE_INTEGER}, {"b", COLUMN_TYPE_TEXT}};
+    const char *row[] = {"1", "one"};
+    const size_t flipped[] = {1, 0};
+    table_t *table = catalog_create_table("shown_flipped", columns, 2);
+    if (table == nullptr) {
+        fail();
+    }
+    assert_int_equal(table_insert(table, row, 2), 0);
+    assert_int_equal(table_set_display_order(table, flipped, 2), 0);
+
+    assert_response("SELECT * FROM shown_flipped", put_expected_flipped_response);
+}
+
 // Runs last: it adds a row to the built-in user table, which the other tests count
 static void test_inserted_row_shows_up_in_select_star([[maybe_unused]] void **state)
 {
@@ -185,6 +212,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_version_query_ignores_case_semicolon_and_spaces),
     cmocka_unit_test(test_select_star_returns_every_row_of_the_table),
     cmocka_unit_test(test_select_star_from_a_missing_table_is_an_error),
+    cmocka_unit_test(test_select_star_shows_columns_in_the_display_order),
     cmocka_unit_test(test_insert_with_a_wrong_value_count_is_an_error),
     cmocka_unit_test(test_other_queries_get_an_error_and_stay_usable),
     cmocka_unit_test(test_response_appends_after_existing_content),

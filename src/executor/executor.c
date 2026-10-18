@@ -43,7 +43,8 @@ static const char *find_invalid_integer(const table_t *table, const sql_insert_t
     const char *invalid = nullptr;
     for (size_t i = 0; i < insert->count && invalid == nullptr; i++) {
         const char *text = insert->values[i].text;
-        invalid = is_valid_cell(table_column(table, i)->type, text) ? nullptr : text;
+        column_type_t type = table_column(table, table_physical_index(table, i))->type;
+        invalid = is_valid_cell(type, text) ? nullptr : text;
     }
     return invalid;
 }
@@ -52,9 +53,9 @@ static int insert_row(table_t *table, const sql_insert_t *insert)
 {
     const char *cells[SQL_MAX_INSERT_VALUES];
     for (size_t i = 0; i < insert->count; i++) {
-        cells[i] = insert->values[i].text;
+        cells[table_physical_index(table, i)] = insert->values[i].text;
     }
-    return table_insert(table, cells, insert->count);
+    return table_insert_locked(table, cells, insert->count);
 }
 
 static void set_missing_table_error(executor_error_t *error, const char *table_name)
@@ -63,14 +64,8 @@ static void set_missing_table_error(executor_error_t *error, const char *table_n
     snprintf(error->message, sizeof(error->message), MISSING_TABLE_FORMAT, table_name);
 }
 
-int executor_insert(const sql_insert_t *insert, executor_error_t *error)
+static int insert_checked(table_t *table, const sql_insert_t *insert, executor_error_t *error)
 {
-    *error = (executor_error_t){};
-    table_t *table = catalog_find(insert->table);
-    if (table == nullptr) {
-        set_missing_table_error(error, insert->table);
-        return 0;
-    }
     if (insert->count != table_column_count(table)) {
         set_error(error, SYNTAX_SQLSTATE);
         snprintf(error->message, sizeof(error->message), "%s", WRONG_COUNT_MESSAGE);
@@ -83,6 +78,20 @@ int executor_insert(const sql_insert_t *insert, executor_error_t *error)
         return 0;
     }
     return insert_row(table, insert);
+}
+
+int executor_insert(const sql_insert_t *insert, executor_error_t *error)
+{
+    *error = (executor_error_t){};
+    table_t *table = catalog_find(insert->table);
+    if (table == nullptr) {
+        set_missing_table_error(error, insert->table);
+        return 0;
+    }
+    table_lock(table);
+    int status = insert_checked(table, insert, error);
+    table_unlock(table);
+    return status;
 }
 
 void executor_select_all(const char *table_name, executor_select_t *select)

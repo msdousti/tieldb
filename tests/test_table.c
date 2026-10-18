@@ -42,6 +42,13 @@ static void test_table_copies_its_name_and_column_names([[maybe_unused]] void **
     table_destroy(table);
 }
 
+static void assert_display_order_rejected(table_t *table, const size_t *order, size_t count)
+{
+    errno = 0;
+    assert_int_equal(table_set_display_order(table, order, count), -1);
+    assert_int_equal(errno, EINVAL);
+}
+
 static void test_new_table_is_empty([[maybe_unused]] void **state)
 {
     table_t *table = create_pair_table();
@@ -96,7 +103,88 @@ static void test_insert_rejects_bad_arguments([[maybe_unused]] void **state)
     errno = 0;
     assert_int_equal(table_insert(table, row, 1), -1);
     assert_int_equal(errno, EINVAL);
+    errno = 0;
+    assert_int_equal(table_insert_locked(nullptr, row, 2), -1);
+    assert_int_equal(errno, EINVAL);
     assert_int_equal(table_row_count(table), 0);
+    table_destroy(table);
+}
+
+static void test_columns_are_shown_in_definition_order_by_default([[maybe_unused]] void **state)
+{
+    table_t *table = create_pair_table();
+
+    assert_int_equal(table_physical_index(table, 0), 0);
+    assert_int_equal(table_physical_index(table, 1), 1);
+    table_destroy(table);
+}
+
+static void
+test_display_order_can_be_changed_without_touching_the_rows([[maybe_unused]] void **state)
+{
+    table_t *table = create_pair_table();
+    const char *row[] = {"1", "one"};
+    const size_t reversed[] = {1, 0};
+
+    assert_int_equal(table_insert(table, row, 2), 0);
+    assert_int_equal(table_set_display_order(table, reversed, 2), 0);
+
+    assert_int_equal(table_physical_index(table, 0), 1);
+    assert_int_equal(table_physical_index(table, 1), 0);
+    assert_string_equal(table_column(table, 0)->name, "a");
+    assert_string_equal(table_cell(table, 0, 0), "1");
+    assert_string_equal(table_cell(table, 0, 1), "one");
+    table_destroy(table);
+}
+
+static void test_invalid_display_orders_are_rejected([[maybe_unused]] void **state)
+{
+    table_t *table = create_pair_table();
+    const size_t duplicate[] = {1, 1};
+    const size_t out_of_range[] = {0, 2};
+    const size_t too_short[] = {0};
+    const size_t reversed[] = {1, 0};
+
+    assert_int_equal(table_set_display_order(table, reversed, 2), 0);
+    assert_display_order_rejected(table, duplicate, 2);
+    assert_display_order_rejected(table, out_of_range, 2);
+    assert_display_order_rejected(table, too_short, 1);
+    assert_display_order_rejected(table, nullptr, 2);
+    assert_display_order_rejected(nullptr, reversed, 2);
+    assert_int_equal(table_physical_index(table, 0), 1);
+    table_destroy(table);
+}
+
+static constexpr size_t REORDER_ROUNDS = 500;
+
+static void *reorder_columns(void *argument)
+{
+    const size_t orders[][2] = {{0, 1}, {1, 0}};
+    int status = 0;
+
+    for (size_t i = 0; i < REORDER_ROUNDS && status == 0; i++) {
+        status = table_set_display_order(argument, orders[i % 2], 2);
+    }
+    return status == 0 ? nullptr : argument;
+}
+
+static void test_readers_see_a_consistent_display_order([[maybe_unused]] void **state)
+{
+    table_t *table = create_pair_table();
+    pthread_t thread;
+    void *failed = nullptr;
+    size_t inconsistent = 0;
+
+    assert_int_equal(pthread_create(&thread, nullptr, reorder_columns, table), 0);
+    for (size_t i = 0; i < REORDER_ROUNDS; i++) {
+        table_lock(table);
+        inconsistent += table_physical_index(table, 0) == table_physical_index(table, 1);
+        table_unlock(table);
+    }
+    assert_int_equal(pthread_join(thread, &failed), 0);
+
+    assert_null(failed);
+    assert_int_equal(inconsistent, 0);
     table_destroy(table);
 }
 
@@ -140,6 +228,10 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_inserted_rows_are_copied_and_kept_in_order),
     cmocka_unit_test(test_table_grows_past_its_initial_capacity),
     cmocka_unit_test(test_insert_rejects_bad_arguments),
+    cmocka_unit_test(test_columns_are_shown_in_definition_order_by_default),
+    cmocka_unit_test(test_display_order_can_be_changed_without_touching_the_rows),
+    cmocka_unit_test(test_invalid_display_orders_are_rejected),
+    cmocka_unit_test(test_readers_see_a_consistent_display_order),
     cmocka_unit_test(test_concurrent_inserts_are_all_kept),
 };
 
