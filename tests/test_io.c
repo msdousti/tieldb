@@ -17,167 +17,24 @@
 
 #include "io/io.h"
 
-// Test fixture setup/teardown
-static int setup(void **state)
+static int setup([[maybe_unused]] void **state)
 {
-    (void) state;  // Unused
-    io_init(true); // Start with real I/O
+    io_init(true);
     return 0;
 }
 
-static int teardown(void **state)
+static int teardown([[maybe_unused]] void **state)
 {
-    (void) state; // Unused
     io_reset_faults();
     return 0;
-}
-
-// Test: Real I/O operations work
-static void test_real_io_operations(void **state)
-{
-    (void) state;
-
-    const char *test_file = "/tmp/tieldb_test_io.dat";
-    const char *test_data = "Hello, TielDB!";
-    char read_buf[128] = {};
-
-    // Write
-    int fd = io->open(test_file, O_RDWR | O_CREAT | O_TRUNC, 0644);
-    assert_true(fd >= 0);
-
-    ssize_t written = io->write(fd, test_data, strlen(test_data));
-    assert_int_equal(written, (ssize_t) strlen(test_data));
-
-    int sync_result = io->fsync(fd);
-    assert_int_equal(sync_result, 0);
-
-    // Read back
-    ssize_t read_bytes = io->pread(fd, read_buf, sizeof(read_buf), 0);
-    assert_true(read_bytes > 0);
-    assert_string_equal(read_buf, test_data);
-
-    io->close(fd);
-    unlink(test_file);
-}
-
-// Test: Fault injection for torn write
-static void test_fault_injection_torn_write(void **state)
-{
-    (void) state;
-
-    io_init(false); // Use fault injection
-
-    const char *test_file = "/tmp/tieldb_test_torn.dat";
-    const char *test_data = "0123456789ABCDEF"; // 16 bytes
-    char read_buf[128] = {};
-
-    // Inject torn write on 1st write call
-    io_inject_fault(IO_FAULT_TORN_WRITE, 1);
-
-    int fd = io->open(test_file, O_RDWR | O_CREAT | O_TRUNC, 0644);
-    assert_true(fd >= 0);
-
-    // This write will be torn (only half written)
-    ssize_t written = io->write(fd, test_data, strlen(test_data));
-    assert_int_equal(written, (ssize_t) (strlen(test_data) / 2)); // Only half
-
-    io->close(fd);
-
-    // Verify only half was written
-    fd = open(test_file, O_RDONLY);
-    ssize_t read_bytes = read(fd, read_buf, sizeof(read_buf));
-    assert_int_equal(read_bytes, 8); // Half of 16
-
-    close(fd);
-    unlink(test_file);
-}
-
-// Test: Fault injection for fsync failure
-static void test_fault_injection_fsync_fail(void **state)
-{
-    (void) state;
-
-    io_init(false); // Use fault injection
-
-    const char *test_file = "/tmp/tieldb_test_fsync.dat";
-
-    // Inject fsync failure on 1st fsync call
-    io_inject_fault(IO_FAULT_FSYNC_FAIL, 1);
-
-    int fd = io->open(test_file, O_RDWR | O_CREAT | O_TRUNC, 0644);
-    assert_true(fd >= 0);
-
-    const char *data = "test";
-    io->write(fd, data, strlen(data));
-
-    // This fsync will fail
-    int result = io->fsync(fd);
-    assert_int_equal(result, -1);
-
-    io->close(fd);
-    unlink(test_file);
-}
-
-// Test: Multiple calls, fault on Nth
-static void test_fault_on_nth_call(void **state)
-{
-    (void) state;
-
-    io_init(false);
-
-    const char *test_file = "/tmp/tieldb_test_nth.dat";
-
-    // Inject write error on 3rd write call
-    io_inject_fault(IO_FAULT_WRITE_ERROR, 3);
-
-    int fd = io->open(test_file, O_RDWR | O_CREAT | O_TRUNC, 0644);
-    assert_true(fd >= 0);
-
-    char data = 'X';
-
-    // First write: succeeds
-    assert_int_equal(io->write(fd, &data, 1), 1);
-
-    // Second write: succeeds
-    assert_int_equal(io->write(fd, &data, 1), 1);
-
-    // Third write: fails (fault injected)
-    assert_int_equal(io->write(fd, &data, 1), -1);
-
-    // Fourth write: succeeds (fault was one-time)
-    assert_int_equal(io->write(fd, &data, 1), 1);
-
-    io->close(fd);
-    unlink(test_file);
-}
-
-// Test: Reset faults
-static void test_reset_faults(void **state)
-{
-    (void) state;
-
-    io_init(false);
-    io_inject_fault(IO_FAULT_WRITE_ERROR, 1);
-
-    // Reset faults
-    io_reset_faults();
-
-    const char *test_file = "/tmp/tieldb_test_reset.dat";
-    int fd = io->open(test_file, O_RDWR | O_CREAT | O_TRUNC, 0644);
-
-    char data = 'X';
-
-    // Should succeed (fault was reset)
-    assert_int_equal(io->write(fd, &data, 1), 1);
-
-    io->close(fd);
-    unlink(test_file);
 }
 
 static int open_scratch_file(const char *path)
 {
     int fd = io->open(path, O_RDWR | O_CREAT | O_TRUNC, 0644);
-    assert_true(fd >= 0);
+    if (fd < 0) {
+        fail();
+    }
     return fd;
 }
 
@@ -187,9 +44,74 @@ static void close_scratch_file(int fd, const char *path)
     unlink(path);
 }
 
-static void test_real_positioned_and_plain_io(void **state)
+static void test_real_io_operations([[maybe_unused]] void **state)
 {
-    (void) state;
+    const char *path = "/tmp/tieldb_test_io.dat";
+    const char *data = "Hello, TielDB!";
+    char buf[128] = {};
+    int fd = open_scratch_file(path);
+
+    assert_int_equal(io->write(fd, data, strlen(data)), (ssize_t) strlen(data));
+    assert_int_equal(io->fsync(fd), 0);
+    assert_true(io->pread(fd, buf, sizeof(buf), 0) > 0);
+    assert_string_equal(buf, data);
+    close_scratch_file(fd, path);
+}
+
+static void test_fault_injection_torn_write([[maybe_unused]] void **state)
+{
+    io_init(false);
+    const char *path = "/tmp/tieldb_test_torn.dat";
+    const char *data = "0123456789ABCDEF";
+    char buf[128] = {};
+    int fd = open_scratch_file(path);
+
+    io_inject_fault(IO_FAULT_TORN_WRITE, 1);
+    assert_int_equal(io->write(fd, data, strlen(data)), (ssize_t) strlen(data) / 2);
+    assert_int_equal(io_real_ops.pread(fd, buf, sizeof(buf), 0), (ssize_t) strlen(data) / 2);
+    close_scratch_file(fd, path);
+}
+
+static void test_fault_injection_fsync_fail([[maybe_unused]] void **state)
+{
+    io_init(false);
+    const char *path = "/tmp/tieldb_test_fsync.dat";
+    int fd = open_scratch_file(path);
+
+    io_inject_fault(IO_FAULT_FSYNC_FAIL, 1);
+    assert_int_equal(io->write(fd, "test", 4), 4);
+    assert_int_equal(io->fsync(fd), -1);
+    close_scratch_file(fd, path);
+}
+
+static void test_fault_on_nth_call([[maybe_unused]] void **state)
+{
+    io_init(false);
+    const char *path = "/tmp/tieldb_test_nth.dat";
+    const ssize_t expected[] = {1, 1, -1, 1};
+    int fd = open_scratch_file(path);
+
+    io_inject_fault(IO_FAULT_WRITE_ERROR, 3);
+    for (size_t i = 0; i < sizeof(expected) / sizeof(expected[0]); i++) {
+        assert_int_equal(io->write(fd, "X", 1), expected[i]);
+    }
+    close_scratch_file(fd, path);
+}
+
+static void test_reset_faults([[maybe_unused]] void **state)
+{
+    io_init(false);
+    const char *path = "/tmp/tieldb_test_reset.dat";
+    int fd = open_scratch_file(path);
+
+    io_inject_fault(IO_FAULT_WRITE_ERROR, 1);
+    io_reset_faults();
+    assert_int_equal(io->write(fd, "X", 1), 1);
+    close_scratch_file(fd, path);
+}
+
+static void test_real_positioned_and_plain_io([[maybe_unused]] void **state)
+{
     const char *path = "/tmp/tieldb_test_positioned.dat";
     char buf[4] = {};
     int fd = open_scratch_file(path);
@@ -203,9 +125,8 @@ static void test_real_positioned_and_plain_io(void **state)
     close_scratch_file(fd, path);
 }
 
-static void test_fault_read_error_is_one_shot(void **state)
+static void test_fault_read_error_is_one_shot([[maybe_unused]] void **state)
 {
-    (void) state;
     io_init(false);
     const char *path = "/tmp/tieldb_test_read_error.dat";
     char buf[1];
@@ -221,9 +142,8 @@ static void test_fault_read_error_is_one_shot(void **state)
     close_scratch_file(fd, path);
 }
 
-static void test_fault_pread_error_is_one_shot(void **state)
+static void test_fault_pread_error_is_one_shot([[maybe_unused]] void **state)
 {
-    (void) state;
     io_init(false);
     const char *path = "/tmp/tieldb_test_pread_error.dat";
     char buf[1];
@@ -238,9 +158,8 @@ static void test_fault_pread_error_is_one_shot(void **state)
     close_scratch_file(fd, path);
 }
 
-static void test_fault_pwrite_error_and_torn(void **state)
+static void test_fault_pwrite_error_and_torn([[maybe_unused]] void **state)
 {
-    (void) state;
     io_init(false);
     const char *path = "/tmp/tieldb_test_pwrite_faults.dat";
     int fd = open_scratch_file(path);
@@ -256,9 +175,8 @@ static void test_fault_pwrite_error_and_torn(void **state)
     close_scratch_file(fd, path);
 }
 
-static void test_fault_write_error_sets_eio(void **state)
+static void test_fault_write_error_sets_eio([[maybe_unused]] void **state)
 {
-    (void) state;
     io_init(false);
     const char *path = "/tmp/tieldb_test_write_error.dat";
     int fd = open_scratch_file(path);
@@ -270,9 +188,8 @@ static void test_fault_write_error_sets_eio(void **state)
     close_scratch_file(fd, path);
 }
 
-static void test_fault_fsync_drop_reports_success(void **state)
+static void test_fault_fsync_drop_reports_success([[maybe_unused]] void **state)
 {
-    (void) state;
     io_init(false);
     const char *path = "/tmp/tieldb_test_fsync_drop.dat";
     int fd = open_scratch_file(path);
