@@ -9,6 +9,15 @@
 
 static constexpr size_t SQLSTATE_LENGTH = 5;
 
+// The table OID (int32) and column number (int16) that precede the type OID are always zero
+static constexpr size_t COLUMN_TYPE_OID_OFFSET = sizeof(int32_t) + sizeof(int16_t);
+static constexpr size_t COLUMN_TYPE_SIZE_OFFSET = COLUMN_TYPE_OID_OFFSET + sizeof(int32_t);
+static constexpr size_t COLUMN_TYPE_MODIFIER_OFFSET = COLUMN_TYPE_SIZE_OFFSET + sizeof(int16_t);
+// The format code (int16, always 0 for text) follows the type modifier
+static constexpr size_t COLUMN_FIXED_SIZE =
+    COLUMN_TYPE_MODIFIER_OFFSET + sizeof(int32_t) + sizeof(int16_t);
+static constexpr int32_t NO_TYPE_MODIFIER = -1;
+
 typedef struct error_field {
     char code;
     const char *value;
@@ -97,10 +106,10 @@ int protocol_put_error_response(wire_writer_t *writer, const char *severity, con
 
 static int put_column(wire_writer_t *writer, const protocol_column_t *column)
 {
-    uint8_t fixed[18] = {};
-    wire_encode_i32(fixed + 6, column->type_oid);
-    wire_encode_i16(fixed + 10, column->type_size);
-    wire_encode_i32(fixed + 12, -1);
+    uint8_t fixed[COLUMN_FIXED_SIZE] = {};
+    wire_encode_i32(fixed + COLUMN_TYPE_OID_OFFSET, column->type_oid);
+    wire_encode_i16(fixed + COLUMN_TYPE_SIZE_OFFSET, column->type_size);
+    wire_encode_i32(fixed + COLUMN_TYPE_MODIFIER_OFFSET, NO_TYPE_MODIFIER);
     if (wire_writer_put_cstring(writer, column->name) != 0) {
         return -1;
     }

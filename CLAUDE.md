@@ -122,6 +122,7 @@ meson test -C build-asan
       return do_work(page);  // main logic at left margin
   }
   ```
+- **No magic numbers** in `src/`: give every size, offset, shift, and protocol value a named constant, preferably derived from `sizeof` or other constants so the structure explains itself (enforced by `clang-tidy`; tests are exempt)
 - **No comments by default** - code should be self-explanatory
   - Only comment *why*, never *what*
   - Document public APIs with brief descriptions
@@ -365,6 +366,7 @@ Before submitting/committing code:
 - [ ] All tests pass under ASan + UBSan
 - [ ] New feature has tests (unit, reference-model, or crash test)
 - [ ] Functions <20 lines, nesting depth ≤2
+- [ ] No magic numbers in `src/`: constants are named
 - [ ] No raw `malloc`/`free` in application code (use arenas)
 - [ ] All error returns checked
 - [ ] No comments unless explaining *why*

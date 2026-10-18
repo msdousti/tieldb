@@ -5,11 +5,13 @@
 #include "net/wire_buffer.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
 static constexpr size_t WRITER_INITIAL_CAPACITY = 64;
 static constexpr size_t WRITER_MAX_SIZE = INT32_MAX;
+static constexpr unsigned BYTE_BITS = CHAR_BIT;
 
 static_assert(WRITER_MAX_SIZE <= SIZE_MAX / 2);
 
@@ -99,16 +101,16 @@ int wire_writer_put_u8(wire_writer_t *writer, uint8_t value)
 void wire_encode_i16(uint8_t *out, int16_t value)
 {
     uint16_t bits = (uint16_t) value;
-    out[0] = (uint8_t) (bits >> 8);
+    out[0] = (uint8_t) (bits >> BYTE_BITS);
     out[1] = (uint8_t) bits;
 }
 
 void wire_encode_i32(uint8_t *out, int32_t value)
 {
     uint32_t bits = (uint32_t) value;
-    out[0] = (uint8_t) (bits >> 24);
-    out[1] = (uint8_t) (bits >> 16);
-    out[2] = (uint8_t) (bits >> 8);
+    out[0] = (uint8_t) (bits >> (3 * BYTE_BITS));
+    out[1] = (uint8_t) (bits >> (2 * BYTE_BITS));
+    out[2] = (uint8_t) (bits >> BYTE_BITS);
     out[3] = (uint8_t) bits;
 }
 
@@ -224,7 +226,7 @@ int wire_reader_get_i16(wire_reader_t *reader, int16_t *out)
     if (wire_reader_get_bytes(reader, bytes, sizeof(bytes)) != 0) {
         return -1;
     }
-    *out = (int16_t) (uint16_t) ((bytes[0] << 8) | bytes[1]);
+    *out = (int16_t) (uint16_t) ((bytes[0] << BYTE_BITS) | bytes[1]);
     return 0;
 }
 
@@ -237,8 +239,9 @@ int wire_reader_get_i32(wire_reader_t *reader, int32_t *out)
     if (wire_reader_get_bytes(reader, bytes, sizeof(bytes)) != 0) {
         return -1;
     }
-    *out = (int32_t) (((uint32_t) bytes[0] << 24) | ((uint32_t) bytes[1] << 16) |
-                      ((uint32_t) bytes[2] << 8) | (uint32_t) bytes[3]);
+    *out = (int32_t) (((uint32_t) bytes[0] << (3 * BYTE_BITS)) |
+                      ((uint32_t) bytes[1] << (2 * BYTE_BITS)) |
+                      ((uint32_t) bytes[2] << BYTE_BITS) | (uint32_t) bytes[3]);
     return 0;
 }
 
