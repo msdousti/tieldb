@@ -108,19 +108,13 @@ static bool should_inject_fault(io_fault_type_t expected_type)
 
 static ssize_t fault_write(int fd, const void *buf, size_t count)
 {
-    if (should_inject_fault(IO_FAULT_TORN_WRITE) || should_inject_fault(IO_FAULT_WRITE_ERROR)) {
-        switch (fault_state.type) {
-            case IO_FAULT_TORN_WRITE:
-                // Write only half the data (simulate power loss)
-                return write(fd, buf, count / 2);
-
-            case IO_FAULT_WRITE_ERROR:
-                errno = EIO;
-                return -1;
-
-            default:
-                break;
-        }
+    if (should_inject_fault(IO_FAULT_WRITE_ERROR)) {
+        errno = EIO;
+        return -1;
+    }
+    if (should_inject_fault(IO_FAULT_TORN_WRITE)) {
+        // Write only half the data (simulate power loss)
+        return write(fd, buf, count / 2);
     }
 
     return write(fd, buf, count);
@@ -128,18 +122,12 @@ static ssize_t fault_write(int fd, const void *buf, size_t count)
 
 static ssize_t fault_pwrite(int fd, const void *buf, size_t count, off_t offset)
 {
-    if (should_inject_fault(IO_FAULT_TORN_WRITE) || should_inject_fault(IO_FAULT_WRITE_ERROR)) {
-        switch (fault_state.type) {
-            case IO_FAULT_TORN_WRITE:
-                return pwrite(fd, buf, count / 2, offset);
-
-            case IO_FAULT_WRITE_ERROR:
-                errno = EIO;
-                return -1;
-
-            default:
-                break;
-        }
+    if (should_inject_fault(IO_FAULT_WRITE_ERROR)) {
+        errno = EIO;
+        return -1;
+    }
+    if (should_inject_fault(IO_FAULT_TORN_WRITE)) {
+        return pwrite(fd, buf, count / 2, offset);
     }
 
     return pwrite(fd, buf, count, offset);
@@ -147,19 +135,13 @@ static ssize_t fault_pwrite(int fd, const void *buf, size_t count, off_t offset)
 
 static int fault_fsync(int fd)
 {
-    if (should_inject_fault(IO_FAULT_FSYNC_FAIL) || should_inject_fault(IO_FAULT_FSYNC_DROP)) {
-        switch (fault_state.type) {
-            case IO_FAULT_FSYNC_FAIL:
-                errno = EIO;
-                return -1;
-
-            case IO_FAULT_FSYNC_DROP:
-                // Succeed but don't actually sync (simulate fsyncgate)
-                return 0;
-
-            default:
-                break;
-        }
+    if (should_inject_fault(IO_FAULT_FSYNC_FAIL)) {
+        errno = EIO;
+        return -1;
+    }
+    if (should_inject_fault(IO_FAULT_FSYNC_DROP)) {
+        // Succeed but don't actually sync (simulate fsyncgate)
+        return 0;
     }
 
     return fsync(fd);
