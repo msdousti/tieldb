@@ -40,18 +40,23 @@ void wire_writer_destroy(wire_writer_t *writer)
     free(writer);
 }
 
+static size_t grown_capacity(size_t capacity, size_t needed)
+{
+    while (capacity < needed && capacity <= SIZE_MAX / 2) {
+        capacity *= 2;
+    }
+    return capacity;
+}
+
 static int writer_reserve(wire_writer_t *writer, size_t extra)
 {
     if (extra > SIZE_MAX - writer->size) {
         return -1;
     }
     size_t needed = writer->size + extra;
-    size_t capacity = writer->capacity;
-    while (capacity < needed) {
-        if (capacity > SIZE_MAX / 2) {
-            return -1;
-        }
-        capacity *= 2;
+    size_t capacity = grown_capacity(writer->capacity, needed);
+    if (capacity < needed) {
+        return -1;
     }
     if (capacity == writer->capacity) {
         return 0;
