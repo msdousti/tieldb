@@ -12,8 +12,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-// Global I/O operations pointer
-const io_ops_t *io = nullptr;
+// Global I/O operations pointer, real syscalls until io_init selects otherwise
+const io_ops_t *io = &io_real_ops;
 
 // Fault injection state
 static struct {
@@ -57,12 +57,7 @@ static int real_fsync(int fd)
 
 static int real_fdatasync(int fd)
 {
-#ifdef __APPLE__
-    // macOS doesn't have fdatasync, use fsync
-    return fsync(fd);
-#else
     return fdatasync(fd);
-#endif
 }
 
 static int real_open(const char *pathname, int flags, mode_t mode)
@@ -114,10 +109,10 @@ static ssize_t fault_write(int fd, const void *buf, size_t count)
     }
     if (should_inject_fault(IO_FAULT_TORN_WRITE)) {
         // Write only half the data (simulate power loss)
-        return write(fd, buf, count / 2);
+        return real_write(fd, buf, count / 2);
     }
 
-    return write(fd, buf, count);
+    return real_write(fd, buf, count);
 }
 
 static ssize_t fault_pwrite(int fd, const void *buf, size_t count, off_t offset)
@@ -127,10 +122,10 @@ static ssize_t fault_pwrite(int fd, const void *buf, size_t count, off_t offset)
         return -1;
     }
     if (should_inject_fault(IO_FAULT_TORN_WRITE)) {
-        return pwrite(fd, buf, count / 2, offset);
+        return real_pwrite(fd, buf, count / 2, offset);
     }
 
-    return pwrite(fd, buf, count, offset);
+    return real_pwrite(fd, buf, count, offset);
 }
 
 static int fault_fsync(int fd)
@@ -144,7 +139,7 @@ static int fault_fsync(int fd)
         return 0;
     }
 
-    return fsync(fd);
+    return real_fsync(fd);
 }
 
 static ssize_t fault_read(int fd, void *buf, size_t count)
@@ -154,7 +149,7 @@ static ssize_t fault_read(int fd, void *buf, size_t count)
         return -1;
     }
 
-    return read(fd, buf, count);
+    return real_read(fd, buf, count);
 }
 
 static ssize_t fault_pread(int fd, void *buf, size_t count, off_t offset)
@@ -164,7 +159,7 @@ static ssize_t fault_pread(int fd, void *buf, size_t count, off_t offset)
         return -1;
     }
 
-    return pread(fd, buf, count, offset);
+    return real_pread(fd, buf, count, offset);
 }
 
 const io_ops_t io_fault_inject_ops = {
@@ -201,4 +196,3 @@ void io_init(bool use_real)
     io = use_real ? &io_real_ops : &io_fault_inject_ops;
     io_reset_faults();
 }
-// test

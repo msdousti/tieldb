@@ -44,6 +44,11 @@ static void close_scratch_file(int fd, const char *path)
     unlink(path);
 }
 
+static void test_io_defaults_to_real_operations([[maybe_unused]] void **state)
+{
+    assert_ptr_equal(io, &io_real_ops);
+}
+
 static void test_real_io_operations([[maybe_unused]] void **state)
 {
     const char *path = "/tmp/tieldb_test_io.dat";
@@ -214,6 +219,8 @@ static void test_fault_fsync_drop_reports_success([[maybe_unused]] void **state)
 int main(void)
 {
     const struct CMUnitTest tests[] = {
+        // Must stay first: it checks the default before any test calls io_init
+        cmocka_unit_test(test_io_defaults_to_real_operations),
         cmocka_unit_test_setup_teardown(test_real_io_operations, setup, teardown),
         cmocka_unit_test_setup_teardown(test_fault_injection_torn_write, setup, teardown),
         cmocka_unit_test_setup_teardown(test_fault_injection_fsync_fail, setup, teardown),

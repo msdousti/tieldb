@@ -191,6 +191,12 @@ static void test_encode_functions_write_big_endian([[maybe_unused]] void **state
     assert_memory_equal(buf, expected, sizeof(expected));
 }
 
+static void test_writer_accessors_accept_null([[maybe_unused]] void **state)
+{
+    assert_null(wire_writer_data(nullptr));
+    assert_int_equal(wire_writer_size(nullptr), 0);
+}
+
 int main(void)
 {
     const struct CMUnitTest tests[] = {
@@ -207,6 +213,7 @@ int main(void)
         cmocka_unit_test(test_writer_accepts_empty_bytes),
         cmocka_unit_test(test_writer_rejects_null_input),
         cmocka_unit_test(test_writer_destroy_accepts_null),
+        cmocka_unit_test(test_writer_accessors_accept_null),
     };
     return cmocka_run_group_tests(tests, nullptr, nullptr);
 }
