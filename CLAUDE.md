@@ -427,6 +427,7 @@ Work proceeds as a sequence of small, reviewable pull requests, each leaving `ma
 - **Roadmap upkeep:** each PR updates `ROADMAP.md` in the same PR. Check a task only when every part of it is done.
   If the PR does only part of a step, add sub-items under that step and check only the ones it completes
 - **PR description:** fill in `.github/pull_request_template.md` (`gh pr create --body-file` does not apply it automatically); check only the boxes that are true
+- **CI gate:** `main` requires every CI check (including `Detect Code Changes`), for admins too. Docs-only PRs skip the jobs but still report, so they merge normally. Never merge a red PR or ask to bypass; fix the cause
 - **Coverage:** CI fails if line coverage of `src/` drops below `fail-under-line` in `gcovr.cfg`. Raise the threshold as tests grow; never lower it without asking the user
 - **Measure before opening:** check `git diff --stat main` and split if the size is over target
 
