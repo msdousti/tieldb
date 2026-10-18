@@ -134,7 +134,7 @@ meson test -C build-asan
 - **Make leaks structural:** assert zero outstanding arenas/pins/file handles at teardown
 
 #### Error Handling
-- **Consistent convention:** Return 0 for success, -1 or errno for failure
+- **Consistent convention:** Return 0 for success; on failure return -1 (or `nullptr` from `foo_create`) and set `errno`
 - **Check every return value** that can fail (malloc, read, write, fsync)
 - **Don't return NULL casually** - use result structs when needed
 - **Fail fast** - library code should never call `exit()`
@@ -370,6 +370,9 @@ Before submitting/committing code:
 - [ ] All error returns checked
 - [ ] No comments unless explaining *why*
 - [ ] Module internals are `static`
+- [ ] Stateful module types are opaque (`foo_create`/`foo_destroy`); vtables only where implementations are swappable
+- [ ] Every failure sets `errno`, documented in the header and asserted in tests
+- [ ] At most 4 parameters per function; use an options struct beyond that
 - [ ] Headers are self-contained with `#pragma once`
 
 ### 8. When Writing New Code

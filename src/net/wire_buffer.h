@@ -50,8 +50,12 @@
  *
  * Error handling
  * --------------
- * All functions return 0 on success and -1 on failure; a failed call leaves
- * the buffer unchanged.
+ * All functions return 0 on success. On failure they return -1, set errno,
+ * and leave the buffer unchanged:
+ *
+ *   EINVAL      a required argument was null
+ *   EOVERFLOW   the buffer size would exceed SIZE_MAX
+ *   ENOMEM      memory allocation failed
  */
 
 #pragma once

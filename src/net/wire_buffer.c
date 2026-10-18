@@ -4,6 +4,7 @@
 
 #include "net/wire_buffer.h"
 
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -40,6 +41,12 @@ void wire_writer_destroy(wire_writer_t *writer)
     free(writer);
 }
 
+static int fail_with(int error)
+{
+    errno = error;
+    return -1;
+}
+
 static size_t grown_capacity(size_t capacity, size_t needed)
 {
     while (capacity < needed && capacity <= SIZE_MAX / 2) {
@@ -51,19 +58,19 @@ static size_t grown_capacity(size_t capacity, size_t needed)
 static int writer_reserve(wire_writer_t *writer, size_t extra)
 {
     if (extra > SIZE_MAX - writer->size) {
-        return -1;
+        return fail_with(EOVERFLOW);
     }
     size_t needed = writer->size + extra;
     size_t capacity = grown_capacity(writer->capacity, needed);
     if (capacity < needed) {
-        return -1;
+        return fail_with(EOVERFLOW);
     }
     if (capacity == writer->capacity) {
         return 0;
     }
     uint8_t *grown = realloc(writer->data, capacity);
     if (grown == nullptr) {
-        return -1;
+        return fail_with(ENOMEM);
     }
     writer->data = grown;
     writer->capacity = capacity;
@@ -73,7 +80,7 @@ static int writer_reserve(wire_writer_t *writer, size_t extra)
 int wire_writer_put_bytes(wire_writer_t *writer, const void *data, size_t size)
 {
     if (writer == nullptr || (data == nullptr && size > 0)) {
-        return -1;
+        return fail_with(EINVAL);
     }
     if (writer_reserve(writer, size) != 0) {
         return -1;
@@ -108,7 +115,7 @@ int wire_writer_put_i32(wire_writer_t *writer, int32_t value)
 int wire_writer_put_cstring(wire_writer_t *writer, const char *str)
 {
     if (str == nullptr) {
-        return -1;
+        return fail_with(EINVAL);
     }
     return wire_writer_put_bytes(writer, str, strlen(str) + 1);
 }

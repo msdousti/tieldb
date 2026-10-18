@@ -2,6 +2,7 @@
  * Tests for wire protocol output buffer
  */
 
+#include <errno.h>
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -69,7 +70,9 @@ static void test_writer_rejects_size_overflow(void **state)
     uint8_t byte = 1;
 
     assert_int_equal(wire_writer_put_u8(w, byte), 0);
+    errno = 0;
     assert_int_equal(wire_writer_put_bytes(w, &byte, SIZE_MAX), -1);
+    assert_int_equal(errno, EOVERFLOW);
 
     assert_int_equal(wire_writer_size(w), 1);
     wire_writer_destroy(w);
@@ -108,9 +111,15 @@ static void test_writer_rejects_null_input(void **state)
     wire_writer_t *w = wire_writer_create();
     assert_non_null(w);
 
+    errno = 0;
     assert_int_equal(wire_writer_put_bytes(w, nullptr, 1), -1);
+    assert_int_equal(errno, EINVAL);
+    errno = 0;
     assert_int_equal(wire_writer_put_cstring(w, nullptr), -1);
+    assert_int_equal(errno, EINVAL);
+    errno = 0;
     assert_int_equal(wire_writer_put_u8(nullptr, 1), -1);
+    assert_int_equal(errno, EINVAL);
 
     assert_int_equal(wire_writer_size(w), 0);
     wire_writer_destroy(w);
