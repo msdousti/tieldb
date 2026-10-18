@@ -20,6 +20,7 @@ test_wire_buffer = executable('test_wire_buffer',
   'test_wire_buffer.c',
   dependencies: [tieldb_dep, cmocka_dep],
   include_directories: inc,
+  link_args: ['-Wl,--wrap=malloc', '-Wl,--wrap=calloc', '-Wl,--wrap=realloc'],
 )
 
 test('wire_buffer', test_wire_buffer)
