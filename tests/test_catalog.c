@@ -39,18 +39,6 @@ static void test_unknown_table_is_not_found([[maybe_unused]] void **state)
     assert_null(catalog_find("nope"));
 }
 
-static void test_user_table_starts_with_three_rows([[maybe_unused]] void **state)
-{
-    const table_t *user = catalog_find("user");
-
-    assert_int_equal(table_column_count(user), 2);
-    assert_column_is(user, 0, "id", COLUMN_TYPE_INTEGER);
-    assert_column_is(user, 1, "name", COLUMN_TYPE_TEXT);
-    assert_int_equal(table_row_count(user), 3);
-    assert_string_equal(table_cell(user, 0, 1), "Alice");
-    assert_string_equal(table_cell(user, 2, 1), "Carol");
-}
-
 static void test_created_table_can_be_found([[maybe_unused]] void **state)
 {
     table_t *created = create_or_fail("found");
@@ -67,9 +55,6 @@ static void test_creating_an_existing_table_is_an_error([[maybe_unused]] void **
 
     errno = 0;
     assert_null(catalog_create_table("twice", PAIR_COLUMNS, 2));
-    assert_int_equal(errno, EEXIST);
-    errno = 0;
-    assert_null(catalog_create_table("user", PAIR_COLUMNS, 2));
     assert_int_equal(errno, EEXIST);
     assert_ptr_equal(catalog_find("twice"), first);
 }
@@ -117,7 +102,6 @@ static void test_exactly_one_concurrent_create_wins([[maybe_unused]] void **stat
 
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_unknown_table_is_not_found),
-    cmocka_unit_test(test_user_table_starts_with_three_rows),
     cmocka_unit_test(test_created_table_can_be_found),
     cmocka_unit_test(test_creating_an_existing_table_is_an_error),
     cmocka_unit_test(test_many_tables_can_be_created),

@@ -4,9 +4,7 @@
  * Names are lower-case, as the SQL layer produces them. The catalog is shared between connection
  * threads and locks itself. Tables live as long as the process; there is no DROP TABLE yet.
  *
- * It starts with one table, so queries can be answered before CREATE TABLE is wired up:
- *
- *   user (id INTEGER, name TEXT)   three rows
+ * The catalog starts empty.
  *
  * catalog_create_table takes 0 to TABLE_MAX_COLUMNS columns and copies its arguments. Errors
  * return nullptr and set errno: EEXIST when a table of that name exists, ENOMEM when memory runs

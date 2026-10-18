@@ -1,8 +1,9 @@
 /**
  * Tests for statement execution
  *
- * The statements run against the built-in user table, which is shared by every test in this
- * file, so the test that really inserts a row comes last.
+ * The statements run against the user table that create_user_table makes, which is shared by
+ * every test in this file, so the tests that really insert a row come after the ones that count
+ * rows.
  */
 
 #include <errno.h>
@@ -238,7 +239,21 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_integer_check_uses_the_column_shown_at_that_position),
 };
 
+// The tests share one table: user (id INTEGER, name TEXT) with three rows
+static int create_user_table([[maybe_unused]] void **state)
+{
+    const table_column_t columns[] = {{"id", COLUMN_TYPE_INTEGER}, {"name", COLUMN_TYPE_TEXT}};
+    const char *rows[][2] = {{"1", "Alice"}, {"2", "Bob"}, {"3", "Carol"}};
+    table_t *table = catalog_create_table("user", columns, 2);
+    int status = table == nullptr;
+
+    for (size_t i = 0; i < 3 && status == 0; i++) {
+        status = table_insert(table, rows[i], 2);
+    }
+    return status;
+}
+
 int main(void)
 {
-    return cmocka_run_group_tests(tests, nullptr, nullptr);
+    return cmocka_run_group_tests(tests, create_user_table, nullptr);
 }

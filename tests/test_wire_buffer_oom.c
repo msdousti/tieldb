@@ -464,8 +464,8 @@ static void test_query_response_is_rolled_back_when_a_message_fails([[maybe_unus
     wire_writer_destroy(w);
 }
 
-// The built-in user table is created on first use: the table, a slot for it in the catalog, room
-// for its cells, and a copy of each of the 6 cells of its 3 rows
+// Making the user table takes the table, a slot for it in the catalog, room for its cells, and a
+// copy of each of the 6 cells of its 3 rows
 static void expect_user_table_creation(void)
 {
     will_return(oom_calloc, true);
@@ -760,14 +760,23 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_server_serve_fails_when_a_session_cannot_be_allocated),
 };
 
-// The built-in user table is created on its first use, so do that once, with real allocations
-static int create_user_table_once([[maybe_unused]] void **state)
+// The tests need the user table, so make it once, with real allocations
+static int create_user_table([[maybe_unused]] void **state)
 {
+    const table_column_t columns[] = {{"id", COLUMN_TYPE_INTEGER}, {"name", COLUMN_TYPE_TEXT}};
+    const char *rows[][2] = {{"1", "Alice"}, {"2", "Bob"}, {"3", "Carol"}};
+    int status = 0;
+
     expect_user_table_creation();
-    return catalog_find("user") == nullptr;
+    table_t *table = catalog_create_table("user", columns, 2);
+    status = table == nullptr;
+    for (size_t i = 0; i < 3 && status == 0; i++) {
+        status = table_insert(table, rows[i], 2);
+    }
+    return status;
 }
 
 int main(void)
 {
-    return cmocka_run_group_tests(tests, create_user_table_once, nullptr);
+    return cmocka_run_group_tests(tests, create_user_table, nullptr);
 }

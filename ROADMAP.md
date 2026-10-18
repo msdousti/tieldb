@@ -72,17 +72,13 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
   - [ ] Hash map: table name → table definition
     - [x] Lookup by name (a plain array with a linear search for now)
     - [ ] Hash map
-- [ ] In-memory tuple storage
+- [x] In-memory tuple storage
   - [x] Array of tuples per table (growable, one lock per table; rows are text for now)
-  - [ ] Support `INTEGER` and `TEXT` types only
-- [ ] Hardcoded executor
+  - [x] Support `INTEGER` and `TEXT` types only
+- [x] Hardcoded executor
   - [x] `CREATE TABLE` → add to catalog
-  - [ ] `INSERT` → append to tuple array
-    - [x] Into the built-in `user` table (values checked against the column types)
-    - [ ] Into catalog tables
-  - [ ] `SELECT *` → iterate and return all rows
-    - [x] Against a hardcoded `user` table (so results show in psql before INSERT and CREATE TABLE exist)
-    - [ ] Against catalog tables
+  - [x] `INSERT` → append to tuple array (values checked against the column types)
+  - [x] `SELECT *` → iterate and return all rows
 - [x] Network server
   - [x] Listen on port (default 5432, like Postgres)
     - [x] Listener on the loopback interface (`server_create`)
