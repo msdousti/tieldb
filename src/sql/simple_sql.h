@@ -19,6 +19,10 @@ constexpr size_t SQL_IDENTIFIER_CAPACITY = 64;
 /** Matches "SELECT version()". */
 [[nodiscard]] bool sql_is_version_query(const char *sql);
 
+/** Matches "SELECT current_user" and "SELECT current_database()". */
+[[nodiscard]] bool sql_is_current_user_query(const char *sql);
+[[nodiscard]] bool sql_is_current_database_query(const char *sql);
+
 /**
  * Matches "SELECT * FROM <table>" and copies the lower-cased table name into table. Names that
  * do not fit in capacity bytes (with the terminator) are not recognized.

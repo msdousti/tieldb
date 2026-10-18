@@ -43,6 +43,18 @@ static void test_version_query_is_recognized([[maybe_unused]] void **state)
     assert_true(sql_is_version_query("\nselect version()\n"));
 }
 
+static void test_current_user_and_database_queries_are_recognized([[maybe_unused]] void **state)
+{
+    assert_true(sql_is_current_user_query("select current_user"));
+    assert_true(sql_is_current_user_query(" SELECT Current_User ; "));
+    assert_false(sql_is_current_user_query("select current_user()"));
+    assert_false(sql_is_current_user_query("select current_database()"));
+    assert_true(sql_is_current_database_query("select current_database()"));
+    assert_true(sql_is_current_database_query("SELECT CURRENT_DATABASE();"));
+    assert_false(sql_is_current_database_query("select current_database"));
+    assert_false(sql_is_current_database_query("select current_user"));
+}
+
 static void test_other_text_is_not_a_version_query([[maybe_unused]] void **state)
 {
     assert_false(sql_is_version_query(""));
@@ -258,6 +270,7 @@ static void test_create_table_with_too_many_columns_is_rejected([[maybe_unused]]
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_text_without_a_statement_is_empty),
     cmocka_unit_test(test_version_query_is_recognized),
+    cmocka_unit_test(test_current_user_and_database_queries_are_recognized),
     cmocka_unit_test(test_other_text_is_not_a_version_query),
     cmocka_unit_test(test_select_star_gives_the_lower_cased_table_name),
     cmocka_unit_test(test_statements_that_are_not_select_star_are_rejected),

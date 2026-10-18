@@ -10,6 +10,8 @@
 static constexpr char SELECT_KEYWORD[] = "select";
 static constexpr char FROM_KEYWORD[] = "from";
 static constexpr char VERSION_CALL[] = "version()";
+static constexpr char CURRENT_USER[] = "current_user";
+static constexpr char CURRENT_DATABASE_CALL[] = "current_database()";
 static constexpr char STAR = '*';
 static constexpr char UNDERSCORE = '_';
 static constexpr char SEMICOLON = ';';
@@ -92,14 +94,29 @@ bool sql_is_empty(const char *sql)
     return *cursor == '\0';
 }
 
-bool sql_is_version_query(const char *sql)
+static bool is_select_of(const char *sql, const char *expression)
 {
     const char *cursor = skip_spaces(sql);
     if (!consume_ignoring_case(&cursor, SELECT_KEYWORD)) {
         return false;
     }
     cursor = skip_spaces(cursor);
-    return consume_ignoring_case(&cursor, VERSION_CALL) && is_end_of_statement(cursor);
+    return consume_ignoring_case(&cursor, expression) && is_end_of_statement(cursor);
+}
+
+bool sql_is_version_query(const char *sql)
+{
+    return is_select_of(sql, VERSION_CALL);
+}
+
+bool sql_is_current_user_query(const char *sql)
+{
+    return is_select_of(sql, CURRENT_USER);
+}
+
+bool sql_is_current_database_query(const char *sql)
+{
+    return is_select_of(sql, CURRENT_DATABASE_CALL);
 }
 
 bool sql_parse_select_all(const char *sql, char *table, size_t capacity)
