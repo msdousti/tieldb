@@ -15,6 +15,11 @@ net_sources = files(
   'net/server.c',
 )
 
+# SQL module
+sql_sources = files(
+  'sql/simple_sql.c',
+)
+
 # Command-line options
 cli_sources = files(
   'options.c',
@@ -26,6 +31,7 @@ thread_dep = dependency('threads')
 tieldb_lib = static_library('tieldb',
   io_sources,
   net_sources,
+  sql_sources,
   cli_sources,
   include_directories: inc,
   install: false,
