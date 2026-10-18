@@ -11,7 +11,7 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
 ### Tasks
 - [x] Define coding guidelines (C, clean code, style)
 - [x] Define design choices (storage, concurrency, WAL, etc.)
-- [x] Set up development environment (OrbStack Linux VM on macOS)
+- [x] Set up development environment (Linux VM on macOS)
 - [x] Initialize Meson build system
 - [x] Configure sanitizers (build-asan, build-tsan, build-release)
 - [x] Set up cmocka test framework
@@ -30,7 +30,7 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
 ### Completion Criteria
 - ✅ `meson test -C build-asan` passes (1/1 tests, 5 assertions)
 - ✅ `clang-format` and `clang-tidy` run clean
-- ✅ Can build and run tests in Linux VM (OrbStack)
+- ✅ Can build and run tests in a Linux VM
 - ✅ CI pipeline passing on GitHub Actions
 
 **Estimated Time:** 2-3 days  

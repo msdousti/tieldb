@@ -5,7 +5,7 @@ This guide helps you set up the development environment for TielDB.
 ## Platform
 
 **Primary:** Linux (Ubuntu/Debian recommended)  
-**macOS Users:** Use OrbStack to run a Linux VM
+**macOS Users:** Run a Linux VM
 
 ### Why Linux?
 
@@ -19,26 +19,14 @@ macOS lacks these features or has different semantics, which would teach the wro
 
 ---
 
-## OrbStack Setup (for macOS Users)
+## Setup
 
-### 1. Install OrbStack
+### 1. Linux VM (macOS users)
 
-```bash
-# Download from https://orbstack.dev/ or use Homebrew
-brew install orbstack
-```
+Create an Ubuntu VM with the tool of your choice and work inside it. Keep the repository on the VM's
+own disk (ext4/xfs), not on a shared folder, so that `O_DIRECT` and `fsync` behave correctly.
 
-### 2. Create Linux VM
-
-```bash
-# Create Ubuntu VM
-orb create ubuntu tieldb-dev
-
-# Enter the VM
-orb -m tieldb-dev
-```
-
-### 3. Install Dependencies (Inside VM)
+### 2. Install Dependencies (Inside VM)
 
 ```bash
 # Update package list
@@ -115,7 +103,7 @@ meson setup build-cov --native-file clang.ini -Db_coverage=true
 
 **Option 1: Edit on macOS, build in VM**
 - Use your favorite editor on macOS (VS Code, Vim, etc.)
-- Code is synced to VM via OrbStack shared folder (for editing only)
+- Code is synced to the VM through a shared folder (for editing only)
 - Clone project separately in VM for building
 
 **Option 2: Edit in VM via SSH**
@@ -255,4 +243,3 @@ meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined &&
 - [Meson Documentation](https://mesonbuild.com/Tutorial.html)
 - [cmocka Documentation](https://cmocka.org/)
 - [AddressSanitizer](https://github.com/google/sanitizers/wiki/AddressSanitizer)
-- [OrbStack Docs](https://docs.orbstack.dev/)

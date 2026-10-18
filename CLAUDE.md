@@ -34,15 +34,14 @@ Before writing any code, familiarize yourself with:
 
 ### 2. Development Environment
 
-**Platform:** Linux (Ubuntu/Debian) via OrbStack VM on macOS
+**Platform:** Linux (Ubuntu/Debian), in a VM on macOS
 - macOS lacks O_DIRECT, io_uring, proper sanitizer support
 - Edit source on Mac, build/run in Linux VM
 - Data directory on VM disk (ext4/xfs), not shared folders
 
 **Setup:**
 ```bash
-# On macOS: Install OrbStack
-# Create Linux VM, then inside the VM:
+# On macOS: create a Linux VM, then inside the VM:
 
 # Install dependencies
 sudo apt update
@@ -446,7 +445,7 @@ Work proceeds as a sequence of small, reviewable pull requests, each leaving `ma
 
 Tasks:
 - [x] Define guidelines and design choices
-- [ ] Set up OrbStack Linux VM
+- [ ] Set up a Linux VM
 - [ ] Create Meson build configuration
 - [ ] Scaffold directory structure
 - [ ] Write injectable I/O interface

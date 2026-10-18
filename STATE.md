@@ -1,595 +1,190 @@
 # TielDB Development State
 
-**Last Updated:** 2026-10-18  
-**Current Phase:** Phase 0 ✅ Complete → Ready for Phase 1
+**Last updated:** 2026-10-19
+**Phase 1 is complete.** Next: plan Phase 2 (persistence). Start with the type registry and typed
+values (see "What comes next").
+
+This file is the hand-over for a new session. Read it first, then `CLAUDE.md` (the rules) and
+`ROADMAP.md` (the plan). `ROADMAP.md` is the source of truth for what is done.
 
 ---
 
-## Quick Start on OrbStack
+## What TielDB is
+
+An educational DBMS in C23 that speaks the Postgres wire protocol, so `psql` connects to it. The
+goal is to learn database internals by building it in small, tested steps. No TLS, no
+authentication, no security features: the clients are `psql` and well-behaved drivers, and the code
+does not defend against malformed or hostile client input.
+
+## What works today
+
+Start the server and connect with `psql` (one command: `scripts/dev.sh`, see below):
+
+```
+create table pet (id integer, name text);      CREATE TABLE
+insert into pet values (1, 'Rex');             INSERT 0 1
+select * from pet;                             the rows
+select version();   select current_user;   select current_database();
+;                                              (an empty statement is fine)
+```
+
+- `CREATE TABLE t (col type, ...)` with types `INTEGER`/`INT`/`INT4` and `TEXT`; zero columns is
+  allowed (`create table t();`). Errors use Postgres SQLSTATEs: 42P07 table exists, 42701 repeated
+  column, 42704 unknown type.
+- `INSERT INTO t VALUES (...)`: integers and `'strings'` (with `''` as the escape); values are checked
+  against the column types (22P02); wrong count gives 42601.
+- `SELECT * FROM t`. Unknown table gives 42P01. Other statements get 0A000 ("unsupported").
+- Everything is in memory and lost on restart (Phase 2 adds persistence).
+- One thread per connection. Tables and the catalog are shared and locked.
+- Columns have a display order separate from the storage order (`table_set_display_order`); there
+  is no SQL to change it yet (roadmap: `ALTER TABLE ... MODIFY ... AFTER`).
+
+Known deviations from Postgres: integers are stored as written (`007` stays `007`; the type
+registry in Phase 2 fixes it); the server reports `server_version` `18.0 (TielDB 0.1.0)` so that
+psql 18 does not print a version-mismatch warning; the table named `user` works only because
+TielDB's matcher is simple (it is a reserved word in Postgres); SQL is recognized by stopgap
+matchers (`src/sql/simple_sql.c`), not a parser; no comments, no multiple statements per query.
+
+## How to work (the process the user wants)
+
+The user (Sadeq Dousti) works in this Linux VM directly: never `ssh`. They merge PRs themselves
+and say "merged and pulled"; then continue with the next PR. They run `/code-review` on PRs
+themselves and expect a short triage (real / skipped, with reasons) before any fix is pushed.
+
+- **Small PRs.** Feature PRs aim for 100 to 200 changed lines; **500 is a hard limit**: ask the
+  user before exceeding it, or split. Measure with `git diff --shortstat main` before opening.
+  Docs, CI and refactor PRs are exempt from the target but still kept small.
+- **One concern per PR.** If a change grows, split it (parser, then catalog, then executor, then
+  cleanup is how CREATE TABLE went).
+- **Every PR updates `ROADMAP.md`**: tick a task only when all of it is done; add sub-items when a
+  PR does part of a step.
+- **PR description** follows `.github/pull_request_template.md` (Summary, Size, Checklist) and ends
+  with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`. `gh pr edit` fails (a
+  Projects-classic deprecation), so edit a body with
+  `gh api -X PATCH repos/msdousti/tieldb/pulls/N -F body=@file`. Commits end with a
+  `Co-Authored-By: Claude ...` line.
+- **CI is required and strict.** Seven checks must pass, for admins too; never merge or bypass a
+  red PR. Docs-only PRs (`*.md`, `docs/`, `.claude/`, and the local scripts `dev.sh`,
+  `valgrind.sh`, `install-hooks.sh`, `pre-commit`) skip the build jobs but still report.
+- **Coverage is 100% of lines and branches of `src/`** (`gcovr.cfg`). Do not contort code to
+  reach it. If a path is impractical to cover, **stop and ask**; lowering the threshold or adding
+  an exclusion needs the user's explicit approval each time. Mock allocation failures with the test
+  library (the `-D` renames in `tests/meson.build`), never by touching production code.
+- **Opinion questions** ("WDYT?", "should we...") get a direct answer with a recommendation, not
+  code. "Just answer" means no changes. Do not start the next PR before being told to when the
+  user said so.
+- Stacked PRs: when a branch builds on an unmerged PR, push the branch and open its PR after the
+  base merges, using `git rebase --onto origin/main <old-base> <branch>` (a plain rebase replays
+  the squashed commits and conflicts).
+
+## Toolchain (Clang 22 only)
+
+- **Clang 22 is the only compiler**: `clang.ini` is a Meson native file, and `meson.build` rejects
+  anything else. Always set up build directories with `--native-file clang.ini`. GCC is not
+  installed on the machine. CI uses the composite action `.github/actions/setup-clang`
+  (apt.llvm.org clang-22, meson, cmocka, `postgresql-client`).
+- Tools: `clang-format-22`, `clang-tidy-22`, `llvm-cov-22` (through gcovr), Valgrind, `psql` 18.
+  CI has Meson 1.3.2 (older than local 1.10): keep `meson.build` compatible (pass `psql.full_path()`,
+  not the program object, to `test()`).
+- Environment variables fill in what a command line leaves out: if `PGDATABASE`, `PGUSER` etc. are
+  set in the shell, a manual `psql` uses them.
+
+## Daily commands
 
 ```bash
-# SSH into OrbStack
-ssh sadeq@192.168.139.68
-
-# Navigate to project
-cd ~/tieldb
-
-# Verify everything works
-git status
-meson test -C build-asan
+scripts/dev.sh                     # build build-asan, start tieldb on 5432, open psql; stops on exit
+scripts/dev.sh -c "select 1"       # psql arguments pass through; PORT=5433 and BUILD_DIR override
+meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined   # once
+ninja -C build-asan && meson test -C build-asan                   # build and test (ASan + UBSan)
+meson setup build-tsan --native-file clang.ini -Db_sanitize=thread  # TSan; same test command
+scripts/coverage.sh                # build-cov; fails below 100% lines/branches
+scripts/valgrind.sh                # build-valgrind; occasional use
+clang-format-22 -i src/*/*.[ch] tests/*.c
+clang-tidy-22 -p build-asan $(find src tests -name '*.c')
 ```
 
----
+The pre-commit hook (`scripts/install-hooks.sh`, copies `scripts/pre-commit`) runs the format check
+and clang-tidy; tidy findings fail the commit. `build-release` (`--buildtype=release`) exists for
+the CI release job. All `build-*` directories are git-ignored.
 
-## Project Status
+The git identity is already set: `3616518+msdousti@users.noreply.github.com` (never the gmail
+address; GitHub rejects it).
 
-### Phase 0: Complete ✅
-
-All setup tasks finished:
-- ✅ Meson build system configured
-- ✅ Sanitizers (ASan, UBSan, TSan) working
-- ✅ Injectable I/O interface with fault injection
-- ✅ cmocka test framework with 5 passing tests
-- ✅ clang-format-22 and clang-tidy configured
-- ✅ CI/CD pipeline on GitHub Actions (all passing)
-- ✅ Pre-commit hooks installed
-- ✅ Development guidelines in `.claude/` directory
-
-### Current Commit
+## Code layout
 
 ```
-2427e27 - docs: Mark Phase 0 as complete
+src/
+  main.c             the tieldb binary: --port N (default 5432), --once, prints "listening on port N"
+  options.{h,c}      command-line parsing
+  io/                injectable I/O (io->read/write/...) for fault injection
+  ds/hash_map.{h,c}  reusable chained hash map; entries embed hash_node_t; no locking inside
+  net/
+    wire_buffer      big-endian writer (INT32_MAX cap, patch/truncate) and bounds-checked reader
+    protocol         backend message encoders (R, S, Z, C, E, T, D, I)
+    startup          SSLRequest/GSS decline, CancelRequest, StartupMessage; parses user/database
+    session.h        session_info_t {user, database}
+    query_handler    Query ('Q'): single-value queries, SELECT *, INSERT, CREATE TABLE, errors
+    connection       per-connection loop (startup, then messages until Terminate)
+    server           loopback TCP listener, a detached thread per connection
+  sql/simple_sql     stopgap recognizers (version/current_user/current_database, select *,
+                     insert, create table, empty); the real parser is a Phase 3 task
+  executor/          executor_insert, executor_create_table, executor_select_all (+ release)
+  storage/
+    table              in-memory table: copies name/columns, text cells, row count, per-table
+                       mutex, display order, embedded hash node
+    catalog            all tables by name in a hash map behind a read-write lock
+tests/               one test_*.c per module (cmocka), test_wire_buffer_oom.c (allocation
+                     failures via renamed malloc/calloc/realloc), test_tieldb.c (spawns the
+                     binary), psql_session.sh + .expected (real psql, suite "client")
+.claude/             design docs for the rules (style, clean code, C guidelines, design choices)
 ```
 
-### Test Status
-
-```
-1/1 test passing (test_io)
-5/5 assertions passing:
-- Real I/O operations work
-- Fault injection: torn write
-- Fault injection: fsync fail
-- Fault injection: Nth call targeting
-- Fault injection: reset
-```
-
----
-
-## Repository Structure
-
-```
-tieldb/
-├── .claude/                    # Development guidelines
-│   ├── c-guidelines.md        # Modern C23, Meson, sanitizers
-│   ├── clean-code.md          # Functions, naming, avoiding nesting
-│   ├── design-choices.md      # 20 architectural decisions
-│   ├── style-guide.md         # Naming conventions, formatting
-│   └── summary.md             # Project goals and tech decisions
-│
-├── .github/workflows/
-│   └── ci.yml                 # CI pipeline (format, lint, build+test)
-│
-├── scripts/
-│   ├── pre-commit             # Git pre-commit hook
-│   └── install-hooks.sh       # Hook installation script
-│
-├── src/
-│   ├── common/
-│   │   └── types.h            # Common types (page_id_t, lsn_t, etc.)
-│   └── io/
-│       ├── io.h               # Injectable I/O interface
-│       └── io.c               # Real and fault-injection implementations
-│
-├── tests/
-│   └── test_io.c              # I/O interface tests (5 tests)
-│
-├── include/                   # Public headers (empty for now)
-│
-├── meson.build                # Build configuration
-├── .clang-format              # Code formatting rules (sorting disabled)
-├── .clang-tidy                # Static analysis configuration
-├── .gitignore                 # Git ignore patterns
-├── CLAUDE.md                  # Main development guide
-├── ROADMAP.md                 # Phased development plan
-├── README.md                  # Project overview
-└── STATE.md                   # This file - current state snapshot
-```
-
----
-
-## Build Directories
-
-```bash
-build-asan/     # Default dev build (ASan + UBSan)
-build-tsan/     # Thread sanitizer (not created yet, for Phase 6+)
-build-release/  # Optimized build (not created yet, for benchmarks)
-```
-
-**Note:** Only `build-asan` exists currently. Others will be created as needed.
-
----
-
-## Git Configuration
-
-### Email Setup (IMPORTANT!)
-
-Git is configured to use GitHub noreply email to protect privacy:
-
-```bash
-# Already configured on OrbStack:
-git config user.name "Sadeq Dousti"
-git config user.email "3616518+msdousti@users.noreply.github.com"
-```
-
-**Never use:** `msdousti@gmail.com` in commits (GitHub will reject pushes)
-
-### Pre-commit Hooks
-
-Already installed on OrbStack. To reinstall if needed:
-
-```bash
-./scripts/install-hooks.sh
-```
-
-Hook checks:
-- ✅ clang-format-22 formatting
-- ✅ clang-tidy static analysis (if build-asan exists)
-
----
-
-## Development Workflow
-
-### 1. Daily Workflow
-
-```bash
-# Pull latest
-git pull
-
-# Make changes to code
-vim src/module/file.c
-
-# Build (ASan + UBSan enabled)
-ninja -C build-asan
-
-# Run tests
-meson test -C build-asan
-
-# Format code (pre-commit does this, but can run manually)
-find src tests -name '*.c' -o -name '*.h' | xargs clang-format-22 -i
-
-# Commit (pre-commit hook runs automatically)
-git add .
-git commit -m "feat: description
-
-Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
-
-# Push
-git push
-```
-
-### 2. Adding New Code
-
-**Order of operations:**
-
-1. **Write test first** (TDD)
-   ```bash
-   vim tests/test_new_feature.c
-   # Add to meson.build tests section
-   ```
-
-2. **Write header** (public API)
-   ```bash
-   vim src/module/feature.h
-   ```
-
-3. **Write implementation**
-   ```bash
-   vim src/module/feature.c
-   # Add to meson.build sources section
-   ```
-
-4. **Build and test**
-   ```bash
-   ninja -C build-asan
-   meson test -C build-asan -v
-   ```
-
-5. **Format and commit**
-   ```bash
-   git add src/module/ tests/test_new_feature.c meson.build
-   git commit -m "Add feature: description"
-   ```
-
-### 3. Build System Commands
-
-```bash
-# Initial setup (already done)
-meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined -Dc_std=c2x
-
-# Clean rebuild
-rm -rf build-asan
-meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined -Dc_std=c2x
-
-# Build
-ninja -C build-asan
-
-# Test (all)
-meson test -C build-asan
-
-# Test (verbose)
-meson test -C build-asan -v
-
-# Test (specific)
-meson test -C build-asan tieldb:io
-
-# Check test log
-cat build-asan/meson-logs/testlog.txt
-```
-
-### 4. Code Quality
-
-```bash
-# Format all code
-find src tests -type f \( -name '*.c' -o -name '*.h' \) \
-  -exec clang-format-22 -i {} \;
-
-# Check formatting (without changes)
-find src tests -type f \( -name '*.c' -o -name '*.h' \) \
-  -exec clang-format-22 --dry-run --Werror {} \;
-
-# Run static analysis
-find src -name '*.c' -exec clang-tidy-22 -p build-asan {} \;
-```
-
----
-
-## Key Files and Configurations
-
-### meson.build
-
-```meson
-project('tieldb', 'c', version: '0.1.0', default_options: [
-  'c_std=c2x',              # C23 standard
-  'warning_level=3',        # -Wall -Wextra -Wpedantic
-  'werror=true',            # All warnings are errors
-])
-
-# Extra warnings for safety
-add_project_arguments([
-  '-Wshadow',
-  '-Wconversion',
-  '-Wstrict-prototypes',
-  '-Wformat=2',
-], language: 'c')
-
-# Dependencies
-cmocka_dep = dependency('cmocka')
-
-# Includes
-inc = include_directories('include', 'src')
-```
-
-### .clang-format
-
-Key settings:
-- `IndentWidth: 4` (spaces, no tabs)
-- `ColumnLimit: 100`
-- `BreakBeforeBraces: Custom` (functions on new line, control on same line)
-- `PointerAlignment: Right` (`int *ptr`)
-- **`SortIncludes: false`** (manual control due to dependencies)
-
-### .clang-tidy
-
-Enabled checks:
-- `bugprone-*`, `cert-*`, `clang-analyzer-*`
-- `concurrency-*`, `misc-*`, `performance-*`
-- `portability-*`, `readability-*`
-
-Disabled pedantic checks for systems programming.
-
-### CI Pipeline (.github/workflows/ci.yml)
-
-5 jobs on every push/PR:
-1. **format-check** - clang-format-22
-2. **lint** - clang-tidy-22
-3. **build-asan** - ASan + UBSan
-4. **build-tsan** - TSan
-5. **build-release** - Release build
-
-All use `ubuntu-24.04` with LLVM 22.
-
----
-
-## Dependencies Installed
-
-### System Packages (Ubuntu on OrbStack)
-
-```bash
-# Already installed:
-sudo apt install -y \
-  build-essential \
-  meson \
-  ninja-build \
-  clang-22 \
-  clang-format-22 \
-  clang-tidy-22 \
-  libcmocka-dev \
-  pkg-config \
-  git
-```
-
-### LLVM 22 Source
-
-```bash
-# LLVM apt repository already added:
-wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | \
-  sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-echo "deb http://apt.llvm.org/resolute/ llvm-toolchain-resolute-22 main" | \
-  sudo tee /etc/apt/sources.list.d/llvm.list
-```
-
----
-
-## Coding Standards (Quick Reference)
-
-### Naming Conventions
-
-```c
-// Functions: module_verb_object
-int buffer_pool_init(buffer_pool_t *pool, size_t n_buffers);
-page_t *buffer_pool_get_page(buffer_pool_t *pool, page_id_t page_id);
-
-// Variables: snake_case
-int pin_count;
-page_id_t victim_page_id;
-bool is_dirty;
-
-// Types: snake_case_t suffix
-typedef struct buffer_pool buffer_pool_t;
-typedef uint64_t page_id_t;
-
-// Constants/Macros: UPPER_SNAKE_CASE
-#define PAGE_SIZE 8192
-#define MAX_BUFFER_POOL_SIZE (1024 * 1024)
-```
-
-### C23 Features to Use
-
-```c
-// nullptr instead of NULL
-if (page == nullptr) { return -1; }
-
-// bool, true, false are keywords (no #include <stdbool.h>)
-bool is_dirty = true;
-
-// [[nodiscard]] for must-check returns
-[[nodiscard]] int buffer_pool_pin_page(buffer_pool_t *pool, page_id_t id);
-
-// [[maybe_unused]] for callback parameters
-static int callback([[maybe_unused]] void *arg) { }
-
-// constexpr for compile-time constants
-constexpr size_t PAGE_SIZE = 8192;
-
-// static_assert (no message needed)
-static_assert(sizeof(page_header_t) == 64);
-
-// Empty initializer {}
-page_t page = {};
-```
-
-### Code Structure
-
-```c
-// Keep functions small (<20 lines ideal)
-// Avoid nesting (max depth 2)
-// Use early returns
-
-// Good:
-int foo(page_t *page)
-{
-    if (page == nullptr) {
-        return -1;
-    }
-    if (page->pin_count == 0) {
-        return -1;
-    }
-    
-    return do_work(page);  // main logic at left margin
-}
-
-// Always use braces, even for single statements
-if (condition) {
-    do_something();
-}
-```
-
----
-
-## Next Steps: Phase 1
-
-**Goal:** Connect with `psql`, execute hardcoded queries in memory (no persistence yet).
-
-### Phase 1 Components
-
-1. **Postgres wire protocol** (`src/net/protocol.{h,c}`)
-   - Startup (no authentication or TLS)
-   - Simple query protocol
-   - Response messages
-
-2. **SQL parser** (`src/sql/parser.{h,c}`)
-   - CREATE TABLE, INSERT, SELECT *
-   - Consider using `libpg_query` (Postgres parser)
-
-3. **In-memory catalog** (`src/catalog/catalog.{h,c}`)
-   - Table metadata storage
-   - Hash map: table name → definition
-
-4. **In-memory tuple storage** (`src/storage/memory.{h,c}`)
-   - Array of tuples per table
-   - INTEGER and TEXT types only
-
-5. **Hardcoded executor** (`src/executor/executor.{h,c}`)
-   - CREATE TABLE → add to catalog
-   - INSERT → append to array
-   - SELECT * → iterate and return
-
-6. **Network server** (`src/net/server.{h,c}`)
-   - Listen on port 5433
-   - Accept connections
-   - Per-connection thread
-
-### Phase 1 Success Criteria
-
-```bash
-# Start server
-./build-asan/tieldb
-
-# Connect with psql
-psql -h localhost -p 5433 -U test testdb
-
-# Run queries
-CREATE TABLE users (id INTEGER, name TEXT);
-INSERT INTO users VALUES (1, 'Alice');
-SELECT * FROM users;
-```
-
-**Estimated time:** 1-2 weeks
-
-### Recommended Reading Before Starting
-
-1. **Postgres Wire Protocol**
-   - https://www.postgresql.org/docs/current/protocol.html
-   - Focus on: startup, simple query, row description, data row
-
-2. **SQL Parsing**
-   - Consider `libpg_query`: https://github.com/pganalyze/libpg_query
-   - Or hand-write minimal parser for 3 statements
-
-3. **CMU 15-445 Lecture 1-3**
-   - Database storage, buffer pool, disk manager
-   - https://15445.courses.cs.cmu.edu/
-
----
+Design points worth knowing:
+- **Executor vs handler.** The executor knows what a statement does and returns either success, a
+  client-visible SQL error (`executor_error_t`: SQLSTATE + message, return 0), or a server failure
+  (return -1 with `errno`, e.g. ENOMEM, which drops the connection). The query handler only encodes
+  results as protocol messages.
+- **Locking.** `executor_select_all` returns the table locked; the caller releases it after
+  building the response. INSERT holds the table lock while it checks and inserts, because it reads
+  the display order. `table_insert` locks itself; `table_insert_locked` is for lock holders. Readers
+  currently block writers on a table (Postgres does not); the real fix is MVCC in Phase 6.
+- **Atomic responses.** Every encoder and handler appends in full or not at all (rollback to the
+  recorded writer size on failure).
+
+## Coding rules that CI enforces (details in CLAUDE.md)
+
+C23 (`nullptr`, `constexpr`, `[[nodiscard]]`, `static_assert`, `bool`). Functions at most 20 lines,
+nesting depth 2 (cmocka `assert_*` macros count as a nesting level inside loops and `if` blocks:
+use `if (...) { fail(); }` or small helpers), at most 4 parameters, no magic numbers in `src/`
+(name them with `constexpr`), opaque types for stateful modules, errno on every failure documented
+in the header and tested, `-Werror` with `-Wconversion`, strict `-std=c2x` (some POSIX features
+need `#define _POSIX_C_SOURCE 200809L`, as in `catalog.c`). Trust the client: no validation or tests
+whose only purpose is to survive malformed or hostile client input. Branch coverage with Clang
+counts conditions: a loop condition with `&&` needs a test for each operand being false.
+
+## What comes next
+
+1. **Plan Phase 2 with the user before writing code.** Proposed first step: the **type registry**
+   (like `pg_type`): each type has a name, OID, text in/out functions, storage size and a
+   comparison function; `INTEGER` and `TEXT` become registry entries; values are stored in their
+   own format, not as text (fixes `007`). It replaces `column_type_t`, the executor's type-name
+   table and the handler's type-to-OID mapping. Then the tuple format, slotted pages, buffer pool,
+   heap files, persistent catalog (including each column's display position).
+2. Phase 3 (already in the roadmap): the real SQL parser and syntax tree first, then expressions,
+   `WHERE`, projection, `DELETE`/`UPDATE`/`TRUNCATE`/`INSERT ... SELECT`, `generate_series`,
+   `ALTER TABLE ... MODIFY/ADD COLUMN ... AFTER|FIRST`, ORDER BY, aggregates, joins.
+3. Later: user-defined types on top of the registry (`CREATE TYPE ... AS ENUM` first), B+trees, WAL,
+   MVCC.
 
 ## Troubleshooting
 
-### Build Issues
-
-```bash
-# Clean rebuild
-rm -rf build-asan
-meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined -Dc_std=c2x
-ninja -C build-asan
-
-# Check Meson version (should be recent)
-meson --version
-
-# Check LLVM version
-clang-22 --version
-clang-format-22 --version
-clang-tidy-22 --version
-```
-
-### Test Failures
-
-```bash
-# Run tests verbosely
-meson test -C build-asan -v
-
-# Check test log
-cat build-asan/meson-logs/testlog.txt
-
-# Run specific test under gdb
-gdb --args build-asan/tests/test_io
-```
-
-### Git Issues
-
-```bash
-# Check email configuration
-git config user.email
-# Should be: 3616518+msdousti@users.noreply.github.com
-
-# If wrong, fix it:
-git config user.email "3616518+msdousti@users.noreply.github.com"
-
-# Amend last commit if email was wrong
-git commit --amend --reset-author --no-edit
-```
-
-### CI Failures
-
-Check GitHub Actions: https://github.com/msdousti/tieldb/actions
-
-Common issues:
-- Formatting: run `clang-format-22 -i` on all files
-- Lint warnings: fix or add to .clang-tidy disabled checks
-- Test failures: fix locally first, then push
-
----
-
-## Important Notes
-
-### Memory Management
-
-- Every allocation needs an owner with matching free
-- Use arena allocators for per-query/per-transaction cleanup (later phases)
-- Check all malloc/calloc/realloc return values
-- Set pointers to nullptr after free
-
-### Error Handling
-
-- Return 0 for success, -1 or errno for failure
-- Check every return value that can fail
-- Fail fast - library code never calls `exit()`
-
-### Testing Philosophy
-
-1. **Reference-model tests** - Most valuable
-2. **Crash tests** - For durability (Phase 5+)
-3. **Fuzz tests** - For parsers/deserializers
-4. **Sanitizers** - Run by default (ASan + UBSan)
-
-### Include Order
-
-**Important:** cmocka.h must come AFTER standard headers!
-
-```c
-// Standard C headers first
-#include <stddef.h>
-#include <setjmp.h>
-// ... other standard headers
-
-// Testing framework
-#include <cmocka.h>
-
-// Project headers
-#include "io/io.h"
-```
-
-Reason: cmocka needs `size_t` and `jmp_buf` defined.
-
----
-
-## Summary
-
-**Phase 0 is complete!** All infrastructure is in place:
-- ✅ Build system working
-- ✅ Tests passing
-- ✅ CI/CD pipeline green
-- ✅ Code quality tooling configured
-- ✅ Development environment ready
-
-**You can now:**
-1. SSH into OrbStack: `ssh sadeq@192.168.139.68`
-2. Navigate to project: `cd ~/tieldb`
-3. Start Phase 1: Begin implementing Postgres wire protocol
-
-**All state is preserved in:**
-- Git repository (commits + history)
-- This STATE.md file
-- ROADMAP.md (phase checklist)
-- .claude/ directory (guidelines)
-
-**Happy coding!** 🚀
+- A build directory made with GCC (or without the native file) fails at configure with a message
+  pointing at `clang.ini`: delete it and set it up again.
+- `coverage.sh` fails with stale `.gcno` errors after switching branches: `rm -rf build-cov`.
+- gcov `NegativeHits` errors come from threaded tests; the coverage build uses
+  `-fprofile-update=atomic` (already in `scripts/coverage.sh`).
+- Valgrind reports "possibly lost" blocks from glibc's cache of exited detached threads: not a leak
+  (`scripts/valgrind.sh` only fails on definite and indirect leaks).
+- RLIMIT_NPROC test (`test_server`) is skipped when run as root.
+- psql prints the version warning only on a terminal; the client test uses `script` for that and
+  only when psql is version 18.
