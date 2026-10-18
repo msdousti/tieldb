@@ -69,6 +69,15 @@ test_connection = executable('test_connection',
 
 test('connection', test_connection)
 
+# Test: TCP listener
+test_server = executable('test_server',
+  'test_server.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('server', test_server)
+
 # Test: wire protocol output buffer, out-of-memory paths. wire_buffer.c is compiled a second
 # time with its allocation calls renamed to the mocks in the test, so only that file is affected.
 wire_buffer_oom_lib = static_library('wire_buffer_oom',
