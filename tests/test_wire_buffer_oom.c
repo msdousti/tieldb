@@ -18,6 +18,7 @@
 #include <cmocka.h>
 
 #include "net/protocol.h"
+#include "net/startup.h"
 #include "net/wire_buffer.h"
 
 // NOLINTBEGIN(misc-use-internal-linkage): called from wire_buffer.c, a separate translation unit
@@ -74,6 +75,8 @@ static constexpr size_t MESSAGE_HEADER_SIZE = sizeof(char) + sizeof(int32_t);
 static constexpr size_t FIELD_COUNT_SIZE = sizeof(int16_t);
 static constexpr size_t COLUMN_FIXED_SIZE = 18;
 static constexpr size_t TERMINATOR_SIZE = 1;
+static constexpr size_t AUTHENTICATION_OK_SIZE = sizeof(char) + sizeof(int32_t) + sizeof(int32_t);
+static constexpr size_t READY_FOR_QUERY_SIZE = MESSAGE_HEADER_SIZE + sizeof(char);
 
 static size_t cstring_size(const char *str)
 {
@@ -290,6 +293,65 @@ static void test_data_row_rolls_back_finished_value_when_next_fails([[maybe_unus
         MESSAGE_HEADER_SIZE + FIELD_COUNT_SIZE + sizeof(int32_t) + strlen("ab") + sizeof(int32_t)));
 }
 
+static void assert_startup_fails_leaving(size_t filled)
+{
+    const uint8_t packet[] = {0, 3, 0, 0};
+    startup_result_t result = STARTUP_CONTINUE;
+    wire_writer_t *w = create_writer_filled_to(filled);
+
+    will_return(oom_calloc, true);
+    will_return(oom_realloc, false);
+    errno = 0;
+    assert_int_equal(startup_handle_packet(packet, sizeof(packet), w, &result), -1);
+
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(wire_writer_size(w), filled);
+    wire_writer_destroy(w);
+}
+
+static void test_startup_leaves_writer_unchanged_when_reader_fails([[maybe_unused]] void **state)
+{
+    const uint8_t packet[] = {0, 3, 0, 0};
+    startup_result_t result = STARTUP_CONTINUE;
+    wire_writer_t *w = create_writer_with_real_allocations();
+
+    will_return(oom_calloc, false);
+    errno = 0;
+    assert_int_equal(startup_handle_packet(packet, sizeof(packet), w, &result), -1);
+
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(wire_writer_size(w), 0);
+    wire_writer_destroy(w);
+}
+
+static void test_startup_rolls_back_when_authentication_ok_fails([[maybe_unused]] void **state)
+{
+    assert_startup_fails_leaving(fill_to_overflow_at(AUTHENTICATION_OK_SIZE));
+}
+
+static void test_startup_rolls_back_when_ready_for_query_fails([[maybe_unused]] void **state)
+{
+    assert_startup_fails_leaving(
+        fill_to_overflow_at(AUTHENTICATION_OK_SIZE + READY_FOR_QUERY_SIZE));
+}
+
+static void test_startup_leaves_result_unset_when_decline_write_fails([[maybe_unused]] void **state)
+{
+    const uint8_t packet[] = {0x04, 0xD2, 0x16, 0x2F};
+    startup_result_t result = STARTUP_DONE;
+    wire_writer_t *w = create_writer_filled_to(WRITER_CAPACITY);
+
+    will_return(oom_calloc, true);
+    will_return(oom_realloc, false);
+    errno = 0;
+    assert_int_equal(startup_handle_packet(packet, sizeof(packet), w, &result), -1);
+
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(result, STARTUP_DONE);
+    assert_int_equal(wire_writer_size(w), WRITER_CAPACITY);
+    wire_writer_destroy(w);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_create_fails_when_struct_allocation_fails),
     cmocka_unit_test(test_create_fails_when_buffer_allocation_fails),
@@ -310,6 +372,10 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_data_row_rolls_back_when_value_length_fails),
     cmocka_unit_test(test_data_row_rolls_back_when_value_bytes_fail),
     cmocka_unit_test(test_data_row_rolls_back_finished_value_when_next_fails),
+    cmocka_unit_test(test_startup_leaves_writer_unchanged_when_reader_fails),
+    cmocka_unit_test(test_startup_rolls_back_when_authentication_ok_fails),
+    cmocka_unit_test(test_startup_rolls_back_when_ready_for_query_fails),
+    cmocka_unit_test(test_startup_leaves_result_unset_when_decline_write_fails),
 };
 
 int main(void)

@@ -9,6 +9,7 @@ io_sources = files(
 net_sources = files(
   'net/wire_buffer.c',
   'net/protocol.c',
+  'net/startup.c',
 )
 
 # Build static library

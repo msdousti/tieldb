@@ -49,8 +49,9 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
   - [x] Writer length patching and size cap (support for variable-length messages)
   - [ ] Startup message (accept every connection, database selection; no authentication)
     - [x] AuthenticationOk response
-    - [ ] Startup packet decoding
-    - [ ] Decline `SSLRequest` with `N` (no TLS)
+    - [x] Startup packet decoding (version check; parameters ignored)
+    - [x] Decline `SSLRequest` with `N` (no TLS)
+    - [ ] Parse startup parameters (user, database)
   - [ ] Simple query protocol (text queries)
   - [x] Response messages: RowDescription, DataRow, CommandComplete, ReadyForQuery
     - [x] ReadyForQuery

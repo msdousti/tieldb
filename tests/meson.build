@@ -42,6 +42,15 @@ test_protocol = executable('test_protocol',
 
 test('protocol', test_protocol)
 
+# Test: startup packet handling
+test_startup = executable('test_startup',
+  'test_startup.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('startup', test_startup)
+
 # Test: wire protocol output buffer, out-of-memory paths. wire_buffer.c is compiled a second
 # time with its allocation calls renamed to the mocks in the test, so only that file is affected.
 wire_buffer_oom_lib = static_library('wire_buffer_oom',
