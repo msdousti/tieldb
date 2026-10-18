@@ -110,6 +110,17 @@ static void test_reset_faults([[maybe_unused]] void **state)
     close_scratch_file(fd, path);
 }
 
+static void test_fault_with_nth_zero_is_disabled([[maybe_unused]] void **state)
+{
+    io_init(false);
+    const char *path = "/tmp/tieldb_test_nth_zero.dat";
+    int fd = open_scratch_file(path);
+
+    io_inject_fault(IO_FAULT_TORN_WRITE, 0);
+    assert_int_equal(io->write(fd, "abcd", 4), 4);
+    close_scratch_file(fd, path);
+}
+
 static void test_real_positioned_and_plain_io([[maybe_unused]] void **state)
 {
     const char *path = "/tmp/tieldb_test_positioned.dat";
@@ -208,6 +219,7 @@ int main(void)
         cmocka_unit_test_setup_teardown(test_fault_injection_fsync_fail, setup, teardown),
         cmocka_unit_test_setup_teardown(test_fault_on_nth_call, setup, teardown),
         cmocka_unit_test_setup_teardown(test_reset_faults, setup, teardown),
+        cmocka_unit_test_setup_teardown(test_fault_with_nth_zero_is_disabled, setup, teardown),
         cmocka_unit_test_setup_teardown(test_real_positioned_and_plain_io, setup, teardown),
         cmocka_unit_test_setup_teardown(test_fault_read_error_is_one_shot, setup, teardown),
         cmocka_unit_test_setup_teardown(test_fault_pread_error_is_one_shot, setup, teardown),

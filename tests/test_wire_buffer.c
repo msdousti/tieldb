@@ -129,6 +129,11 @@ static void test_writer_rejects_null_input([[maybe_unused]] void **state)
     wire_writer_destroy(w);
 }
 
+static void test_writer_destroy_accepts_null([[maybe_unused]] void **state)
+{
+    wire_writer_destroy(nullptr);
+}
+
 int main(void)
 {
     const struct CMUnitTest tests[] = {
@@ -140,6 +145,7 @@ int main(void)
         cmocka_unit_test(test_writer_encodes_negative_values),
         cmocka_unit_test(test_writer_accepts_empty_bytes),
         cmocka_unit_test(test_writer_rejects_null_input),
+        cmocka_unit_test(test_writer_destroy_accepts_null),
     };
     return cmocka_run_group_tests(tests, nullptr, nullptr);
 }
