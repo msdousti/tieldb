@@ -150,6 +150,7 @@ testdb=> SELECT * FROM user;
   - [ ] Special system tables (pg_class-like)
   - [ ] Bootstrap: create catalog files on first run
   - [ ] Load catalog at startup
+  - [ ] Store each column's display position next to its definition, so a reordering survives a restart
 - [ ] Tuple format
   - [ ] Fixed-length header (null bitmap, optional xmin/xmax)
   - [ ] Variable-length data (length prefix for TEXT)
@@ -222,6 +223,13 @@ psql -h localhost -p 5433 -c "SELECT * FROM user;"
   - [ ] Nested-loop join (simple, correct, slow)
   - [ ] Hash join (faster for equi-joins)
   - [ ] Cartesian product (CROSS JOIN)
+- [ ] Column reordering: `ALTER TABLE ... MODIFY ... AFTER ...` (MariaDB syntax; Postgres cannot do this)
+  - [ ] Parse `ALTER TABLE <t> MODIFY <column> <type> AFTER <other column>` and `... FIRST`
+  - [ ] Execute it by changing the column's display position (`table_set_display_order`); the stored rows are not touched. The display order already exists in the catalog; `SELECT *` and `INSERT ... VALUES` follow it
+  - [ ] Only the column's current type is accepted at first; changing the type needs data conversion and is a separate step
+- [ ] Adding columns: `ALTER TABLE <t> ADD COLUMN <column> <type> [AFTER <other column> | FIRST]` (MariaDB syntax)
+  - [ ] Add the column at the end of the stored row, and give it the requested display position, so existing rows are not rewritten
+  - [ ] Existing rows need a value for the new column: needs NULL or `DEFAULT` support first
 - [ ] Volcano iterator model
   - [ ] SeqScan, Filter, Project, Sort, Limit, HashAgg, NestedLoopJoin, HashJoin operators
   - [ ] `open()`, `next()`, `close()` interface
