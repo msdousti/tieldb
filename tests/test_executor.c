@@ -13,7 +13,7 @@
 #include <cmocka.h>
 
 #include "executor/executor.h"
-#include "storage/table.h"
+#include "storage/catalog.h"
 
 static void run_insert(const char *sql, executor_error_t *error)
 {
@@ -27,13 +27,13 @@ static void run_insert(const char *sql, executor_error_t *error)
 static void assert_rejected(const char *sql, const char *sqlstate, const char *message)
 {
     executor_error_t error;
-    size_t rows = table_row_count(table_find("user"));
+    size_t rows = table_row_count(catalog_find("user"));
 
     run_insert(sql, &error);
 
     assert_string_equal(error.sqlstate, sqlstate);
     assert_string_equal(error.message, message);
-    assert_int_equal(table_row_count(table_find("user")), rows);
+    assert_int_equal(table_row_count(catalog_find("user")), rows);
 }
 
 static void test_insert_into_a_missing_table_is_an_error([[maybe_unused]] void **state)
@@ -74,7 +74,7 @@ static void test_integers_outside_32_bits_are_an_error([[maybe_unused]] void **s
 static void test_valid_insert_adds_a_row([[maybe_unused]] void **state)
 {
     executor_error_t error;
-    const table_t *user = table_find("user");
+    const table_t *user = catalog_find("user");
 
     run_insert("INSERT INTO user VALUES ('4', 'Dave')", &error);
 
@@ -87,7 +87,7 @@ static void test_valid_insert_adds_a_row([[maybe_unused]] void **state)
 static void test_number_in_a_text_column_is_stored_as_text([[maybe_unused]] void **state)
 {
     executor_error_t error;
-    const table_t *user = table_find("user");
+    const table_t *user = catalog_find("user");
 
     run_insert("INSERT INTO user VALUES (5, 42)", &error);
 
@@ -121,7 +121,7 @@ static void test_select_gives_the_locked_table_until_released([[maybe_unused]] v
     assert_int_equal(table_column_count(select.table), 2);
     executor_select_release(&select);
     assert_null(select.table);
-    assert_int_equal(table_insert(table_find("user"), row, 2), 0);
+    assert_int_equal(table_insert(catalog_find("user"), row, 2), 0);
 }
 
 static const struct CMUnitTest tests[] = {

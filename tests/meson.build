@@ -69,6 +69,15 @@ test_table = executable('test_table',
 
 test('table', test_table)
 
+# Test: catalog
+test_catalog = executable('test_catalog',
+  'test_catalog.c',
+  dependencies: [tieldb_dep, cmocka_dep, thread_dep],
+  include_directories: inc,
+)
+
+test('catalog', test_catalog)
+
 # Test: statement execution
 test_executor = executable('test_executor',
   'test_executor.c',

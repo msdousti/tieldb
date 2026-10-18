@@ -28,6 +28,7 @@ executor_sources = files(
 # Storage module
 storage_sources = files(
   'storage/table.c',
+  'storage/catalog.c',
 )
 
 # Command-line options
