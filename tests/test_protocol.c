@@ -117,6 +117,49 @@ static void test_command_complete_rejects_null_arguments([[maybe_unused]] void *
     wire_writer_destroy(w);
 }
 
+static void test_error_response_matches_postgres_bytes([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+    const uint8_t expected[] = {'E', 0,   0,   0,   33,  'S', 'E', 'R', 'R', 'O', 'R', 0,
+                                'C', '4', '2', '6', '0', '1', 0,   'M', 's', 'y', 'n', 't',
+                                'a', 'x', ' ', 'e', 'r', 'r', 'o', 'r', 0,   0};
+
+    assert_int_equal(protocol_put_error_response(w, "ERROR", "42601", "syntax error"), 0);
+    assert_writer_holds(w, expected, sizeof(expected));
+    wire_writer_destroy(w);
+}
+
+static void test_error_response_length_ignores_earlier_content([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+
+    assert_int_equal(protocol_put_authentication_ok(w), 0);
+    assert_int_equal(protocol_put_error_response(w, "FATAL", "28000", "x"), 0);
+    assert_int_equal(wire_writer_size(w), 9 + 1 + 4 + 7 + 7 + 3 + 1);
+    assert_int_equal(wire_writer_data(w)[13], 22);
+    wire_writer_destroy(w);
+}
+
+static void test_error_response_rejects_invalid_arguments([[maybe_unused]] void **state)
+{
+    wire_writer_t *w = create_writer();
+    const char *const sqlstates[] = {"4260", "426011"};
+
+    errno = 0;
+    assert_int_equal(protocol_put_error_response(nullptr, "ERROR", "42601", "m"), -1);
+    assert_int_equal(errno, EINVAL);
+    assert_int_equal(protocol_put_error_response(w, nullptr, "42601", "m"), -1);
+    assert_int_equal(protocol_put_error_response(w, "ERROR", nullptr, "m"), -1);
+    assert_int_equal(protocol_put_error_response(w, "ERROR", "42601", nullptr), -1);
+    for (size_t i = 0; i < 2; i++) {
+        errno = 0;
+        assert_int_equal(protocol_put_error_response(w, "ERROR", sqlstates[i], "m"), -1);
+        assert_int_equal(errno, EINVAL);
+    }
+    assert_int_equal(wire_writer_size(w), 0);
+    wire_writer_destroy(w);
+}
+
 int main(void)
 {
     const struct CMUnitTest tests[] = {
@@ -128,6 +171,9 @@ int main(void)
         cmocka_unit_test(test_command_complete_matches_postgres_bytes),
         cmocka_unit_test(test_command_complete_length_ignores_earlier_content),
         cmocka_unit_test(test_command_complete_rejects_null_arguments),
+        cmocka_unit_test(test_error_response_matches_postgres_bytes),
+        cmocka_unit_test(test_error_response_length_ignores_earlier_content),
+        cmocka_unit_test(test_error_response_rejects_invalid_arguments),
     };
     return cmocka_run_group_tests(tests, nullptr, nullptr);
 }

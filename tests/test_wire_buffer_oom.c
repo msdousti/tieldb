@@ -141,6 +141,49 @@ static void test_command_complete_rolls_back_header_when_tag_fails([[maybe_unuse
     wire_writer_destroy(w);
 }
 
+static wire_writer_t *create_writer_filled_to(size_t size)
+{
+    uint8_t filler[64] = {};
+    wire_writer_t *writer = create_writer_with_real_allocations();
+    if (wire_writer_put_bytes(writer, filler, size) != 0) {
+        fail();
+    }
+    return writer;
+}
+
+static void assert_error_response_fails_leaving(size_t filled)
+{
+    wire_writer_t *w = create_writer_filled_to(filled);
+
+    will_return(oom_realloc, false);
+    errno = 0;
+    assert_int_equal(protocol_put_error_response(w, "ERROR", "42601", "x"), -1);
+
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(wire_writer_size(w), filled);
+    wire_writer_destroy(w);
+}
+
+static void test_error_response_rolls_back_when_header_fails([[maybe_unused]] void **state)
+{
+    assert_error_response_fails_leaving(60);
+}
+
+static void test_error_response_rolls_back_when_field_code_fails([[maybe_unused]] void **state)
+{
+    assert_error_response_fails_leaving(59);
+}
+
+static void test_error_response_rolls_back_when_field_value_fails([[maybe_unused]] void **state)
+{
+    assert_error_response_fails_leaving(58);
+}
+
+static void test_error_response_rolls_back_when_terminator_fails([[maybe_unused]] void **state)
+{
+    assert_error_response_fails_leaving(42);
+}
+
 int main(void)
 {
     const struct CMUnitTest tests[] = {
@@ -150,6 +193,10 @@ int main(void)
         cmocka_unit_test(test_reader_create_fails_when_allocation_fails),
         cmocka_unit_test(test_command_complete_leaves_writer_unchanged_when_header_fails),
         cmocka_unit_test(test_command_complete_rolls_back_header_when_tag_fails),
+        cmocka_unit_test(test_error_response_rolls_back_when_header_fails),
+        cmocka_unit_test(test_error_response_rolls_back_when_field_code_fails),
+        cmocka_unit_test(test_error_response_rolls_back_when_field_value_fails),
+        cmocka_unit_test(test_error_response_rolls_back_when_terminator_fails),
     };
     return cmocka_run_group_tests(tests, nullptr, nullptr);
 }
