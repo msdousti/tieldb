@@ -93,6 +93,22 @@ jobs:
           name: test-logs-asan
           path: build-asan/meson-logs/
 
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            meson ninja-build gcovr \
+            libcmocka-dev pkg-config
+
+      - name: Test with coverage (fails below gcovr.cfg threshold)
+        run: ./scripts/coverage.sh
+
   build-tsan:
     name: Build (TSan)
     runs-on: ubuntu-24.04
