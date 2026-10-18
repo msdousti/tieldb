@@ -12,9 +12,15 @@
  * checksum field (filled in when the page is written to disk) and the bookkeeping for the slots.
  * The page does not look inside a tuple; it stores and returns bytes.
  *
- * Deleting a tuple frees its slot number for reuse: page_insert gives a new tuple the lowest free
- * slot number, or a new one at the end if there is none. The space of a deleted tuple is reused
- * too: when the free space is in pieces, page_insert first moves the tuples together.
+ * Deleting a tuple frees its space at once but not its slot number: the slot becomes dead, so
+ * nothing that still holds the number (an index entry, a reader) can see a new tuple under it.
+ * page_reclaim_dead_slots makes dead slots unused, and only unused numbers are given to new tuples
+ * (the lowest first). The storage engine calls it when no one can still refer to a dead slot,
+ * which for an engine without indexes or concurrent readers is right after deleting. When the
+ * free space is in pieces, page_insert first moves the tuples together.
+ *
+ * Each page has 16 flag bits for the storage engine; the page stores them and does not look at
+ * them. Flags of a tuple belong in the tuple's own header.
  *
  * Pages have no locks; the buffer pool decides who may use a page. Slot numbers and tuple
  * lengths must come from the page itself.
@@ -36,6 +42,13 @@ typedef enum {
     PAGE_TYPE_HEAP = 1,
 } page_type_t;
 
+/** The state of a slot. A new slot is normal; deleting its tuple makes it dead. */
+typedef enum {
+    SLOT_UNUSED = 0, // no tuple, and the number may be given to a new tuple
+    SLOT_NORMAL = 1, // holds a tuple
+    SLOT_DEAD = 2,   // the tuple is deleted; the number stays taken until page_reclaim_dead_slots
+} slot_state_t;
+
 typedef struct {
     alignas(uint64_t) unsigned char bytes[PAGE_SIZE];
 } page_t;
@@ -53,7 +66,13 @@ void page_init(page_t *page, page_type_t type);
 
 [[nodiscard]] int page_delete(page_t *page, size_t slot);
 
-/** The number of slots, deleted ones included; slot numbers below it may be valid. */
+/** Makes dead slots reusable; returns how many there were. */
+size_t page_reclaim_dead_slots(page_t *page);
+
+[[nodiscard]] uint16_t page_flags(const page_t *page);
+void page_set_flags(page_t *page, uint16_t flags);
+
+/** The number of slots, dead and unused ones included; slot numbers below it may be valid. */
 [[nodiscard]] size_t page_slot_count(const page_t *page);
 
 /** The length of the longest tuple that page_insert would accept now. */
