@@ -20,6 +20,11 @@ sql_sources = files(
   'sql/simple_sql.c',
 )
 
+# Executor module
+executor_sources = files(
+  'executor/executor.c',
+)
+
 # Storage module
 storage_sources = files(
   'storage/table.c',
@@ -38,6 +43,7 @@ tieldb_lib = static_library('tieldb',
   net_sources,
   sql_sources,
   storage_sources,
+  executor_sources,
   cli_sources,
   include_directories: inc,
   install: false,

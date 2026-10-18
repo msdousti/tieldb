@@ -483,7 +483,6 @@ static void test_table_response_is_rolled_back_when_a_row_fails([[maybe_unused]]
     wire_writer_t *w = create_writer_filled_to(filled);
 
     will_return(oom_calloc, true);
-    expect_user_table_creation();
     will_return(oom_realloc, false);
     errno = 0;
     assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w), -1);
@@ -618,6 +617,40 @@ static void test_table_insert_undoes_a_partly_copied_row([[maybe_unused]] void *
     table_destroy(table);
 }
 
+static void
+test_insert_fails_when_the_statement_text_cannot_be_copied([[maybe_unused]] void **state)
+{
+    const char *sql = "INSERT INTO user VALUES (9, 'x')";
+    wire_writer_t *w = create_writer_with_real_allocations();
+
+    will_return(oom_calloc, true);
+    will_return(oom_malloc, false);
+    errno = 0;
+    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w), -1);
+
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(wire_writer_size(w), 0);
+    wire_writer_destroy(w);
+}
+
+static void test_insert_fails_when_the_row_cannot_be_stored([[maybe_unused]] void **state)
+{
+    const char *sql = "INSERT INTO user VALUES (9, 'x')";
+    wire_writer_t *w = create_writer_with_real_allocations();
+
+    will_return(oom_calloc, true);
+    will_return(oom_malloc, true);
+    will_return(oom_malloc, true);
+    will_return(oom_malloc, false);
+    errno = 0;
+    assert_int_equal(query_handle_message(sql, strlen(sql) + 1, w), -1);
+
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(wire_writer_size(w), 0);
+    assert_int_equal(table_row_count(table_find("user")), 3);
+    wire_writer_destroy(w);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_create_fails_when_struct_allocation_fails),
     cmocka_unit_test(test_create_fails_when_buffer_allocation_fails),
@@ -649,6 +682,8 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_startup_leaves_result_unset_when_decline_write_fails),
     cmocka_unit_test(test_query_response_is_rolled_back_when_a_message_fails),
     cmocka_unit_test(test_table_response_is_rolled_back_when_a_row_fails),
+    cmocka_unit_test(test_insert_fails_when_the_statement_text_cannot_be_copied),
+    cmocka_unit_test(test_insert_fails_when_the_row_cannot_be_stored),
     cmocka_unit_test(test_query_fails_cleanly_when_the_reader_cannot_be_created),
     cmocka_unit_test(test_connection_fails_when_the_writer_cannot_be_created),
     cmocka_unit_test(test_connection_fails_when_a_packet_cannot_be_buffered),
@@ -659,7 +694,14 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_server_serve_fails_when_a_session_cannot_be_allocated),
 };
 
+// The built-in user table is created on its first use, so do that once, with real allocations
+static int create_user_table_once([[maybe_unused]] void **state)
+{
+    expect_user_table_creation();
+    return table_find("user") == nullptr;
+}
+
 int main(void)
 {
-    return cmocka_run_group_tests(tests, nullptr, nullptr);
+    return cmocka_run_group_tests(tests, create_user_table_once, nullptr);
 }
