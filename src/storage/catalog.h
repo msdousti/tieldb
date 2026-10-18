@@ -2,7 +2,9 @@
  * The catalog: every table, found by name.
  *
  * Names are lower-case, as the SQL layer produces them. The catalog is shared between connection
- * threads and locks itself. Tables live as long as the process; there is no DROP TABLE yet.
+ * threads and locks itself (a read-write lock: lookups run in parallel, creation is exclusive). It
+ * keeps the tables in a hash map (ds/hash_map.h). Tables live as long as the process; there is no
+ * DROP TABLE yet.
  *
  * The catalog starts empty.
  *

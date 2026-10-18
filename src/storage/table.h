@@ -25,6 +25,8 @@
 
 #include <stddef.h>
 
+#include "ds/hash_map.h"
+
 /** Most columns a table may have. */
 constexpr size_t TABLE_MAX_COLUMNS = 32;
 
@@ -63,6 +65,13 @@ void table_lock(table_t *table);
 void table_unlock(table_t *table);
 
 [[nodiscard]] const char *table_name(const table_t *table);
+
+/**
+ * A table embeds the link that lets the catalog keep it in a hash map. The two functions convert
+ * between the table and its link; table_from_node(nullptr) is nullptr.
+ */
+[[nodiscard]] hash_node_t *table_node(table_t *table);
+[[nodiscard]] table_t *table_from_node(const hash_node_t *node);
 [[nodiscard]] size_t table_column_count(const table_t *table);
 [[nodiscard]] size_t table_physical_index(const table_t *table, size_t display_index);
 [[nodiscard]] const table_column_t *table_column(const table_t *table, size_t index);
