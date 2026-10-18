@@ -2,6 +2,7 @@
  * Tests for injectable I/O interface
  */
 
+#include <errno.h>
 #include <fcntl.h>
 #include <setjmp.h>
 #include <stdarg.h>
@@ -173,6 +174,115 @@ static void test_reset_faults(void **state)
     unlink(test_file);
 }
 
+static int open_scratch_file(const char *path)
+{
+    int fd = io->open(path, O_RDWR | O_CREAT | O_TRUNC, 0644);
+    assert_true(fd >= 0);
+    return fd;
+}
+
+static void close_scratch_file(int fd, const char *path)
+{
+    io->close(fd);
+    unlink(path);
+}
+
+static void test_real_positioned_and_plain_io(void **state)
+{
+    (void) state;
+    const char *path = "/tmp/tieldb_test_positioned.dat";
+    char buf[4] = {};
+    int fd = open_scratch_file(path);
+
+    assert_int_equal(io->pwrite(fd, "abcd", 4, 0), 4);
+    assert_int_equal(io->fdatasync(fd), 0);
+    assert_int_equal(lseek(fd, 0, SEEK_SET), 0);
+    assert_int_equal(io->read(fd, buf, sizeof(buf)), 4);
+
+    assert_memory_equal(buf, "abcd", 4);
+    close_scratch_file(fd, path);
+}
+
+static void test_fault_read_error_is_one_shot(void **state)
+{
+    (void) state;
+    io_init(false);
+    const char *path = "/tmp/tieldb_test_read_error.dat";
+    char buf[1];
+    int fd = open_scratch_file(path);
+    assert_int_equal(io->write(fd, "x", 1), 1);
+    assert_int_equal(lseek(fd, 0, SEEK_SET), 0);
+
+    io_inject_fault(IO_FAULT_READ_ERROR, 1);
+    errno = 0;
+    assert_int_equal(io->read(fd, buf, 1), -1);
+    assert_int_equal(errno, EIO);
+    assert_int_equal(io->read(fd, buf, 1), 1);
+    close_scratch_file(fd, path);
+}
+
+static void test_fault_pread_error_is_one_shot(void **state)
+{
+    (void) state;
+    io_init(false);
+    const char *path = "/tmp/tieldb_test_pread_error.dat";
+    char buf[1];
+    int fd = open_scratch_file(path);
+    assert_int_equal(io->write(fd, "x", 1), 1);
+
+    io_inject_fault(IO_FAULT_READ_ERROR, 1);
+    errno = 0;
+    assert_int_equal(io->pread(fd, buf, 1, 0), -1);
+    assert_int_equal(errno, EIO);
+    assert_int_equal(io->pread(fd, buf, 1, 0), 1);
+    close_scratch_file(fd, path);
+}
+
+static void test_fault_pwrite_error_and_torn(void **state)
+{
+    (void) state;
+    io_init(false);
+    const char *path = "/tmp/tieldb_test_pwrite_faults.dat";
+    int fd = open_scratch_file(path);
+
+    io_inject_fault(IO_FAULT_WRITE_ERROR, 1);
+    errno = 0;
+    assert_int_equal(io->pwrite(fd, "abcd", 4, 0), -1);
+    assert_int_equal(errno, EIO);
+
+    io_inject_fault(IO_FAULT_TORN_WRITE, 1);
+    assert_int_equal(io->pwrite(fd, "abcd", 4, 0), 2);
+    assert_int_equal(io->pwrite(fd, "abcd", 4, 0), 4);
+    close_scratch_file(fd, path);
+}
+
+static void test_fault_write_error_sets_eio(void **state)
+{
+    (void) state;
+    io_init(false);
+    const char *path = "/tmp/tieldb_test_write_error.dat";
+    int fd = open_scratch_file(path);
+
+    io_inject_fault(IO_FAULT_WRITE_ERROR, 1);
+    errno = 0;
+    assert_int_equal(io->write(fd, "x", 1), -1);
+    assert_int_equal(errno, EIO);
+    close_scratch_file(fd, path);
+}
+
+static void test_fault_fsync_drop_reports_success(void **state)
+{
+    (void) state;
+    io_init(false);
+    const char *path = "/tmp/tieldb_test_fsync_drop.dat";
+    int fd = open_scratch_file(path);
+
+    io_inject_fault(IO_FAULT_FSYNC_DROP, 1);
+    assert_int_equal(io->fsync(fd), 0);
+    assert_int_equal(io->fsync(fd), 0);
+    close_scratch_file(fd, path);
+}
+
 int main(void)
 {
     const struct CMUnitTest tests[] = {
@@ -181,6 +291,12 @@ int main(void)
         cmocka_unit_test_setup_teardown(test_fault_injection_fsync_fail, setup, teardown),
         cmocka_unit_test_setup_teardown(test_fault_on_nth_call, setup, teardown),
         cmocka_unit_test_setup_teardown(test_reset_faults, setup, teardown),
+        cmocka_unit_test_setup_teardown(test_real_positioned_and_plain_io, setup, teardown),
+        cmocka_unit_test_setup_teardown(test_fault_read_error_is_one_shot, setup, teardown),
+        cmocka_unit_test_setup_teardown(test_fault_pread_error_is_one_shot, setup, teardown),
+        cmocka_unit_test_setup_teardown(test_fault_pwrite_error_and_torn, setup, teardown),
+        cmocka_unit_test_setup_teardown(test_fault_write_error_sets_eio, setup, teardown),
+        cmocka_unit_test_setup_teardown(test_fault_fsync_drop_reports_success, setup, teardown),
     };
 
     return cmocka_run_group_tests(tests, nullptr, nullptr);
