@@ -22,7 +22,10 @@ jobs:
         run: |
           clang-format --version
           # Check if any files would be reformatted
-          find src tests \( -name '*.c' -o -name '*.h' \) | xargs clang-format --dry-run --Werror
+          FILES=$(find src tests -type f \( -name '*.c' -o -name '*.h' \))
+          if [ -n "$FILES" ]; then
+            echo "$FILES" | xargs clang-format --dry-run --Werror
+          fi
 
   lint:
     name: Static Analysis (clang-tidy)
@@ -40,10 +43,13 @@ jobs:
       - name: Setup build
         run: meson setup build -Db_sanitize=address,undefined
 
+      - name: Compile (needed for clang-tidy)
+        run: ninja -C build
+
       - name: Run clang-tidy
         run: |
           clang-tidy --version
-          clang-tidy -p build src/io/*.c
+          find src -name '*.c' -exec clang-tidy -p build {} \;
 
   build-asan:
     name: Build (ASan + UBSan)
