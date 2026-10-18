@@ -42,7 +42,7 @@ static void put_expected_unsupported_response(wire_writer_t *w)
     assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
 }
 
-static void put_expected_users_response(wire_writer_t *w)
+static void put_expected_user_response(wire_writer_t *w)
 {
     const protocol_column_t columns[] = {{"id", PROTOCOL_TYPE_INT4}, {"name", PROTOCOL_TYPE_TEXT}};
     const char *rows[][2] = {{"1", "Alice"}, {"2", "Bob"}, {"3", "Carol"}};
@@ -93,8 +93,8 @@ static void test_version_query_ignores_case_semicolon_and_spaces([[maybe_unused]
 
 static void test_select_star_returns_every_row_of_the_table([[maybe_unused]] void **state)
 {
-    assert_response("SELECT * FROM users", put_expected_users_response);
-    assert_response("select*from USERS ;", put_expected_users_response);
+    assert_response("SELECT * FROM user", put_expected_user_response);
+    assert_response("select*from USER ;", put_expected_user_response);
 }
 
 static void test_select_star_from_a_missing_table_is_an_error([[maybe_unused]] void **state)

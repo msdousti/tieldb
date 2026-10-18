@@ -43,7 +43,7 @@ static void test_other_text_is_not_a_version_query([[maybe_unused]] void **state
 
 static void test_select_star_gives_the_lower_cased_table_name([[maybe_unused]] void **state)
 {
-    assert_table_is("SELECT * FROM users", "users");
+    assert_table_is("SELECT * FROM user", "user");
     assert_table_is("  select  *  from  Big_Table_2 ; ", "big_table_2");
     assert_table_is("select*from t", "t");
 }
@@ -52,14 +52,14 @@ static void test_statements_that_are_not_select_star_are_rejected([[maybe_unused
 {
     assert_not_select_all("");
     assert_not_select_all("SELECT 1");
-    assert_not_select_all("SELECT id FROM users");
-    assert_not_select_all("SELECT * users");
-    assert_not_select_all("SELECT * FROMusers");
+    assert_not_select_all("SELECT id FROM user");
+    assert_not_select_all("SELECT * user");
+    assert_not_select_all("SELECT * FROMuser");
     assert_not_select_all("SELECT * FROM");
     assert_not_select_all("SELECT * FROM ;");
-    assert_not_select_all("SELECT * FROM 1users");
-    assert_not_select_all("SELECT * FROM users WHERE id = 1");
-    assert_not_select_all("SELECT * FROM users;;");
+    assert_not_select_all("SELECT * FROM 1user");
+    assert_not_select_all("SELECT * FROM user WHERE id = 1");
+    assert_not_select_all("SELECT * FROM user;;");
 }
 
 static void test_table_names_that_do_not_fit_are_rejected([[maybe_unused]] void **state)

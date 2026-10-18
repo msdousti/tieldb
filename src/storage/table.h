@@ -4,7 +4,7 @@
  * For now there is a single hardcoded table so queries can be answered end to end before the
  * catalog, INSERT and CREATE TABLE exist; those will replace the hardcoded data.
  *
- *   users (id INTEGER, name TEXT)   three rows
+ *   user (id INTEGER, name TEXT)   three rows
  *
  * Cells are kept in their text form, which is what the wire protocol sends. Index arguments must
  * be in range; callers get the ranges from the table itself.

@@ -464,7 +464,7 @@ static void test_query_response_is_rolled_back_when_a_message_fails([[maybe_unus
 
 static void test_table_response_is_rolled_back_when_a_row_fails([[maybe_unused]] void **state)
 {
-    const char *sql = "SELECT * FROM users";
+    const char *sql = "SELECT * FROM user";
     size_t row_description_size = MESSAGE_HEADER_SIZE + FIELD_COUNT_SIZE + cstring_size("id") +
                                   cstring_size("name") + (2 * COLUMN_FIXED_SIZE);
     size_t filled = fill_to_overflow_at(row_description_size + MESSAGE_HEADER_SIZE);

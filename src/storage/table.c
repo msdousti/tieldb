@@ -14,30 +14,30 @@ struct table {
     size_t row_count;
 };
 
-static constexpr size_t USERS_COLUMN_COUNT = 2;
+static constexpr size_t USER_COLUMN_COUNT = 2;
 
-static const table_column_t USERS_COLUMNS[USERS_COLUMN_COUNT] = {
+static const table_column_t USER_COLUMNS[USER_COLUMN_COUNT] = {
     {"id", COLUMN_TYPE_INTEGER},
     {"name", COLUMN_TYPE_TEXT},
 };
 
-static const char *const USERS_CELLS[] = {
+static const char *const USER_CELLS[] = {
     "1", "Alice", //
     "2", "Bob",   //
     "3", "Carol", //
 };
 
-static const table_t USERS = {
-    .name = "users",
-    .columns = USERS_COLUMNS,
-    .column_count = USERS_COLUMN_COUNT,
-    .cells = USERS_CELLS,
-    .row_count = sizeof(USERS_CELLS) / sizeof(USERS_CELLS[0]) / USERS_COLUMN_COUNT,
+static const table_t USER = {
+    .name = "user",
+    .columns = USER_COLUMNS,
+    .column_count = USER_COLUMN_COUNT,
+    .cells = USER_CELLS,
+    .row_count = sizeof(USER_CELLS) / sizeof(USER_CELLS[0]) / USER_COLUMN_COUNT,
 };
 
 const table_t *table_find(const char *name)
 {
-    return strcmp(name, USERS.name) == 0 ? &USERS : nullptr;
+    return strcmp(name, USER.name) == 0 ? &USER : nullptr;
 }
 
 size_t table_column_count(const table_t *table)
