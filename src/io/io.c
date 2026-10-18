@@ -2,6 +2,8 @@
  * Injectable I/O implementation
  */
 
+#define _POSIX_C_SOURCE 200809L
+
 #include "io/io.h"
 
 #include <errno.h>
