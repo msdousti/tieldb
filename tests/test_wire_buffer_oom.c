@@ -60,6 +60,41 @@ static wire_writer_t *create_writer_with_real_allocations(void)
     return writer;
 }
 
+// Mirrors the writer's initial capacity: the first write that crosses it must grow the buffer
+static constexpr size_t WRITER_CAPACITY = 64;
+
+// Bytes to pre-fill so that the write ending at bytes_through_failing_write is the first to
+// overflow the capacity, and therefore the one that has to grow (and fails in these tests)
+static size_t fill_to_overflow_at(size_t bytes_through_failing_write)
+{
+    return WRITER_CAPACITY + 1 - bytes_through_failing_write;
+}
+
+static constexpr size_t MESSAGE_HEADER_SIZE = sizeof(char) + sizeof(int32_t);
+static constexpr size_t FIELD_COUNT_SIZE = sizeof(int16_t);
+static constexpr size_t COLUMN_FIXED_SIZE = 18;
+static constexpr size_t TERMINATOR_SIZE = 1;
+
+static size_t cstring_size(const char *str)
+{
+    return strlen(str) + 1;
+}
+
+static size_t error_field_size(const char *value)
+{
+    return sizeof(char) + cstring_size(value);
+}
+
+static wire_writer_t *create_writer_filled_to(size_t size)
+{
+    uint8_t filler[WRITER_CAPACITY] = {};
+    wire_writer_t *writer = create_writer_with_real_allocations();
+    if (wire_writer_put_bytes(writer, filler, size) != 0) {
+        fail();
+    }
+    return writer;
+}
+
 static void test_create_fails_when_struct_allocation_fails([[maybe_unused]] void **state)
 {
     will_return(oom_calloc, false);
@@ -112,16 +147,15 @@ static void test_reader_create_fails_when_allocation_fails([[maybe_unused]] void
 static void
 test_command_complete_leaves_writer_unchanged_when_header_fails([[maybe_unused]] void **state)
 {
-    wire_writer_t *w = create_writer_with_real_allocations();
-    uint8_t filler[60] = {};
-    assert_int_equal(wire_writer_put_bytes(w, filler, sizeof(filler)), 0);
+    size_t filled = fill_to_overflow_at(MESSAGE_HEADER_SIZE);
+    wire_writer_t *w = create_writer_filled_to(filled);
 
     will_return(oom_realloc, false);
     errno = 0;
     assert_int_equal(protocol_put_command_complete(w, "SELECT 1"), -1);
 
     assert_int_equal(errno, ENOMEM);
-    assert_int_equal(wire_writer_size(w), sizeof(filler));
+    assert_int_equal(wire_writer_size(w), filled);
     wire_writer_destroy(w);
 }
 
@@ -141,16 +175,6 @@ static void test_command_complete_rolls_back_header_when_tag_fails([[maybe_unuse
     wire_writer_destroy(w);
 }
 
-static wire_writer_t *create_writer_filled_to(size_t size)
-{
-    uint8_t filler[64] = {};
-    wire_writer_t *writer = create_writer_with_real_allocations();
-    if (wire_writer_put_bytes(writer, filler, size) != 0) {
-        fail();
-    }
-    return writer;
-}
-
 static void assert_error_response_fails_leaving(size_t filled)
 {
     wire_writer_t *w = create_writer_filled_to(filled);
@@ -166,28 +190,30 @@ static void assert_error_response_fails_leaving(size_t filled)
 
 static void test_error_response_rolls_back_when_header_fails([[maybe_unused]] void **state)
 {
-    assert_error_response_fails_leaving(60);
+    assert_error_response_fails_leaving(fill_to_overflow_at(MESSAGE_HEADER_SIZE));
 }
 
 static void test_error_response_rolls_back_when_field_code_fails([[maybe_unused]] void **state)
 {
-    assert_error_response_fails_leaving(59);
+    assert_error_response_fails_leaving(fill_to_overflow_at(MESSAGE_HEADER_SIZE + sizeof(char)));
 }
 
 static void test_error_response_rolls_back_when_field_value_fails([[maybe_unused]] void **state)
 {
-    assert_error_response_fails_leaving(58);
+    assert_error_response_fails_leaving(
+        fill_to_overflow_at(MESSAGE_HEADER_SIZE + sizeof(char) + cstring_size("ERROR")));
 }
 
 static void test_error_response_rolls_back_when_terminator_fails([[maybe_unused]] void **state)
 {
-    assert_error_response_fails_leaving(42);
+    assert_error_response_fails_leaving(
+        fill_to_overflow_at(MESSAGE_HEADER_SIZE + error_field_size("ERROR") +
+                            error_field_size("42601") + error_field_size("x") + TERMINATOR_SIZE));
 }
 
 static void assert_row_description_fails_leaving(size_t filled)
 {
-    const protocol_column_t columns[] = {{"id", PROTOCOL_TYPE_INT4, 4},
-                                         {"name", PROTOCOL_TYPE_TEXT, -1}};
+    const protocol_column_t columns[] = {{"id", PROTOCOL_TYPE_INT4}, {"name", PROTOCOL_TYPE_TEXT}};
     wire_writer_t *w = create_writer_filled_to(filled);
 
     will_return(oom_realloc, false);
@@ -201,22 +227,25 @@ static void assert_row_description_fails_leaving(size_t filled)
 
 static void test_row_description_rolls_back_when_header_fails([[maybe_unused]] void **state)
 {
-    assert_row_description_fails_leaving(60);
+    assert_row_description_fails_leaving(fill_to_overflow_at(MESSAGE_HEADER_SIZE));
 }
 
 static void test_row_description_rolls_back_when_count_fails([[maybe_unused]] void **state)
 {
-    assert_row_description_fails_leaving(58);
+    assert_row_description_fails_leaving(
+        fill_to_overflow_at(MESSAGE_HEADER_SIZE + FIELD_COUNT_SIZE));
 }
 
 static void test_row_description_rolls_back_when_name_fails([[maybe_unused]] void **state)
 {
-    assert_row_description_fails_leaving(56);
+    assert_row_description_fails_leaving(
+        fill_to_overflow_at(MESSAGE_HEADER_SIZE + FIELD_COUNT_SIZE + cstring_size("id")));
 }
 
 static void test_row_description_rolls_back_when_column_fields_fail([[maybe_unused]] void **state)
 {
-    assert_row_description_fails_leaving(40);
+    assert_row_description_fails_leaving(fill_to_overflow_at(
+        MESSAGE_HEADER_SIZE + FIELD_COUNT_SIZE + cstring_size("id") + COLUMN_FIXED_SIZE));
 }
 
 int main(void)

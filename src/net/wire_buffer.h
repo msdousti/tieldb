@@ -66,7 +66,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/** Big-endian encoders for building a fixed-size block of fields in a local array. */
+/**
+ * Big-endian encoders for building a fixed-size block of fields in a local array.
+ * They do no checking: out must point to at least 2 (i16) or 4 (i32) writable bytes.
+ */
 void wire_encode_i16(uint8_t *out, int16_t value);
 void wire_encode_i32(uint8_t *out, int32_t value);
 

@@ -41,7 +41,8 @@
  *
  * Each encoder appends one complete message to a wire_writer_t, or nothing on
  * failure. Failures return -1 and set errno as documented in wire_buffer.h;
- * a null writer or an invalid argument gives EINVAL.
+ * a null writer or an invalid argument gives EINVAL; for RowDescription that
+ * includes a type OID other than the PROTOCOL_TYPE_* values.
  */
 
 #pragma once
@@ -61,11 +62,10 @@ enum {
     PROTOCOL_TYPE_TEXT = 25,
 };
 
-/** One result column: its name, Postgres type OID, and type size (-1 if variable length). */
+/** One result column: its name and Postgres type OID (the type size follows from the OID). */
 typedef struct protocol_column {
     const char *name;
     int32_t type_oid;
-    int16_t type_size;
 } protocol_column_t;
 
 [[nodiscard]] int protocol_put_authentication_ok(wire_writer_t *writer);
