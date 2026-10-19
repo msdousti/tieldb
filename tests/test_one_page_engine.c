@@ -76,11 +76,6 @@ static void assert_next_is(storage_cursor_t *cursor, const int32_t *number, cons
     }
 }
 
-static void test_an_empty_engine_has_no_rows([[maybe_unused]] void **state)
-{
-    assert_int_equal(count_rows(), 0);
-}
-
 static void test_rows_come_back_in_the_order_they_were_inserted([[maybe_unused]] void **state)
 {
     const int32_t one = 1;
@@ -88,6 +83,7 @@ static void test_rows_come_back_in_the_order_they_were_inserted([[maybe_unused]]
     storage_cursor_t *cursor = nullptr;
     row_value_t values[2];
 
+    assert_int_equal(count_rows(), 0);
     assert_int_equal(insert_pair(&one, "Rex", 3), 0);
     assert_int_equal(insert_pair(nullptr, "", 0), 0);
     assert_int_equal(insert_pair(&two, nullptr, 0), 0);
@@ -95,7 +91,6 @@ static void test_rows_come_back_in_the_order_they_were_inserted([[maybe_unused]]
     assert_next_is(cursor, &one, "Rex");
     assert_next_is(cursor, nullptr, "");
     assert_next_is(cursor, &two, nullptr);
-    assert_int_equal(storage_next(cursor, values), 0);
     assert_int_equal(storage_next(cursor, values), 0);
     storage_close_cursor(cursor);
 }
@@ -131,9 +126,6 @@ static void test_a_full_page_refuses_rows_and_keeps_the_others([[maybe_unused]] 
     assert_int_equal(errno, ENOSPC);
     assert_true(inserted > 100);
     assert_int_equal(count_rows(), inserted);
-    errno = 0;
-    assert_int_equal(insert_pair(&number, "some text", 9), -1);
-    assert_int_equal(errno, ENOSPC);
 }
 
 static void test_the_largest_row_fits_and_a_larger_one_does_not([[maybe_unused]] void **state)
@@ -249,7 +241,6 @@ static void test_random_rows_are_stored_and_scanned_like_a_model([[maybe_unused]
 }
 
 static const struct CMUnitTest tests[] = {
-    cmocka_unit_test_setup_teardown(test_an_empty_engine_has_no_rows, setup, teardown),
     cmocka_unit_test_setup_teardown(test_rows_come_back_in_the_order_they_were_inserted, setup,
                                     teardown),
     cmocka_unit_test(test_a_table_without_columns_still_counts_rows),

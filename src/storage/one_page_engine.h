@@ -2,9 +2,8 @@
  * The one-page engine: a table whose rows all live in one 8 KB slotted page.
  *
  * The first storage engine, simple on purpose: it holds a few hundred small rows, and an insert
- * into a full page fails with ENOSPC. Rows are encoded with the row codec, so the page holds what
- * any engine would hold. The engine copies the layout (the column types), so the caller's array
- * need not outlive the call. Rows are kept in memory; saving them is not part of this module yet.
+ * into a full page fails with ENOSPC. Rows are encoded with the row codec. The engine copies the
+ * layout, so the caller's array need not outlive the call. Rows are kept in memory only, for now.
  * See storage_engine.h for the interface and its errors.
  */
 

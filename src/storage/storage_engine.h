@@ -6,9 +6,8 @@
  * files, so that engines can be swapped: the one-page engine (one_page_engine.h) first, the heap
  * engine and perhaps an LSM engine later.
  *
- * An implementation embeds storage_engine_t as the first member of its own struct, sets ops, and
- * hands out a pointer to it; storage_cursor_t works the same way. The wrappers below call the
- * operation of the engine behind the pointer.
+ * An implementation embeds storage_engine_t (and storage_cursor_t) as the first member of its own
+ * struct and sets ops. The wrappers below call the operation of the engine behind the pointer.
  *
  * An engine does no locking. The caller serializes the calls on one engine, and holds that
  * serialization (for the executor, the table lock) from opening a cursor until it closes it. No
