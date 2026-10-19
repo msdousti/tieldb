@@ -39,6 +39,7 @@ executor_sources = files(
 storage_sources = files(
   'storage/table.c',
   'storage/catalog.c',
+  'storage/crc32c.c',
   'storage/page.c',
   'storage/row_codec.c',
 )

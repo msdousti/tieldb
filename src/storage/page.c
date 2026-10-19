@@ -3,6 +3,8 @@
 #include <errno.h>
 #include <string.h>
 
+#include "storage/crc32c.h"
+
 typedef struct {
     uint64_t lsn;
     uint32_t checksum;
@@ -26,6 +28,8 @@ typedef struct {
 } slot_t;
 
 static constexpr size_t PAGE_HEADER_SIZE = 24;
+// Keep this the value after the last page_type_t, or page_validate rejects the new type
+static constexpr unsigned PAGE_TYPE_LIMIT = PAGE_TYPE_HEAP + 1;
 static constexpr unsigned STATE_SHIFT = 14;
 static constexpr uint16_t OFFSET_MASK = (1U << STATE_SHIFT) - 1;
 
@@ -221,4 +225,54 @@ size_t page_reclaim_dead_slots(page_t *page)
         reclaimed += reclaim_slot(page, slot);
     }
     return reclaimed;
+}
+
+static uint32_t compute_checksum(const page_t *page)
+{
+    page_t copy = *page;
+    page_header_t header = load_header(&copy);
+    header.checksum = 0;
+    store_header(&copy, &header);
+    return crc32c(copy.bytes, PAGE_SIZE);
+}
+
+void page_set_checksum(page_t *page)
+{
+    page_header_t header = load_header(page);
+    header.checksum = compute_checksum(page);
+    store_header(page, &header);
+}
+
+int page_verify_checksum(const page_t *page)
+{
+    if (load_header(page).checksum != compute_checksum(page)) {
+        errno = EBADMSG;
+        return -1;
+    }
+    return 0;
+}
+
+static bool is_valid_slot(const page_t *page, const page_header_t *header, size_t slot)
+{
+    slot_t entry = load_slot(page, slot);
+    if (entry.state > SLOT_DEAD) {
+        return false;
+    }
+    return entry.state != SLOT_NORMAL ||
+           (entry.offset >= header->upper && entry.offset + entry.length <= PAGE_SIZE);
+}
+
+int page_validate(const page_t *page)
+{
+    page_header_t header = load_header(page);
+    bool is_valid = header.type < PAGE_TYPE_LIMIT && header.upper <= PAGE_SIZE &&
+                    slot_position(header.slot_count) <= header.upper;
+    for (size_t slot = 0; is_valid && slot < header.slot_count; slot++) {
+        is_valid = is_valid_slot(page, &header, slot);
+    }
+    if (!is_valid) {
+        errno = EBADMSG;
+        return -1;
+    }
+    return 0;
 }

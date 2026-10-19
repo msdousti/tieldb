@@ -25,8 +25,13 @@
  * Pages have no locks; the buffer pool decides who may use a page. Slot numbers and tuple
  * lengths must come from the page itself.
  *
+ * A page read from disk is checked before it is used: page_verify_checksum compares the CRC-32C in
+ * the header with the page, and page_validate checks that the header and the slots are consistent,
+ * so that the other functions can trust the page (a page of zeros is not valid: use page_init).
+ * page_set_checksum fills in the checksum, just before a page is written.
+ *
  * Errors return -1 or nullptr and set errno: ENOSPC when a tuple does not fit in the page, ENOENT
- * for a slot that does not exist or was deleted.
+ * for a slot that does not exist or was deleted, EBADMSG for a page that is corrupt.
  */
 
 #pragma once
@@ -80,3 +85,10 @@ void page_set_flags(page_t *page, uint16_t flags);
  * a byte of data fits; an empty one may still fit.
  */
 [[nodiscard]] size_t page_free_space(const page_t *page);
+
+/** Stores the CRC-32C of the page in its header. */
+void page_set_checksum(page_t *page);
+
+[[nodiscard]] int page_verify_checksum(const page_t *page);
+
+[[nodiscard]] int page_validate(const page_t *page);

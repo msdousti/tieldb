@@ -292,6 +292,7 @@ static void assert_free_space_is_exact(void)
 static void model_compare(const model_t *model)
 {
     assert_int_equal(page_slot_count(&page), model->count);
+    assert_int_equal(page_validate(&page), 0);
     assert_free_space_is_exact();
     for (size_t slot = 0; slot < model->count; slot++) {
         model_compare_slot(model, slot);
