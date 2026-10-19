@@ -197,6 +197,7 @@ Two milestones, so that the first visible result comes early:
   - [ ] Page ID (file number + page number)
   - [ ] Generic over files and page numbers, with no heap assumptions: an LSM engine keeps its own file formats and block cache
   - [ ] Zero outstanding pins asserted at teardown
+  - [ ] Optional direct I/O (`O_DIRECT`, off by default), so that a page is not cached twice: the page buffers are 4096-aligned (`alignas` on `page_t`); the tests run with it on and off, and fall back when the filesystem refuses it (`tmpfs` does); `fsync` is still needed for durability
 - [ ] Free space map (bitmap or simple list)
 - [ ] Heap engine
   - [ ] Implements the storage engine interface and replaces the one-page engine: INSERT finds a page with space, adds a tuple and marks the page dirty; SELECT pins pages, iterates tuples and unpins
@@ -636,6 +637,7 @@ psql needs only the simple protocol. JDBC, psycopg and most drivers use this one
 
 ### Benchmarks
 - [ ] A small benchmark program on `build-release`: bulk insert, scans, index lookups, using `generate_series` data
+- [ ] Compare buffered and direct I/O with the buffer pool (the optional `O_DIRECT` mode of Phase 2)
 
 ### More Data Types
 - [ ] FLOAT, DOUBLE
