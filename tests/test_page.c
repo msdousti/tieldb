@@ -163,17 +163,22 @@ static void test_scattered_free_space_is_gathered_when_needed([[maybe_unused]] v
 }
 
 static constexpr size_t MODEL_SLOTS = 2048;
-static constexpr size_t MAX_TUPLE = 400;
+static constexpr size_t MAX_SMALL_TUPLE = 400;
+static constexpr size_t MAX_TINY_TUPLE = 3;
 static constexpr size_t OPERATIONS = 20000;
 static constexpr size_t CHECK_EVERY = 50;
 static constexpr uint64_t RECLAIM_ONE_IN = 16;
+static constexpr uint64_t LENGTH_KINDS = 8;
+static constexpr size_t PHASE_STEPS = 2500;
+static constexpr uint64_t PHASES = 4;
 
 typedef enum { MODEL_UNUSED, MODEL_NORMAL, MODEL_DEAD } model_state_t;
 
+// A tuple is its length repeated, so the model needs to remember only the length and the byte
 typedef struct {
     model_state_t state;
     size_t length;
-    unsigned char data[MAX_TUPLE];
+    unsigned char fill;
 } model_slot_t;
 
 // The model is an array of tuples; it knows nothing about offsets or free space except the sum
@@ -200,31 +205,29 @@ static size_t model_reclaimable(const model_t *model)
     return space;
 }
 
-static size_t model_free_space(const model_t *model)
+static bool model_fits(const model_t *model, size_t length)
 {
     size_t cost = model_free_slot(model) == model->count ? SLOT_SIZE : 0;
-    size_t space = model_reclaimable(model);
-    return space > cost ? space - cost : 0;
+    return length + cost <= model_reclaimable(model);
 }
 
 static void model_insert(model_t *model, size_t length, unsigned char fill)
 {
-    unsigned char data[MAX_TUPLE];
+    unsigned char data[PAGE_SIZE];
     size_t slot = model_free_slot(model);
-    bool fits = length <= model_free_space(model);
+    bool fits = model_fits(model, length);
 
     memset(data, fill, length);
     errno = 0;
-    int result = page_insert(&page, data, length);
-    assert_int_equal(result, fits ? (int) slot : -1);
+    assert_int_equal(page_insert(&page, data, length), fits ? (int) slot : -1);
     if (!fits) {
         assert_int_equal(errno, ENOSPC);
         return;
     }
-    model->slots[slot].state = MODEL_NORMAL;
-    model->slots[slot].length = length;
-    memcpy(model->slots[slot].data, data, length);
-    model->count += slot == model->count ? 1 : 0;
+    model->slots[slot] = (model_slot_t){MODEL_NORMAL, length, fill};
+    if (slot == model->count) {
+        model->count++;
+    }
 }
 
 static void model_delete(model_t *model, size_t slot)
@@ -233,10 +236,20 @@ static void model_delete(model_t *model, size_t slot)
 
     errno = 0;
     assert_int_equal(page_delete(&page, slot), is_live ? 0 : -1);
-    assert_int_equal(errno, is_live ? 0 : ENOENT);
-    if (is_live) {
-        model->slots[slot].state = MODEL_DEAD;
+    if (!is_live) {
+        assert_int_equal(errno, ENOENT);
+        return;
     }
+    model->slots[slot].state = MODEL_DEAD;
+}
+
+static size_t model_reclaim_slot(model_slot_t *slot)
+{
+    if (slot->state != MODEL_DEAD) {
+        return 0;
+    }
+    slot->state = MODEL_UNUSED;
+    return 1;
 }
 
 static void model_reclaim(model_t *model)
@@ -244,39 +257,92 @@ static void model_reclaim(model_t *model)
     size_t dead = 0;
 
     for (size_t slot = 0; slot < model->count; slot++) {
-        dead += model->slots[slot].state == MODEL_DEAD ? 1 : 0;
-        model->slots[slot].state =
-            model->slots[slot].state == MODEL_DEAD ? MODEL_UNUSED : model->slots[slot].state;
+        dead += model_reclaim_slot(&model->slots[slot]);
     }
     assert_int_equal(page_reclaim_dead_slots(&page), dead);
 }
 
 static void model_compare_slot(const model_t *model, size_t slot)
 {
-    if (model->slots[slot].state == MODEL_NORMAL) {
-        assert_tuple_is(slot, model->slots[slot].data, model->slots[slot].length);
-    } else {
+    unsigned char expected[PAGE_SIZE];
+
+    if (model->slots[slot].state != MODEL_NORMAL) {
         assert_slot_is_missing(slot);
+        return;
     }
+    memset(expected, model->slots[slot].fill, model->slots[slot].length);
+    assert_tuple_is(slot, expected, model->slots[slot].length);
+}
+
+// Free space is checked by what the page accepts, not by arithmetic that repeats the page's own:
+// a tuple of exactly that many bytes fits, and one byte more does not
+static void assert_free_space_is_exact(void)
+{
+    unsigned char data[PAGE_SIZE] = {};
+    size_t free_space = page_free_space(&page);
+    page_t exact = page;
+    page_t too_big = page;
+
+    if (free_space > 0) {
+        assert_true(page_insert(&exact, data, free_space) >= 0);
+    }
+    assert_int_equal(page_insert(&too_big, data, free_space + 1), -1);
 }
 
 static void model_compare(const model_t *model)
 {
     assert_int_equal(page_slot_count(&page), model->count);
-    assert_int_equal(page_free_space(&page), model_free_space(model));
+    assert_free_space_is_exact();
     for (size_t slot = 0; slot < model->count; slot++) {
         model_compare_slot(model, slot);
     }
 }
 
+static bool is_tiny_phase(size_t step)
+{
+    return (step / PHASE_STEPS) % PHASES == 1;
+}
+
+// The run goes through phases, so that the page sees many slots (tiny tuples), a page that is
+// almost always full (large tuples and the edge of the free space), and a mix of small tuples
+static size_t pick_length(uint64_t *random, size_t step)
+{
+    uint64_t phase = (step / PHASE_STEPS) % PHASES;
+    uint64_t kind = next_random(random) % LENGTH_KINDS;
+    size_t free_space = page_free_space(&page);
+
+    if (is_tiny_phase(step)) {
+        return next_random(random) % (MAX_TINY_TUPLE + 1);
+    }
+    if (phase == 3 && kind == 0) {
+        return free_space;
+    }
+    if (phase == 3 && kind == 1) {
+        return free_space + 1;
+    }
+    if (phase == 3) {
+        return next_random(random) % PAGE_SIZE;
+    }
+    return next_random(random) % (MAX_SMALL_TUPLE + 1);
+}
+
+static void begin_phase(model_t *model, size_t step)
+{
+    if (step % PHASE_STEPS == 0) {
+        page_init(&page, PAGE_TYPE_HEAP);
+        *model = (model_t){};
+    }
+}
+
 static void model_step(model_t *model, uint64_t *random, size_t step)
 {
-    size_t length = next_random(random) % (MAX_TUPLE + 1);
+    begin_phase(model, step);
+    size_t length = pick_length(random, step);
     size_t slot = next_random(random) % (model->count + 2);
-
     uint64_t action = next_random(random) % RECLAIM_ONE_IN;
+    uint64_t inserts_below = is_tiny_phase(step) ? RECLAIM_ONE_IN - 2 : RECLAIM_ONE_IN / 2;
 
-    if (action < RECLAIM_ONE_IN / 2) {
+    if (action < inserts_below) {
         model_insert(model, length, (unsigned char) step);
     } else if (action < RECLAIM_ONE_IN - 1) {
         model_delete(model, slot);

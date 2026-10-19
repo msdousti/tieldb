@@ -75,5 +75,8 @@ void page_set_flags(page_t *page, uint16_t flags);
 /** The number of slots, dead and unused ones included; slot numbers below it may be valid. */
 [[nodiscard]] size_t page_slot_count(const page_t *page);
 
-/** The length of the longest tuple that page_insert would accept now. */
+/**
+ * The length of the longest tuple that page_insert would accept now. 0 means that no tuple with
+ * a byte of data fits; an empty one may still fit.
+ */
 [[nodiscard]] size_t page_free_space(const page_t *page);
