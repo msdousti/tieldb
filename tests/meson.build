@@ -96,6 +96,15 @@ test_page = executable('test_page',
 
 test('page', test_page)
 
+# Test: row codec
+test_row_codec = executable('test_row_codec',
+  'test_row_codec.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('row_codec', test_row_codec)
+
 # Test: catalog
 test_catalog = executable('test_catalog',
   'test_catalog.c',
