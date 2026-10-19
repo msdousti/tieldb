@@ -96,6 +96,15 @@ test_page = executable('test_page',
 
 test('page', test_page)
 
+# Test: files of pages
+test_page_file = executable('test_page_file',
+  'test_page_file.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('page_file', test_page_file)
+
 # Test: CRC-32C
 test_crc32c = executable('test_crc32c',
   'test_crc32c.c',
