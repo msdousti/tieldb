@@ -129,40 +129,62 @@ testdb=> SELECT * FROM users;
 
 **Goal:** Restart the server and your data survives.
 
+Two milestones, so that the first visible result comes early:
+- **A. Data survives a restart, with a simplifying assumption:** a table is one 8 KB page, saved to a file at shutdown and loaded at startup. A table holds a few hundred small rows.
+- **B. Lift the limit:** heap files with many pages, the buffer pool and the free space map replace the one-page engine behind the same storage engine interface, and the catalog moves into system tables.
+
 **Decisions:**
-- The catalog is stored in real system tables (pg_class-like) on the same heap machinery as user
-  tables, with a bootstrap on first run.
-- Durability before the WAL (Phase 5): dirty pages are flushed on clean shutdown and on an explicit
-  checkpoint. After `kill -9` only data flushed before the kill is guaranteed.
-- Locking: the per-table mutex stays; the buffer pool has its own internal lock. Page latches and
-  MVCC wait for Phase 6.
-- New modules: `src/types`, `src/storage` (page, tuple, heap file, free space map, catalog) and
-  `src/buffer`. The catalog stays in `src/storage`.
-- Each step below is one small PR (about 100-300 lines), in this order.
+- The storage engine interface (rows and scan cursors, no pages or TIDs) exists from milestone A. The one-page engine is its first implementation and the heap engine of milestone B replaces it, so the executor does not change. The row codec, the page format, the page file, the data directory and the shutdown handling carry over unchanged.
+- Everything on disk is versioned: the data directory has a version file and the catalog has a format version, so a later format is refused or upgraded and never misread.
+- Pages are checked when they are read: a CRC-32C checksum and a validity check of the header and slots.
+- Durability before the WAL (Phase 5): dirty pages are flushed on clean shutdown and on an explicit checkpoint. After `kill -9` only data flushed before the kill is guaranteed.
+- Locking: the per-table mutex stays; the buffer pool has its own internal lock. Page latches and MVCC wait for Phase 6.
+- Milestone A keeps the catalog in a page file of its own, in the same row format. Milestone B moves it into real system tables (pg_class-like) with a bootstrap on first run.
+- New modules: `src/types`, `src/storage` (page, page file, row codec, engines, catalog, and in B heap file, heap tuple and free space map) and `src/buffer`.
+- Each step below is one small PR (about 100-300 lines), in the order of the lists.
 
 ### Tasks
+
+#### Milestone A: data survives a restart
 - [x] Type registry (like Postgres's `pg_type`), so types are data and not special cases in the code
   - [x] Registry module: name, OID, text input and output functions, storage size (fixed or variable length) and comparison function; `INTEGER` and `TEXT` are its first entries
   - [x] The executor and the wire protocol layer look types up through it; this replaces the type-name table in the executor and the type-to-OID mapping in the query handler
   - [x] Values are stored in their type's own format (an integer as 4 bytes), converted from and to text only at the edges; this replaces the `column_type_t` enum and fixes integers being stored as written (`007`)
 - [ ] Page abstraction
   - [x] 8 KB pages
-  - [ ] Page header (LSN, checksum, page type, free space): the fields and the page type are in place; the checksum (CRC-32C) is computed and the LSN set when pages are written (heap file, WAL)
+  - [ ] Page header (LSN, checksum, page type, free space): the fields and the page type are in place; the checksum (CRC-32C) is computed and the LSN set when pages are written (page file, WAL)
   - [x] Slotted page layout (slot array + tuples)
   - [x] Page-level operations (insert, delete, get tuple)
-  - [ ] Page deserialization fuzz target (needs the fuzzing build below)
-- [ ] Fuzzing build (its own small PR, before the first fuzz target; `CLAUDE.md` documents `build-fuzz`, but nothing builds it yet)
-  - [ ] Meson option that builds the `tests/fuzz/` targets with libFuzzer and ASan
-  - [ ] CI job that builds them and runs each for a short time on a seed corpus
 - [ ] Row codec, independent of the storage engine (a future LSM engine reuses it)
   - [ ] Null bitmap (a NULL is a set bit and takes no space; SQL support for NULL comes in Phase 3), then the values of the columns in the stored format of their type, encoded and decoded through the type registry
   - [ ] Variable-length data (length prefix for TEXT), with a spare bit in the prefix reserved for the overflow pointer of Phase 8+
   - [ ] A row that does not fit in one page is an error (errno `EFBIG`) that the SQL layer reports; no overflow storage yet
+- [ ] Page file: read and write one page of a file, all I/O through `io->`
+  - [ ] Checksum (CRC-32C) computed on write and verified on read
+  - [ ] `page_validate`: header and slot sanity checks on every page read from disk, so that later page code can trust a page
+- [ ] Storage engine interface (the vtable from `CLAUDE.md`), so that an LSM engine can be added in Phase 8+, and the one-page engine
+  - [ ] Operations on rows and cursors, not on pages or TIDs: insert, and a scan cursor (open, next, close)
+  - [ ] Separate the catalog entry (name, columns, engine, engine metadata) from the storage of the rows; `table_t` is both today
+  - [ ] One-page engine: the rows of a table are in one page of encoded rows; an INSERT into a full page is an error ("table is full"); save and load the whole page through the page file
+  - [ ] The executor uses the engine for INSERT and SELECT
+- [ ] Catalog file
+  - [ ] Save and load the tables: name, engine, each column's name, type id and display position (so a reordering survives a restart), in a page file of its own with a format version
+  - [ ] Store the engine of each table and its engine-specific metadata (an opaque blob to the catalog)
+- [ ] Data directory and shutdown
+  - [ ] `--data-dir` option; load the catalog and the tables at startup, save them on clean shutdown and on an explicit checkpoint
+  - [ ] Data directory format version: a file with a magic number and a format version (like Postgres's `PG_VERSION`), checked at startup so that an old or foreign directory is refused and not misread
+  - [ ] Clean shutdown: SIGTERM and SIGINT stop the listener, close the connections, save the data and exit with status 0 (today only SIGPIPE is handled)
+
+#### Milestone B: lift the one-page limit
+- [ ] Fuzzing build (its own small PR, before the first fuzz target; `CLAUDE.md` documents `build-fuzz`, but nothing builds it yet)
+  - [ ] Meson option that builds the `tests/fuzz/` targets with libFuzzer and ASan
+  - [ ] CI job that builds them and runs each for a short time on a seed corpus
+  - [ ] Page deserialization fuzz target
 - [ ] Heap tuple header, specific to the heap engine
   - [ ] Header in front of the encoded row: flags, optional xmin/xmax
   - [ ] Tuple ID (TID): page + slot; it stays inside the heap engine and is not exposed to the executor
 - [ ] Heap file management
-  - [ ] Create/open/close heap files, all I/O through `io->`
+  - [ ] Create/open/close heap files with many pages, all I/O through `io->`
   - [ ] Allocate new pages
 - [ ] Buffer pool
   - [ ] Fixed-size pool (e.g., 1000 pages)
@@ -173,55 +195,46 @@ testdb=> SELECT * FROM users;
   - [ ] Generic over files and page numbers, with no heap assumptions: an LSM engine keeps its own file formats and block cache
   - [ ] Zero outstanding pins asserted at teardown
 - [ ] Free space map (bitmap or simple list)
-- [ ] Storage engine interface (the vtable from `CLAUDE.md`), so that an LSM engine can be added in Phase 8+
-  - [ ] Operations on rows and cursors, not on pages or TIDs: insert, and a scan cursor (open, next, close)
-  - [ ] Separate the catalog entry (name, columns, engine, engine metadata) from the storage of the rows; `table_t` is both today
-  - [ ] The heap engine is the first implementation
-- [ ] Integrate with executor
-  - [ ] Tables keep their rows in heap files through the buffer pool, behind the engine interface
-  - [ ] INSERT → find a page with space, add tuple, mark dirty
-  - [ ] SELECT → pin pages, iterate tuples, unpin
-- [ ] Persistent catalog
-  - [ ] Special system tables (pg_class-like)
-  - [ ] Bootstrap: create catalog files on first run
-  - [ ] Load catalog at startup
-  - [ ] Store the engine of each table and its engine-specific metadata (an opaque blob to the catalog)
-  - [ ] Store each column's type by id and its display position next to its definition, so a reordering survives a restart
-  - [ ] Data directory option for the server; flush on clean shutdown and on checkpoint
-  - [ ] Data directory format version: a file with a magic number and a format version (like Postgres's `PG_VERSION`), checked at startup so that an old or foreign directory is refused and not misread
-  - [ ] Clean shutdown: SIGTERM and SIGINT stop the listener, close the connections, flush the dirty pages and exit with status 0 (today only SIGPIPE is handled)
+- [ ] Heap engine
+  - [ ] Implements the storage engine interface and replaces the one-page engine: INSERT finds a page with space, adds a tuple and marks the page dirty; SELECT pins pages, iterates tuples and unpins
+  - [ ] An old data directory with one-page tables is upgraded or refused through the format version
+- [ ] Catalog in system tables
+  - [ ] Special system tables (pg_class-like), stored with the heap engine
+  - [ ] Bootstrap: create the catalog tables on first run
+  - [ ] Replaces the catalog file of milestone A
 
 ### Tests
 - [x] **Reference-model test for slotted page**
   - [x] Random insert/delete operations
   - [x] Compare against simple array model
   - [x] Log RNG seed for reproducibility
-- [ ] Unit tests for the type registry and the tuple round trip
+- [ ] Unit tests for the type registry and the row codec round trip
+- [ ] Page file: round trip, a flipped bit is caught by the checksum, a corrupt header or slot is caught by `page_validate`
+- [ ] Restart test: create a table and insert rows, stop the server with SIGTERM, start it again, the rows are there
+- [ ] Shutdown test: SIGTERM while connected saves the data and exits with status 0
+- [ ] Fault injection for page file, heap file and buffer pool I/O (short write, fsync failure) through the injectable `io`
 - [ ] Unit tests for buffer pool (pin/unpin, eviction)
-- [ ] Fault injection for heap file and buffer pool I/O (short write, fsync failure) through the injectable `io`
-- [ ] Shutdown test: SIGTERM while connected flushes the data, exits with status 0, and the data is there after a restart
 - [ ] Crash test: write data, flush, kill -9, restart, verify the flushed data survives
-- [ ] Fuzz test for page deserialization
+- [ ] Fuzz test for page deserialization (milestone B)
 
 ### Deliverables
 - `src/types/type_registry.{h,c}` - Type registry
 - `src/storage/page.{h,c}` - Slotted page implementation
 - `src/storage/row_codec.{h,c}` - Row codec (engine-independent)
-- `src/storage/heap_tuple.{h,c}` - Heap tuple header and TID
-- `src/storage/heap_file.{h,c}` - Heap file management
-- `src/storage/free_space_map.{h,c}` - Free space map
-- `src/storage/storage_engine.h` - Storage engine interface; the heap engine implements it
-- `tests/fuzz/` - Fuzz targets (page deserialization)
-- `src/buffer/buffer_pool.{h,c}` - Buffer pool
-- `src/storage/catalog.{h,c}` - Persistent catalog (updated)
+- `src/storage/page_file.{h,c}` - Reading and writing pages of a file
+- `src/storage/storage_engine.h` - Storage engine interface; the one-page engine and later the heap engine implement it
+- `src/storage/catalog.{h,c}` - Catalog (updated: save and load)
+- `src/storage/heap_tuple.{h,c}`, `src/storage/heap_file.{h,c}`, `src/storage/free_space_map.{h,c}` - Heap engine parts (milestone B)
+- `src/buffer/buffer_pool.{h,c}` - Buffer pool (milestone B)
+- `tests/fuzz/` - Fuzz targets (milestone B)
 
 ### Completion Criteria
 ```bash
 # Insert data
 psql -h localhost -p 5432 -c "INSERT INTO users VALUES (2, 'Bob');"
 
-# Restart server (Ctrl-C, then restart)
-./build-asan/tieldb
+# Restart the server (Ctrl-C, then start it again with the same --data-dir)
+./build-asan/tieldb --data-dir /tmp/tieldb-data
 
 # Data still there
 psql -h localhost -p 5432 -c "SELECT * FROM users;"
@@ -231,6 +244,8 @@ psql -h localhost -p 5432 -c "SELECT * FROM users;"
   2 | Bob
 (2 rows)
 ```
+
+This works at the end of milestone A (a table is one page). At the end of milestone B it also works after inserting more rows than fit in one page.
 
 **Estimated Time:** 2-3 weeks
 

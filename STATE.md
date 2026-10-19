@@ -169,14 +169,16 @@ counts conditions: a loop condition with `&&` needs a test for each operand bein
 ## What comes next
 
 1. **Phase 2, in the order of the ROADMAP.md plan** (decisions are written there: the catalog in
-   real system tables, flush on shutdown and checkpoint since there is no WAL yet, per-table mutex
+   a catalog file first and system tables in milestone B, flush on shutdown and checkpoint since there is no WAL yet, per-table mutex
    plus a buffer pool lock, rows must fit one page, overflow storage is Phase 8+). Done: the type
    registry (PRs 1 to 3: registry, lookups through it, typed cells) and the slotted page with its
-   reference-model test. Next, one PR each: the fuzzing build (a Meson option and a CI job; nothing
-   builds `build-fuzz` yet), `page_validate` with the page fuzz target, row codec, heap tuple
-   header, heap file, buffer pool, free space map, storage engine interface, heap-backed tables,
-   then the persistent catalog with a data directory version file, clean shutdown (SIGTERM/SIGINT),
-   and the crash test. Phase 3 now also lists memory contexts, BOOLEAN, NULL and DEFAULT.
+   reference-model test. Phase 2 has two milestones (see ROADMAP.md).
+   **A, data survives a restart, with a table being one page:** row codec, page file (checksum and `page_validate`), storage engine interface with the
+   one-page engine wired into the executor, catalog file, then `--data-dir`, the version file and
+   clean shutdown (SIGTERM/SIGINT) with a restart test. **B, lift the one-page limit:** fuzzing
+   build and page fuzz target, heap tuple header, heap file, buffer pool, free space map, heap
+   engine, catalog in system tables, crash test. Phase 3 also lists memory contexts, BOOLEAN, NULL
+   and DEFAULT.
 2. Phase 3 (already in the roadmap): the real SQL parser and syntax tree first, then expressions,
    `WHERE`, projection, `DELETE`/`UPDATE`/`TRUNCATE`/`INSERT ... SELECT`, `generate_series`,
    `ALTER TABLE ... MODIFY/ADD COLUMN ... AFTER|FIRST`, ORDER BY, aggregates, joins.
