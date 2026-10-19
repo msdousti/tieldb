@@ -171,10 +171,12 @@ counts conditions: a loop condition with `&&` needs a test for each operand bein
 1. **Phase 2, in the order of the ROADMAP.md plan** (decisions are written there: the catalog in
    real system tables, flush on shutdown and checkpoint since there is no WAL yet, per-table mutex
    plus a buffer pool lock, rows must fit one page, overflow storage is Phase 8+). Done: the type
-   registry (PRs 1 to 3: registry, lookups through it, typed cells). Next, one PR each: slotted page
-   (`src/storage/page`, with a reference-model test and a fuzz target), tuple format (encode and
-   decode through the registry), heap file, buffer pool, free space map, heap-backed tables, then
-   the persistent catalog with a data directory option and the crash test.
+   registry (PRs 1 to 3: registry, lookups through it, typed cells) and the slotted page with its
+   reference-model test. Next, one PR each: the fuzzing build (a Meson option and a CI job; nothing
+   builds `build-fuzz` yet), `page_validate` with the page fuzz target, row codec, heap tuple
+   header, heap file, buffer pool, free space map, storage engine interface, heap-backed tables,
+   then the persistent catalog with a data directory version file, clean shutdown (SIGTERM/SIGINT),
+   and the crash test. Phase 3 now also lists memory contexts, BOOLEAN, NULL and DEFAULT.
 2. Phase 3 (already in the roadmap): the real SQL parser and syntax tree first, then expressions,
    `WHERE`, projection, `DELETE`/`UPDATE`/`TRUNCATE`/`INSERT ... SELECT`, `generate_series`,
    `ALTER TABLE ... MODIFY/ADD COLUMN ... AFTER|FIRST`, ORDER BY, aggregates, joins.

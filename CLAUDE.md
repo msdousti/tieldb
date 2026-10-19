@@ -15,7 +15,7 @@ An educational DBMS built to learn database internals, modeled after PostgreSQL 
 - Extensible architecture - multiple storage engines, concurrency models
 - Uses Postgres wire protocol (connect with `psql`)
 
-**Current Phase:** Phase 0 - Project Setup (see `ROADMAP.md`)
+**Current Phase:** Phase 2 - Persistence (see `ROADMAP.md`; `STATE.md` says what is done and what is next)
 
 ---
 
@@ -446,17 +446,11 @@ Work proceeds as a sequence of small, reviewable pull requests, each leaving `ma
 
 ## Current Development Focus
 
-**Phase 0: Project Setup** (see `ROADMAP.md`)
+**Phase 2: Persistence** (see `ROADMAP.md`). Phases 0 and 1 are complete.
 
-Tasks:
-- [x] Define guidelines and design choices
-- [ ] Set up a Linux VM
-- [ ] Create Meson build configuration
-- [ ] Scaffold directory structure
-- [ ] Write injectable I/O interface
-- [ ] First "hello world" test
+Done: type registry with typed cells, slotted pages. Next: the fuzzing build, page validation, the row codec, heap file, buffer pool, storage engine interface, persistent catalog.
 
-**Next:** Phase 1 - In-Memory Skeleton + Postgres Wire Protocol
+**Next phase:** Phase 3 - Real Queries (parser, expressions, WHERE, joins)
 
 ---
 

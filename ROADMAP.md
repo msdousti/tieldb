@@ -23,7 +23,7 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
 - ✅ `meson.build`, `.clang-format`, `.clang-tidy`
 - ✅ `src/io/io.{h,c}` - Injectable I/O interface
 - ✅ `tests/test_io.c` - First test (5 tests passing)
-- ✅ `CLAUDE.md` - Development guide (replaces docs/dev-setup.md)
+- ✅ `CLAUDE.md` - Development guide (with `docs/dev-setup.md` for the VM and tool setup)
 - ✅ `.github/workflows/ci.yml` - CI/CD pipeline
 - ✅ `scripts/pre-commit` - Git pre-commit hooks
 
@@ -38,7 +38,7 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
 
 ---
 
-## Phase 1: In-Memory Skeleton + Postgres Wire Protocol
+## Phase 1: In-Memory Skeleton + Postgres Wire Protocol ✅
 
 **Goal:** Connect with `psql`, execute hardcoded queries in memory. No persistence yet.
 
@@ -90,7 +90,13 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
 - Fuzz test for wire protocol messages: dropped, since TielDB trusts well-behaved clients and does not defend against malformed messages. The SQL parser is fuzzed in Phase 3
 
 ### Deliverables
-- `src/net/protocol.{h,c}` - Postgres wire protocol
+- `src/net/wire_buffer.{h,c}` - Big-endian writer and bounds-checked reader
+- `src/net/protocol.{h,c}` - Postgres wire protocol (backend message encoders)
+- `src/net/startup.{h,c}`, `src/net/session.h` - Startup packet handling and session info
+- `src/net/query_handler.{h,c}`, `src/net/connection.{h,c}` - Query messages and the per-connection loop
+- `src/options.{h,c}` - Command-line options
+- `src/ds/hash_map.{h,c}` - Reusable hash map
+- `src/storage/table.{h,c}` - In-memory table
 - `src/sql/simple_sql.{h,c}` - Stopgap SQL matchers (the real parser is a Phase 3 task: `src/sql/parser.{h,c}`)
 - `src/storage/catalog.{h,c}` - In-memory catalog, on top of `src/ds/hash_map.{h,c}`
 - `src/executor/executor.{h,c}` - Hardcoded executor
@@ -104,11 +110,11 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
 # In another terminal
 psql -h localhost -U test testdb
 
-testdb=> CREATE TABLE user (id INTEGER, name TEXT);
+testdb=> CREATE TABLE users (id INTEGER, name TEXT);
 CREATE TABLE
-testdb=> INSERT INTO user VALUES (1, 'Alice');
+testdb=> INSERT INTO users VALUES (1, 'Alice');
 INSERT 0 1
-testdb=> SELECT * FROM user;
+testdb=> SELECT * FROM users;
  id | name
 ----+-------
   1 | Alice
@@ -141,12 +147,15 @@ testdb=> SELECT * FROM user;
   - [x] Values are stored in their type's own format (an integer as 4 bytes), converted from and to text only at the edges; this replaces the `column_type_t` enum and fixes integers being stored as written (`007`)
 - [ ] Page abstraction
   - [x] 8 KB pages
-  - [ ] Page header (LSN, checksum, page type, free space): the fields and the page type are in place; the checksum is computed and the LSN set when pages are written (heap file, WAL)
+  - [ ] Page header (LSN, checksum, page type, free space): the fields and the page type are in place; the checksum (CRC-32C) is computed and the LSN set when pages are written (heap file, WAL)
   - [x] Slotted page layout (slot array + tuples)
   - [x] Page-level operations (insert, delete, get tuple)
-  - [ ] Page deserialization fuzz target
+  - [ ] Page deserialization fuzz target (needs the fuzzing build below)
+- [ ] Fuzzing build (its own small PR, before the first fuzz target; `CLAUDE.md` documents `build-fuzz`, but nothing builds it yet)
+  - [ ] Meson option that builds the `tests/fuzz/` targets with libFuzzer and ASan
+  - [ ] CI job that builds them and runs each for a short time on a seed corpus
 - [ ] Row codec, independent of the storage engine (a future LSM engine reuses it)
-  - [ ] Null bitmap, then the values of the columns in the stored format of their type, encoded and decoded through the type registry
+  - [ ] Null bitmap (a NULL is a set bit and takes no space; SQL support for NULL comes in Phase 3), then the values of the columns in the stored format of their type, encoded and decoded through the type registry
   - [ ] Variable-length data (length prefix for TEXT), with a spare bit in the prefix reserved for the overflow pointer of Phase 8+
   - [ ] A row that does not fit in one page is an error (errno `EFBIG`) that the SQL layer reports; no overflow storage yet
 - [ ] Heap tuple header, specific to the heap engine
@@ -179,6 +188,8 @@ testdb=> SELECT * FROM user;
   - [ ] Store the engine of each table and its engine-specific metadata (an opaque blob to the catalog)
   - [ ] Store each column's type by id and its display position next to its definition, so a reordering survives a restart
   - [ ] Data directory option for the server; flush on clean shutdown and on checkpoint
+  - [ ] Data directory format version: a file with a magic number and a format version (like Postgres's `PG_VERSION`), checked at startup so that an old or foreign directory is refused and not misread
+  - [ ] Clean shutdown: SIGTERM and SIGINT stop the listener, close the connections, flush the dirty pages and exit with status 0 (today only SIGPIPE is handled)
 
 ### Tests
 - [x] **Reference-model test for slotted page**
@@ -188,27 +199,32 @@ testdb=> SELECT * FROM user;
 - [ ] Unit tests for the type registry and the tuple round trip
 - [ ] Unit tests for buffer pool (pin/unpin, eviction)
 - [ ] Fault injection for heap file and buffer pool I/O (short write, fsync failure) through the injectable `io`
+- [ ] Shutdown test: SIGTERM while connected flushes the data, exits with status 0, and the data is there after a restart
 - [ ] Crash test: write data, flush, kill -9, restart, verify the flushed data survives
 - [ ] Fuzz test for page deserialization
 
 ### Deliverables
 - `src/types/type_registry.{h,c}` - Type registry
 - `src/storage/page.{h,c}` - Slotted page implementation
-- `src/storage/tuple.{h,c}` - Tuple format
+- `src/storage/row_codec.{h,c}` - Row codec (engine-independent)
+- `src/storage/heap_tuple.{h,c}` - Heap tuple header and TID
 - `src/storage/heap_file.{h,c}` - Heap file management
+- `src/storage/free_space_map.{h,c}` - Free space map
+- `src/storage/storage_engine.h` - Storage engine interface; the heap engine implements it
+- `tests/fuzz/` - Fuzz targets (page deserialization)
 - `src/buffer/buffer_pool.{h,c}` - Buffer pool
 - `src/storage/catalog.{h,c}` - Persistent catalog (updated)
 
 ### Completion Criteria
 ```bash
 # Insert data
-psql -h localhost -p 5433 -c "INSERT INTO user VALUES (2, 'Bob');"
+psql -h localhost -p 5432 -c "INSERT INTO users VALUES (2, 'Bob');"
 
 # Restart server (Ctrl-C, then restart)
 ./build-asan/tieldb
 
 # Data still there
-psql -h localhost -p 5433 -c "SELECT * FROM user;"
+psql -h localhost -p 5432 -c "SELECT * FROM users;"
  id | name
 ----+------
   1 | Alice
@@ -232,17 +248,28 @@ psql -h localhost -p 5433 -c "SELECT * FROM user;"
   - [ ] Syntax errors with SQLSTATE `42601` and an error position, as in Postgres
   - [ ] Quick wins once it exists: `INSERT INTO t (a, b) VALUES ...` with a column list, multi-row `VALUES (1, 'a'), (2, 'b')`, `CREATE TABLE IF NOT EXISTS`, `DROP TABLE [IF EXISTS]`
   - [ ] Fuzz test for the parser (random text must never crash it)
+- [ ] Memory contexts (arena allocator, the rule in `CLAUDE.md`; before the operators, which allocate a lot per query)
+  - [ ] A per-query arena that is freed in one call at the end of the query; assert zero live arenas at teardown
+  - [ ] Move the per-row and per-statement `malloc` calls of the query handler and the executor to it
+- [ ] BOOLEAN type (a registry entry; the result type of comparisons and logical operators; `true` and `false` literals)
+- [ ] NULL support
+  - [ ] `NULL` literal, nullable columns (using the null bitmap of the row codec), `IS [NOT] NULL`, `NOT NULL` constraint
+  - [ ] Three-valued logic in comparisons and `AND`, `OR`, `NOT`; a `WHERE` keeps a row only if the condition is true
+  - [ ] Aggregates ignore NULL (`COUNT(*)` does not); `ORDER BY` puts NULL last
+- [ ] `DEFAULT` values for columns
+- [ ] Error codes: the SQLSTATEs the server uses, in one header and consistent with Postgres (`42601`, `42P01`, `42P07`, `42701`, `42704`, `22P02`, `0A000` so far; `23505` for unique violations in Phase 4; `40001` and `40P01` in Phase 6)
 - [ ] Expression evaluation
   - [ ] Arithmetic (`+`, `-`, `*`, `/`, `%`)
   - [ ] Comparison (`=`, `!=`, `<`, `>`, `<=`, `>=`)
   - [ ] Logical (`AND`, `OR`, `NOT`)
+  - [ ] `IN`, `BETWEEN`, `LIKE`
   - [ ] Type casting
 - [ ] WHERE clause
   - [ ] Filter tuples during scan
   - [ ] Conjunctive normal form (CNF) for optimizations later
 - [ ] Projection
-  - [ ] Select specific columns: `SELECT id, name FROM user`
-  - [ ] Computed columns: `SELECT id * 2 AS double_id FROM user`
+  - [ ] Select specific columns: `SELECT id, name FROM users`
+  - [ ] Computed columns: `SELECT id * 2 AS double_id FROM users`
 - [ ] Changing data (after WHERE; with MVCC in Phase 6 these mark row versions instead of removing them)
   - [ ] `DELETE FROM t [WHERE ...]`
   - [ ] `UPDATE t SET col = expr [, ...] [WHERE ...]`
@@ -251,6 +278,7 @@ psql -h localhost -p 5433 -c "SELECT * FROM user;"
 - [ ] ORDER BY (external sort)
   - [ ] In-memory sort for small tables
   - [ ] External merge sort for large tables (spill to disk)
+- [ ] `SELECT DISTINCT`
 - [ ] LIMIT and OFFSET
 - [ ] Aggregates
   - [ ] COUNT, SUM, AVG, MIN, MAX
@@ -266,7 +294,7 @@ psql -h localhost -p 5433 -c "SELECT * FROM user;"
   - [ ] Only the column's current type is accepted at first; changing the type needs data conversion and is a separate step
 - [ ] Adding columns: `ALTER TABLE <t> ADD COLUMN <column> <type> [AFTER <other column> | FIRST]` (MariaDB syntax)
   - [ ] Add the column at the end of the stored row, and give it the requested display position, so existing rows are not rewritten
-  - [ ] Existing rows need a value for the new column: needs NULL or `DEFAULT` support first
+  - [ ] Existing rows get the `DEFAULT` of the new column, or NULL (see the NULL and `DEFAULT` tasks above)
 - [ ] `generate_series(start, stop [, step])` as a function in FROM, for test and benchmark data
   - [ ] `SELECT * FROM generate_series(1, 100000)` as a function-scan operator, no table needed
   - [ ] Then fill tables with `INSERT INTO t SELECT ... FROM generate_series(...)`; large inputs for ORDER BY, aggregate, join and (Phase 2) buffer pool tests
@@ -292,7 +320,7 @@ psql -h localhost -p 5433 -c "SELECT * FROM user;"
 ```sql
 -- Complex query works
 SELECT u.name, o.amount
-FROM user u JOIN orders o ON u.id = o.user_id
+FROM users u JOIN orders o ON u.id = o.user_id
 WHERE o.amount > 100
 ORDER BY o.amount DESC
 LIMIT 10;
@@ -323,6 +351,12 @@ HAVING COUNT(*) > 5;
   - [ ] Catalog entry (pg_index-like)
   - [ ] Index-to-table mapping
   - [ ] Unique vs. non-unique
+  - [ ] Composite keys (several columns, compared one after the other with the type registry's compare functions)
+- [ ] Index maintenance
+  - [ ] INSERT adds the key with the row's TID; a unique index rejects a duplicate (SQLSTATE `23505`)
+  - [ ] DELETE and UPDATE remove or change the keys
+  - [ ] CREATE INDEX builds the index in bulk from the rows that already exist
+  - [ ] A dead heap slot is reclaimed (`page_reclaim_dead_slots`) only after the index entries that point to it are gone
 - [ ] CREATE INDEX, DROP INDEX
 - [ ] Index scan operator
   - [ ] Volcano interface
@@ -349,13 +383,13 @@ HAVING COUNT(*) > 5;
 ### Completion Criteria
 ```sql
 -- Create index
-CREATE INDEX idx_user_id ON user(id);
+CREATE INDEX idx_user_id ON users(id);
 
 -- Query uses index (verify with EXPLAIN later)
-SELECT * FROM user WHERE id = 42;
+SELECT * FROM users WHERE id = 42;
 
 -- Range scan works
-SELECT * FROM user WHERE id >= 10 AND id < 100;
+SELECT * FROM users WHERE id >= 10 AND id < 100;
 ```
 
 **Estimated Time:** 2-3 weeks
@@ -368,7 +402,9 @@ SELECT * FROM user WHERE id >= 10 AND id < 100;
 
 ### Tasks
 - [ ] Write-Ahead Log (WAL)
-  - [ ] WAL records (redo-only first: INSERT, UPDATE, DELETE)
+  - [ ] Statement-level autocommit: until Phase 6 every statement is its own transaction, and "commit" below means the end of the statement
+  - [ ] WAL records (redo-only first: INSERT, UPDATE, DELETE), also for B+tree page splits and for catalog changes (CREATE/DROP TABLE and INDEX), so that recovery leaves the indexes and the catalog consistent
+  - [ ] WAL segment files of a fixed size, recycled after a checkpoint
   - [ ] LSN (log sequence number) per page
   - [ ] WAL buffers + background writer
   - [ ] fsync on commit (force-log-at-commit)
@@ -409,7 +445,7 @@ SELECT * FROM user WHERE id >= 10 AND id < 100;
 ### Completion Criteria
 ```bash
 # Insert data
-psql -c "BEGIN; INSERT INTO user VALUES (100, 'Test'); COMMIT;"
+psql -c "BEGIN; INSERT INTO users VALUES (100, 'Test'); COMMIT;"
 
 # Kill server hard (kill -9)
 kill -9 $(pgrep tieldb)
@@ -418,7 +454,7 @@ kill -9 $(pgrep tieldb)
 ./build-asan/tieldb
 
 # Data is there
-psql -c "SELECT * FROM user WHERE id = 100;"
+psql -c "SELECT * FROM users WHERE id = 100;"
  id | name
 -----+------
  100 | Test
@@ -436,6 +472,7 @@ psql -c "SELECT * FROM user WHERE id = 100;"
 ### Tasks
 - [ ] Transaction manager
   - [ ] BEGIN, COMMIT, ROLLBACK
+  - [ ] ReadyForQuery reports the transaction state (`I` idle, `T` in a transaction, `E` failed; the encoder already supports the three); after an error inside a transaction block, commands are rejected until ROLLBACK
   - [ ] Transaction ID (XID) assignment
   - [ ] Active transaction list
 - [ ] Strict 2PL (Two-Phase Locking)
@@ -474,12 +511,12 @@ psql -c "SELECT * FROM user WHERE id = 100;"
 ```sql
 -- Transaction 1
 BEGIN;
-UPDATE user SET name = 'Alice2' WHERE id = 1;
+UPDATE users SET name = 'Alice2' WHERE id = 1;
 -- (pause)
 
 -- Transaction 2 (blocks until T1 commits/aborts)
 BEGIN;
-UPDATE user SET name = 'Alice3' WHERE id = 1;  -- waits
+UPDATE users SET name = 'Alice3' WHERE id = 1;  -- waits
 -- T1 commits
 COMMIT;  -- now T2 proceeds
 COMMIT;
@@ -536,18 +573,18 @@ COMMIT;
 ### Completion Criteria
 ```sql
 -- Collect stats
-ANALYZE user;
+ANALYZE users;
 
 -- Show plan
-EXPLAIN SELECT * FROM user WHERE id = 42;
+EXPLAIN SELECT * FROM users WHERE id = 42;
 
 QUERY PLAN
 -------------------------------------------------------------
-Index Scan using idx_user_id on user  (cost=0.00..8.27 rows=1)
+Index Scan using idx_user_id on users  (cost=0.00..8.27 rows=1)
   Index Cond: (id = 42)
 
 -- Complex join plan
-EXPLAIN SELECT * FROM user u JOIN orders o ON u.id = o.user_id;
+EXPLAIN SELECT * FROM users u JOIN orders o ON u.id = o.user_id;
 
 QUERY PLAN
 -------------------------------------------------------------
@@ -555,7 +592,7 @@ Hash Join  (cost=24.50..89.75 rows=1000)
   Hash Cond: (o.user_id = u.id)
   -> Seq Scan on orders o  (cost=0.00..20.00 rows=1000)
   -> Hash  (cost=15.00..15.00 rows=500)
-        -> Seq Scan on user u  (cost=0.00..15.00 rows=500)
+        -> Seq Scan on users u  (cost=0.00..15.00 rows=500)
 ```
 
 **Estimated Time:** 2-3 weeks
@@ -565,9 +602,20 @@ Hash Join  (cost=24.50..89.75 rows=1000)
 ## Phase 8+: Extended Features (Optional, Pick What Interests You)
 
 ### Extended Query Protocol (Prepared Statements)
+psql needs only the simple protocol. JDBC, psycopg and most drivers use this one for parameterized queries, so move it earlier if you want to use such a driver.
 - [ ] Parse/Bind/Execute messages
 - [ ] Parameter binding ($1, $2, ...)
 - [ ] Plan caching
+
+### Copy Protocol and LISTEN/NOTIFY
+- [ ] `COPY ... FROM STDIN` and `COPY ... TO STDOUT` (bulk load and dump)
+- [ ] `LISTEN` and `NOTIFY`
+
+### psql Meta-Commands
+- [ ] Minimal `pg_catalog` views (`pg_class`, `pg_attribute`, `pg_namespace`, `pg_type`) over the persistent catalog, so that `\dt` and `\d` work
+
+### Benchmarks
+- [ ] A small benchmark program on `build-release`: bulk insert, scans, index lookups, using `generate_series` data
 
 ### More Data Types
 - [ ] FLOAT, DOUBLE
@@ -650,7 +698,7 @@ Hash Join  (cost=24.50..89.75 rows=1000)
    - This is the main test for WAL
 
 3. **Fuzz tests for parsers and deserializers**
-   - libFuzzer on page deserializer, wire protocol parser, WAL replay
+   - libFuzzer on page deserializer, SQL parser, WAL replay
    - Run in `build-fuzz` with ASan
    - Let it run overnight to find edge cases
 
@@ -666,15 +714,7 @@ Hash Join  (cost=24.50..89.75 rows=1000)
 
 ### Parsing
 
-**Don't write a full SQL parser initially.** It's a huge distraction.
-
-Options:
-- **libpg_query** (C library, extracts Postgres parser): best option for learning
-- Hand-write a minimal parser for Phase 1 (just CREATE, INSERT, SELECT *)
-- **sqlparser-rs** (Rust): if comfortable with FFI
-- **JSqlParser** (Java) or **Calcite** (Java): if using JVM
-
-Use a real parser by Phase 3 (when you need expressions, joins, etc.).
+TielDB writes its own parser: stopgap matchers in Phase 1 and 2, then the hand-written recursive-descent parser of Phase 3. Do not pull in a parser library. **libpg_query** (the Postgres parser as a C library) is useful only as an oracle in tests: parse the same text with both and compare.
 
 ### Resources
 
