@@ -160,7 +160,7 @@ typedef struct model_op {
 
 static constexpr uint32_t MODEL_SEED = 12345;
 
-static uint32_t next_random(uint32_t *state)
+static uint32_t next_random32(uint32_t *state)
 {
     uint32_t x = *state;
     x ^= x << 13;
@@ -172,12 +172,12 @@ static uint32_t next_random(uint32_t *state)
 
 static model_op_t random_op(uint32_t *rng)
 {
-    model_op_t op = {.kind = (op_kind_t) (next_random(rng) % OP_COUNT)};
-    size_t len = next_random(rng) % 15;
+    model_op_t op = {.kind = (op_kind_t) (next_random32(rng) % OP_COUNT)};
+    size_t len = next_random32(rng) % 15;
 
-    op.number = (int32_t) next_random(rng);
+    op.number = (int32_t) next_random32(rng);
     for (size_t i = 0; i < len; i++) {
-        op.text[i] = (char) ('a' + (next_random(rng) % 26));
+        op.text[i] = (char) ('a' + (next_random32(rng) % 26));
     }
     return op;
 }
