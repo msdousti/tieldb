@@ -640,6 +640,15 @@ psql needs only the simple protocol. JDBC, psycopg and most drivers use this one
 ### psql Meta-Commands
 - [ ] Minimal `pg_catalog` views (`pg_class`, `pg_attribute`, `pg_namespace`, `pg_type`) over the persistent catalog, so that `\dt` and `\d` work
 
+### Object Storage Backend (S3)
+The storage engine interface (rows and cursors) and path strings are already generic. The layers below are shaped like POSIX files (`io_ops_t` on file descriptors, `page_file` with in-place page writes and `fsync`), so a backend below `page_file` is the seam.
+- [ ] A storage backend interface below `page_file`: read a byte range, write a whole object, delete, list, optionally append; the local backend uses `pread` and `pwrite`, an S3 backend uses ranged GET and PUT. The fault injection moves to this interface, so the crash tests keep working
+- [ ] `one_page_file` and the catalog file on the S3 backend (a PUT is atomic, so they cannot tear)
+- [ ] The data directory lock with conditional writes (`If-None-Match`) in place of the pid file; no directory fsync
+- [ ] A design for in-place updates on immutable objects: the LSM engine (immutable files and a manifest) is the natural fit; a heap engine would need a page server in front of the object store, with the WAL shipped to it
+- [ ] The WAL needs append and fsync: batched objects, or a separate log service
+- [ ] Latency of tens of milliseconds per request: buffer pool with read-ahead, request batching, and a local cache
+
 ### Benchmarks
 - [ ] A small benchmark program on `build-release`: bulk insert, scans, index lookups, using `generate_series` data
 - [ ] Compare buffered and direct I/O with the buffer pool (the optional `O_DIRECT` mode of Phase 2)
