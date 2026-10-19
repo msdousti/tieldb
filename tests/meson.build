@@ -96,6 +96,15 @@ test_page = executable('test_page',
 
 test('page', test_page)
 
+# Test: one-page storage engine
+test_one_page_engine = executable('test_one_page_engine',
+  'test_one_page_engine.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('one_page_engine', test_one_page_engine)
+
 # Test: files of pages
 test_page_file = executable('test_page_file',
   'test_page_file.c',
