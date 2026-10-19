@@ -34,7 +34,7 @@ select version();   select current_user;   select current_database();
 - `INSERT INTO t VALUES (...)`: integers and `'strings'` (with `''` as the escape); values are checked
   against the column types (22P02); wrong count gives 42601.
 - `SELECT * FROM t`. Unknown table gives 42P01. Other statements get 0A000 ("unsupported").
-- Everything is in memory and lost on restart (Phase 2 adds persistence).
+- Everything is in memory and lost on restart (Phase 2 adds persistence). A table holds what fits in one 8 KB page (a few hundred small rows); a full table is error 53100, a row that could never fit 54000.
 - One thread per connection. Tables and the catalog are shared and locked.
 - Columns have a display order separate from the storage order (`table_set_display_order`); there
   is no SQL to change it yet (roadmap: `ALTER TABLE ... MODIFY ... AFTER`).
@@ -133,10 +133,16 @@ src/
                      insert, create table, empty); the real parser is a Phase 3 task
   executor/          executor_insert, executor_create_table, executor_select_all (+ release)
   storage/
-    table              in-memory table: copies name/columns, cells stored in the format of their
-                       column type (converted by the registry), row count, per-table mutex,
-                       display order, embedded hash node
+    table              catalog entry of a table: name, columns, display order, per-table mutex,
+                       embedded hash node; it owns a storage engine instance that holds the rows
+                       (insert converts text to the stored format of the column types)
     catalog            all tables by name in a hash map behind a read-write lock
+    storage_engine.h   engine interface: rows and cursors (insert, open/next/close cursor, destroy)
+    one_page_engine    the first engine: all rows of a table in one 8 KB page, in memory
+    row_codec          null bitmap and values of a row as bytes, independent of the engine
+    page               8 KB slotted page, slot states, CRC-32C checksum, page_validate
+    page_file          read/write pages of a file through io->, checksum checked on read
+    crc32c             the page checksum
 tests/               one test_*.c per module (cmocka), test_wire_buffer_oom.c (allocation
                      failures via renamed malloc/calloc/realloc), test_tieldb.c (spawns the
                      binary), psql_session.sh + .expected (real psql, suite "client"),
