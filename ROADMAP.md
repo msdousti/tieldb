@@ -167,9 +167,9 @@ Two milestones, so that the first visible result comes early:
   - [x] Operations on rows and cursors, not on pages or TIDs: insert, and a scan cursor (open, next, close)
   - [ ] Dropping the data of a table: an operation (`storage_drop`) that deletes the persistent data and then destroys the instance. `storage_destroy` only frees memory, because it is also the call at clean shutdown, where the data must stay. Added with the first engine that keeps files
   - [x] Separate the catalog entry (name, columns, engine, engine metadata) from the storage of the rows: `table_t` is the catalog entry and owns an engine instance that holds the rows
-  - [ ] One-page engine
+  - [x] One-page engine
     - [x] The rows of a table are in one page of encoded rows, in memory; an INSERT into a full page is an error (`ENOSPC`), and a row that could never fit is `EFBIG`
-    - [ ] Save and load the whole page through the page file
+    - [x] Save and load the whole page through the page file (`storage_save`, `one_page_engine_load`)
   - [x] The executor and the query handler use the engine for INSERT and SELECT; a full table (`53100`) and a row that could never fit (`54000`) are errors for the client
 - [ ] Catalog file
   - [ ] Save and load the tables: name, engine, each column's name, type id and display position (so a reordering survives a restart), in a page file of its own with a format version

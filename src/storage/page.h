@@ -45,6 +45,7 @@ constexpr size_t PAGE_SIZE = 8192;
 typedef enum {
     PAGE_TYPE_FREE = 0,
     PAGE_TYPE_HEAP = 1,
+    PAGE_TYPE_CATALOG = 2,
 } page_type_t;
 
 /** The state of a slot. A new slot is normal; deleting its tuple makes it dead. */

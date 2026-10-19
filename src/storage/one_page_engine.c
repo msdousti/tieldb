@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 #include "storage/page.h"
+#include "storage/page_file.h"
 
 typedef struct {
     storage_engine_t base;
@@ -26,7 +27,14 @@ static row_layout_t layout_of(const one_page_engine_t *engine)
     return (row_layout_t){engine->types, engine->column_count};
 }
 
-storage_engine_t *one_page_engine_create(const row_layout_t *layout)
+static size_t largest_row_of_an_empty_page(void)
+{
+    page_t empty;
+    page_init(&empty, PAGE_TYPE_HEAP);
+    return page_free_space(&empty);
+}
+
+static one_page_engine_t *allocate_engine(const row_layout_t *layout)
 {
     size_t size = sizeof(one_page_engine_t) + (layout->count * sizeof(layout->types[0]));
     one_page_engine_t *engine = malloc(size);
@@ -38,9 +46,41 @@ storage_engine_t *one_page_engine_create(const row_layout_t *layout)
     for (size_t column = 0; column < layout->count; column++) {
         engine->types[column] = layout->types[column];
     }
+    engine->largest_row = largest_row_of_an_empty_page();
+    return engine;
+}
+
+storage_engine_t *one_page_engine_create(const row_layout_t *layout)
+{
+    one_page_engine_t *engine = allocate_engine(layout);
+    if (engine == nullptr) {
+        return nullptr;
+    }
     page_init(&engine->page, PAGE_TYPE_HEAP);
-    engine->largest_row = page_free_space(&engine->page);
     return &engine->base;
+}
+
+storage_engine_t *one_page_engine_load(const row_layout_t *layout, const char *path)
+{
+    one_page_engine_t *engine = allocate_engine(layout);
+    if (engine == nullptr) {
+        return nullptr;
+    }
+    if (page_file_load(path, &engine->page) != 0) {
+        free(engine);
+        return nullptr;
+    }
+    if (page_type(&engine->page) != PAGE_TYPE_HEAP) {
+        errno = EBADMSG;
+        free(engine);
+        return nullptr;
+    }
+    return &engine->base;
+}
+
+static int one_page_save(storage_engine_t *base, const char *path)
+{
+    return page_file_save(path, &((one_page_engine_t *) base)->page);
 }
 
 static void one_page_destroy(storage_engine_t *engine)
@@ -100,6 +140,7 @@ static void one_page_close_cursor(storage_cursor_t *cursor)
 static const storage_engine_ops_t ONE_PAGE_OPS = {
     .destroy = one_page_destroy,
     .insert = one_page_insert,
+    .save = one_page_save,
     .open_cursor = one_page_open_cursor,
     .next = one_page_next,
     .close_cursor = one_page_close_cursor,

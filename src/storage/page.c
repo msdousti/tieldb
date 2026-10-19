@@ -29,7 +29,7 @@ typedef struct {
 
 static constexpr size_t PAGE_HEADER_SIZE = 24;
 // Keep this the value after the last page_type_t, or page_validate rejects the new type
-static constexpr unsigned PAGE_TYPE_LIMIT = PAGE_TYPE_HEAP + 1;
+static constexpr unsigned PAGE_TYPE_LIMIT = PAGE_TYPE_CATALOG + 1;
 static constexpr unsigned STATE_SHIFT = 14;
 static constexpr uint16_t OFFSET_MASK = (1U << STATE_SHIFT) - 1;
 
