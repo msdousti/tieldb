@@ -28,6 +28,7 @@
 #include "net/query_handler.h"
 #include "net/server.h"
 #include "storage/catalog.h"
+#include "storage/page_file.h"
 #include "net/startup.h"
 #include "net/wire_buffer.h"
 #include "types/type_registry.h"
@@ -602,6 +603,16 @@ static table_t *create_pair_table_with_real_allocations(void)
     return table;
 }
 
+static void
+test_page_file_open_fails_when_the_handle_cannot_be_allocated([[maybe_unused]] void **state)
+{
+    will_return(oom_malloc, false);
+
+    errno = 0;
+    assert_null(page_file_open("/tmp/tieldb_page_file_oom"));
+    assert_int_equal(errno, ENOMEM);
+}
+
 static void test_table_create_fails_when_memory_runs_out([[maybe_unused]] void **state)
 {
     will_return(oom_calloc, false);
@@ -799,6 +810,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_server_create_fails_when_memory_runs_out),
     cmocka_unit_test(test_hash_map_create_fails_when_memory_runs_out),
     cmocka_unit_test(test_hash_map_keeps_working_when_it_cannot_grow),
+    cmocka_unit_test(test_page_file_open_fails_when_the_handle_cannot_be_allocated),
     cmocka_unit_test(test_table_create_fails_when_memory_runs_out),
     cmocka_unit_test(test_catalog_create_fails_when_the_table_cannot_be_allocated),
     cmocka_unit_test(test_table_insert_fails_when_the_cells_cannot_grow),

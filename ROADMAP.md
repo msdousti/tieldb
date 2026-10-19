@@ -159,10 +159,10 @@ Two milestones, so that the first visible result comes early:
   - [x] Null bitmap (a NULL is a set bit and takes no space; SQL support for NULL comes in Phase 3), then the values of the columns in the stored format of their type, encoded and decoded through the type registry
   - [x] Variable-length data (length prefix for TEXT), with a spare bit in the prefix reserved for the overflow pointer of Phase 8+
   - [ ] A row that does not fit in one page is an error (errno `EFBIG`) that the SQL layer reports; no overflow storage yet (the codec already refuses a value over 32767 bytes with `EFBIG`; the page-sized limit comes with the engine)
-- [ ] Page file: read and write one page of a file, all I/O through `io->`
+- [x] Page file: read and write one page of a file, all I/O through `io->`
   - [x] CRC-32C, and `page_set_checksum` / `page_verify_checksum` for the page header
   - [x] `page_validate`: header and slot sanity checks on every page read from disk, so that later page code can trust a page
-  - [ ] Read and write pages of a file: the checksum is set on write, and verified and validated on read
+  - [x] Read and write pages of a file: the checksum is set on write, and verified and validated on read
 - [ ] Storage engine interface (the vtable from `CLAUDE.md`), so that an LSM engine can be added in Phase 8+, and the one-page engine
   - [ ] Operations on rows and cursors, not on pages or TIDs: insert, and a scan cursor (open, next, close)
   - [ ] Separate the catalog entry (name, columns, engine, engine metadata) from the storage of the rows; `table_t` is both today
@@ -174,6 +174,8 @@ Two milestones, so that the first visible result comes early:
 - [ ] Data directory and shutdown
   - [ ] `--data-dir` option; load the catalog and the tables at startup, save them on clean shutdown and on an explicit checkpoint
   - [ ] Data directory format version: a file with a magic number and a format version (like Postgres's `PG_VERSION`), checked at startup so that an old or foreign directory is refused and not misread
+  - [ ] One server per data directory: a lock on the directory (a pid file created with `O_EXCL`, as Postgres does, or an advisory lock that the kernel drops when the process dies), so that a second server on the same directory refuses to start and cannot overwrite the first one's pages; it needs a stale-lock check or a lock call in the injectable I/O layer
+  - [ ] Directory durability: fsync the data directory after creating a file in it (the injectable I/O layer has no way to open or sync a directory yet)
   - [ ] Clean shutdown: SIGTERM and SIGINT stop the listener, close the connections, save the data and exit with status 0 (today only SIGPIPE is handled)
 
 #### Milestone B: lift the one-page limit
@@ -195,6 +197,7 @@ Two milestones, so that the first visible result comes early:
   - [ ] Page ID (file number + page number)
   - [ ] Generic over files and page numbers, with no heap assumptions: an LSM engine keeps its own file formats and block cache
   - [ ] Zero outstanding pins asserted at teardown
+  - [ ] Optional direct I/O (`O_DIRECT`, off by default), so that a page is not cached twice: the page buffers are 4096-aligned (`alignas` on `page_t`); the tests run with it on and off, and fall back when the filesystem refuses it (`tmpfs` does); `fsync` is still needed for durability
 - [ ] Free space map (bitmap or simple list)
 - [ ] Heap engine
   - [ ] Implements the storage engine interface and replaces the one-page engine: INSERT finds a page with space, adds a tuple and marks the page dirty; SELECT pins pages, iterates tuples and unpins
@@ -210,10 +213,12 @@ Two milestones, so that the first visible result comes early:
   - [x] Compare against simple array model
   - [x] Log RNG seed for reproducibility
 - [x] Unit tests for the type registry and the row codec round trip
-- [ ] Page file: round trip, a flipped bit is caught by the checksum, a corrupt header or slot is caught by `page_validate`
+- [x] Page file: round trip, a flipped bit is caught by the checksum, a corrupt header or slot is caught by `page_validate`
 - [ ] Restart test: create a table and insert rows, stop the server with SIGTERM, start it again, the rows are there
 - [ ] Shutdown test: SIGTERM while connected saves the data and exits with status 0
 - [ ] Fault injection for page file, heap file and buffer pool I/O (short write, fsync failure) through the injectable `io`
+  - [x] Page file: write error, torn write, fsync failure, read error
+  - [ ] Heap file and buffer pool (milestone B)
 - [ ] Unit tests for buffer pool (pin/unpin, eviction)
 - [ ] Crash test: write data, flush, kill -9, restart, verify the flushed data survives
 - [ ] Fuzz test for page deserialization (milestone B)
@@ -632,6 +637,7 @@ psql needs only the simple protocol. JDBC, psycopg and most drivers use this one
 
 ### Benchmarks
 - [ ] A small benchmark program on `build-release`: bulk insert, scans, index lookups, using `generate_series` data
+- [ ] Compare buffered and direct I/O with the buffer pool (the optional `O_DIRECT` mode of Phase 2)
 
 ### More Data Types
 - [ ] FLOAT, DOUBLE
