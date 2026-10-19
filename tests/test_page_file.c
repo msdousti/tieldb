@@ -199,49 +199,6 @@ static void test_create_refuses_an_existing_file([[maybe_unused]] void **state)
     assert_page_holds(0, "kept");
 }
 
-static void test_save_creates_or_replaces_a_file_and_load_reads_it([[maybe_unused]] void **state)
-{
-    page_t first = page_holding("first");
-    page_t second = page_holding("second");
-    page_t loaded;
-
-    assert_int_equal(unlink(path), 0);
-    assert_int_equal(page_file_save(path, &first), 0);
-    assert_int_equal(page_file_save(path, &second), 0);
-    assert_int_equal(page_file_load(path, &loaded), 0);
-    assert_memory_equal(page_get(&loaded, 0, &(size_t){0}), "second", 6);
-}
-
-static void test_load_reports_a_missing_or_empty_file([[maybe_unused]] void **state)
-{
-    page_t page;
-
-    errno = 0;
-    assert_int_equal(page_file_load("/tmp/tieldb_no_such_directory/pages", &page), -1);
-    assert_int_equal(errno, ENOENT);
-    assert_int_equal(truncate(path, 0), 0);
-    errno = 0;
-    assert_int_equal(page_file_load(path, &page), -1);
-    assert_int_equal(errno, ENOENT);
-}
-
-static void test_save_reports_its_failures([[maybe_unused]] void **state)
-{
-    page_t page = page_holding("x");
-
-    errno = 0;
-    assert_int_equal(page_file_save("/tmp/tieldb_no_such_directory/pages", &page), -1);
-    assert_int_equal(errno, ENOENT);
-    errno = 0;
-    assert_int_equal(page_file_save("/dev/null/pages", &page), -1);
-    assert_int_equal(errno, ENOTDIR);
-    io_init(false);
-    io_inject_fault(IO_FAULT_WRITE_ERROR, 1);
-    assert_int_equal(page_file_save(path, &page), -1);
-    io_inject_fault(IO_FAULT_FSYNC_FAIL, 1);
-    assert_int_equal(page_file_save(path, &page), -1);
-}
-
 static void test_write_and_sync_and_read_report_io_errors([[maybe_unused]] void **state)
 {
     page_t page = page_holding("io");
@@ -288,10 +245,6 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_open_does_not_create_a_missing_file, setup, teardown),
     cmocka_unit_test_setup_teardown(test_create_makes_a_new_file, setup, teardown),
     cmocka_unit_test_setup_teardown(test_create_refuses_an_existing_file, setup, teardown),
-    cmocka_unit_test_setup_teardown(test_save_creates_or_replaces_a_file_and_load_reads_it, setup,
-                                    teardown),
-    cmocka_unit_test_setup_teardown(test_load_reports_a_missing_or_empty_file, setup, teardown),
-    cmocka_unit_test_setup_teardown(test_save_reports_its_failures, setup, teardown),
     cmocka_unit_test_setup_teardown(test_write_and_sync_and_read_report_io_errors, setup, teardown),
     cmocka_unit_test_setup_teardown(test_a_torn_write_is_a_failure_and_the_page_is_corrupt, setup,
                                     teardown),

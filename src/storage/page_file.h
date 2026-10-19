@@ -39,13 +39,3 @@ typedef struct page_file page_file_t;
 [[nodiscard]] int page_file_write(page_file_t *file, size_t page_number, const page_t *page);
 
 [[nodiscard]] int page_file_sync(page_file_t *file);
-
-/**
- * Writes the page as page 0 of the file at path, and makes it durable. The file is created if it
- * does not exist and overwritten if it does (not atomically: a crash in the middle leaves a torn
- * page, which page_file_load reports as corrupt).
- */
-[[nodiscard]] int page_file_save(const char *path, const page_t *page);
-
-/** Reads page 0 of an existing file, checked as page_file_read does; a missing file is ENOENT. */
-[[nodiscard]] int page_file_load(const char *path, page_t *page);

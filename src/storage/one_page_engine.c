@@ -4,7 +4,7 @@
 #include <stdlib.h>
 
 #include "storage/page.h"
-#include "storage/page_file.h"
+#include "storage/single_page_file.h"
 
 typedef struct {
     storage_engine_t base;
@@ -66,7 +66,7 @@ storage_engine_t *one_page_engine_load(const row_layout_t *layout, const char *p
     if (engine == nullptr) {
         return nullptr;
     }
-    if (page_file_load(path, &engine->page) != 0) {
+    if (single_page_file_load(path, &engine->page) != 0) {
         free(engine);
         return nullptr;
     }
@@ -80,7 +80,7 @@ storage_engine_t *one_page_engine_load(const row_layout_t *layout, const char *p
 
 static int one_page_save(storage_engine_t *base, const char *path)
 {
-    return page_file_save(path, &((one_page_engine_t *) base)->page);
+    return single_page_file_save(path, &((one_page_engine_t *) base)->page);
 }
 
 static void one_page_destroy(storage_engine_t *engine)
