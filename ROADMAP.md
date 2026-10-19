@@ -165,6 +165,7 @@ Two milestones, so that the first visible result comes early:
   - [x] Read and write pages of a file: the checksum is set on write, and verified and validated on read
 - [ ] Storage engine interface (the vtable from `CLAUDE.md`), so that an LSM engine can be added in Phase 8+, and the one-page engine
   - [x] Operations on rows and cursors, not on pages or TIDs: insert, and a scan cursor (open, next, close)
+  - [ ] Dropping the data of a table: an operation (`storage_drop`) that deletes the persistent data and then destroys the instance. `storage_destroy` only frees memory, because it is also the call at clean shutdown, where the data must stay. Added with the first engine that keeps files
   - [ ] Separate the catalog entry (name, columns, engine, engine metadata) from the storage of the rows; `table_t` is both today
   - [ ] One-page engine
     - [x] The rows of a table are in one page of encoded rows, in memory; an INSERT into a full page is an error (`ENOSPC`), and a row that could never fit is `EFBIG`
@@ -270,6 +271,7 @@ This works at the end of milestone A (a table is one page). At the end of milest
   - [ ] Several statements in one query string (`select 1; select 2`)
   - [ ] Syntax errors with SQLSTATE `42601` and an error position, as in Postgres
   - [ ] Quick wins once it exists: `INSERT INTO t (a, b) VALUES ...` with a column list, multi-row `VALUES (1, 'a'), (2, 'b')`, `CREATE TABLE IF NOT EXISTS`, `DROP TABLE [IF EXISTS]`
+    - [ ] `DROP TABLE` takes the table lock (so it waits for scans that hold it), removes the table from the catalog so that no new statement finds it, then destroys the table and its storage engine instance. A statement that found the table earlier needs the lock or a reference count, because the catalog hands out raw table pointers today
   - [ ] Fuzz test for the parser (random text must never crash it)
 - [ ] Memory contexts (arena allocator, the rule in `CLAUDE.md`; before the operators, which allocate a lot per query)
   - [ ] A per-query arena that is freed in one call at the end of the query; assert zero live arenas at teardown
