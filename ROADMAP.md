@@ -164,9 +164,11 @@ Two milestones, so that the first visible result comes early:
   - [x] `page_validate`: header and slot sanity checks on every page read from disk, so that later page code can trust a page
   - [x] Read and write pages of a file: the checksum is set on write, and verified and validated on read
 - [ ] Storage engine interface (the vtable from `CLAUDE.md`), so that an LSM engine can be added in Phase 8+, and the one-page engine
-  - [ ] Operations on rows and cursors, not on pages or TIDs: insert, and a scan cursor (open, next, close)
+  - [x] Operations on rows and cursors, not on pages or TIDs: insert, and a scan cursor (open, next, close)
   - [ ] Separate the catalog entry (name, columns, engine, engine metadata) from the storage of the rows; `table_t` is both today
-  - [ ] One-page engine: the rows of a table are in one page of encoded rows; an INSERT into a full page is an error ("table is full"); save and load the whole page through the page file
+  - [ ] One-page engine
+    - [x] The rows of a table are in one page of encoded rows, in memory; an INSERT into a full page is an error (`ENOSPC`), and a row that could never fit is `EFBIG`
+    - [ ] Save and load the whole page through the page file
   - [ ] The executor uses the engine for INSERT and SELECT
 - [ ] Catalog file
   - [ ] Save and load the tables: name, engine, each column's name, type id and display position (so a reordering survives a restart), in a page file of its own with a format version

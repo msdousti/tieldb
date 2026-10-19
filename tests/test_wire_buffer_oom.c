@@ -28,6 +28,7 @@
 #include "net/query_handler.h"
 #include "net/server.h"
 #include "storage/catalog.h"
+#include "storage/one_page_engine.h"
 #include "storage/page_file.h"
 #include "net/startup.h"
 #include "net/wire_buffer.h"
@@ -603,6 +604,29 @@ static table_t *create_pair_table_with_real_allocations(void)
     return table;
 }
 
+static void test_one_page_engine_create_fails_when_memory_runs_out([[maybe_unused]] void **state)
+{
+    const row_layout_t none = {nullptr, 0};
+
+    will_return(oom_malloc, false);
+    errno = 0;
+    assert_null(one_page_engine_create(&none));
+    assert_int_equal(errno, ENOMEM);
+}
+
+static void test_one_page_engine_cursor_fails_when_memory_runs_out([[maybe_unused]] void **state)
+{
+    const row_layout_t none = {nullptr, 0};
+
+    will_return(oom_malloc, true);
+    storage_engine_t *engine = one_page_engine_create(&none);
+    will_return(oom_malloc, false);
+    errno = 0;
+    assert_null(storage_open_cursor(engine));
+    assert_int_equal(errno, ENOMEM);
+    storage_destroy(engine);
+}
+
 static void
 test_page_file_open_fails_when_the_handle_cannot_be_allocated([[maybe_unused]] void **state)
 {
@@ -810,6 +834,8 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_server_create_fails_when_memory_runs_out),
     cmocka_unit_test(test_hash_map_create_fails_when_memory_runs_out),
     cmocka_unit_test(test_hash_map_keeps_working_when_it_cannot_grow),
+    cmocka_unit_test(test_one_page_engine_create_fails_when_memory_runs_out),
+    cmocka_unit_test(test_one_page_engine_cursor_fails_when_memory_runs_out),
     cmocka_unit_test(test_page_file_open_fails_when_the_handle_cannot_be_allocated),
     cmocka_unit_test(test_table_create_fails_when_memory_runs_out),
     cmocka_unit_test(test_catalog_create_fails_when_the_table_cannot_be_allocated),
