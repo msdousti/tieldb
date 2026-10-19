@@ -96,6 +96,15 @@ test_page = executable('test_page',
 
 test('page', test_page)
 
+# Test: page checksum and validation
+test_page_check = executable('test_page_check',
+  'test_page_check.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('page_check', test_page_check)
+
 # Test: row codec
 test_row_codec = executable('test_row_codec',
   'test_row_codec.c',
