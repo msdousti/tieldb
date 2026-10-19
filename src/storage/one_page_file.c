@@ -1,4 +1,4 @@
-#include "storage/single_page_file.h"
+#include "storage/one_page_file.h"
 
 #include <errno.h>
 
@@ -18,7 +18,7 @@ static page_file_t *open_or_create(const char *path)
     return file == nullptr && errno == ENOENT ? page_file_create(path) : file;
 }
 
-int single_page_file_save(const char *path, const page_t *page)
+int one_page_file_save(const char *path, const page_t *page)
 {
     page_file_t *file = open_or_create(path);
     if (file == nullptr) {
@@ -28,7 +28,7 @@ int single_page_file_save(const char *path, const page_t *page)
     return finish(file, status == 0 ? page_file_sync(file) : status);
 }
 
-int single_page_file_load(const char *path, page_t *page)
+int one_page_file_load(const char *path, page_t *page)
 {
     page_file_t *file = page_file_open(path);
     if (file == nullptr) {

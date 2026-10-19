@@ -142,7 +142,7 @@ src/
     row_codec          null bitmap and values of a row as bytes, independent of the engine
     page               8 KB slotted page, slot states, CRC-32C checksum, page_validate
     page_file          read/write pages of a file through io->, checksum checked on read
-    single_page_file   save/load a file that holds exactly one page (one-page engine, catalog file)
+    one_page_file   save/load a file that holds exactly one page (one-page engine, catalog file)
     crc32c             the page checksum
 tests/               one test_*.c per module (cmocka), test_wire_buffer_oom.c (allocation
                      failures via renamed malloc/calloc/realloc), test_tieldb.c (spawns the

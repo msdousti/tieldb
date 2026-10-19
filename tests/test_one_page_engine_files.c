@@ -17,7 +17,7 @@
 #include <cmocka.h>
 
 #include "storage/one_page_engine.h"
-#include "storage/single_page_file.h"
+#include "storage/one_page_file.h"
 
 static const type_info_t *const INT_TEXT[] = {&TYPE_INT4, &TYPE_TEXT};
 static const row_layout_t PAIR = {INT_TEXT, 2};
@@ -141,7 +141,7 @@ static void test_a_file_of_another_kind_is_refused([[maybe_unused]] void **state
     page_t page;
 
     page_init(&page, PAGE_TYPE_CATALOG);
-    assert_int_equal(single_page_file_save(path, &page), 0);
+    assert_int_equal(one_page_file_save(path, &page), 0);
     errno = 0;
     assert_null(one_page_engine_load(&PAIR, path));
     assert_int_equal(errno, EBADMSG);

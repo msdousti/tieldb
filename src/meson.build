@@ -43,7 +43,7 @@ storage_sources = files(
   'storage/page.c',
   'storage/one_page_engine.c',
   'storage/page_file.c',
-  'storage/single_page_file.c',
+  'storage/one_page_file.c',
   'storage/row_codec.c',
 )
 

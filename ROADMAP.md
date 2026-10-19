@@ -231,7 +231,7 @@ Two milestones, so that the first visible result comes early:
 - `src/storage/page.{h,c}` - Slotted page implementation
 - `src/storage/row_codec.{h,c}` - Row codec (engine-independent)
 - `src/storage/page_file.{h,c}` - Reading and writing pages of a file
-- `src/storage/single_page_file.{h,c}` - A file that holds exactly one page, saved and loaded as a whole (the one-page engine and the catalog file)
+- `src/storage/one_page_file.{h,c}` - A file that holds exactly one page, saved and loaded as a whole (the one-page engine and the catalog file)
 - `src/storage/storage_engine.h` - Storage engine interface; the one-page engine and later the heap engine implement it
 - `src/storage/catalog.{h,c}` - Catalog (updated: save and load)
 - `src/storage/heap_tuple.{h,c}`, `src/storage/heap_file.{h,c}`, `src/storage/free_space_map.{h,c}` - Heap engine parts (milestone B)
