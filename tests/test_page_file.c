@@ -167,11 +167,36 @@ test_a_page_with_a_good_checksum_but_a_bad_structure_is_corrupt([[maybe_unused]]
     assert_read_fails(0, EBADMSG);
 }
 
-static void test_open_fails_for_a_path_that_cannot_be_created([[maybe_unused]] void **state)
+static void test_open_does_not_create_a_missing_file([[maybe_unused]] void **state)
 {
     errno = 0;
     assert_null(page_file_open("/tmp/tieldb_no_such_directory/pages"));
     assert_int_equal(errno, ENOENT);
+    assert_int_equal(access("/tmp/tieldb_no_such_directory", F_OK), -1);
+}
+
+static void test_create_makes_a_new_file([[maybe_unused]] void **state)
+{
+    page_t page = page_holding("new");
+
+    assert_int_equal(unlink(path), 0);
+    page_file_t *created = page_file_create(path);
+    if (created == nullptr) {
+        fail();
+    }
+    assert_int_equal(page_file_write(created, 0, &page), 0);
+    assert_int_equal(page_file_close(created), 0);
+}
+
+static void test_create_refuses_an_existing_file([[maybe_unused]] void **state)
+{
+    page_t page = page_holding("kept");
+
+    assert_int_equal(page_file_write(file, 0, &page), 0);
+    errno = 0;
+    assert_null(page_file_create(path));
+    assert_int_equal(errno, EEXIST);
+    assert_page_holds(0, "kept");
 }
 
 static void test_write_and_sync_and_read_report_io_errors([[maybe_unused]] void **state)
@@ -217,8 +242,9 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_a_changed_byte_on_disk_is_caught, setup, teardown),
     cmocka_unit_test_setup_teardown(test_a_page_with_a_good_checksum_but_a_bad_structure_is_corrupt,
                                     setup, teardown),
-    cmocka_unit_test_setup_teardown(test_open_fails_for_a_path_that_cannot_be_created, setup,
-                                    teardown),
+    cmocka_unit_test_setup_teardown(test_open_does_not_create_a_missing_file, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_create_makes_a_new_file, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_create_refuses_an_existing_file, setup, teardown),
     cmocka_unit_test_setup_teardown(test_write_and_sync_and_read_report_io_errors, setup, teardown),
     cmocka_unit_test_setup_teardown(test_a_torn_write_is_a_failure_and_the_page_is_corrupt, setup,
                                     teardown),

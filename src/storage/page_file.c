@@ -15,18 +15,28 @@ struct page_file {
     int fd;
 };
 
-page_file_t *page_file_open(const char *path)
+static page_file_t *open_with_flags(const char *path, int flags)
 {
     page_file_t *file = malloc(sizeof(*file));
     if (file == nullptr) {
         return nullptr;
     }
-    file->fd = io->open(path, O_RDWR | O_CREAT, FILE_MODE);
+    file->fd = io->open(path, flags, FILE_MODE);
     if (file->fd < 0) {
         free(file);
         return nullptr;
     }
     return file;
+}
+
+page_file_t *page_file_open(const char *path)
+{
+    return open_with_flags(path, O_RDWR);
+}
+
+page_file_t *page_file_create(const char *path)
+{
+    return open_with_flags(path, O_RDWR | O_CREAT | O_EXCL);
 }
 
 int page_file_close(page_file_t *file)

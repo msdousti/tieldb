@@ -11,10 +11,10 @@
  * time uses a page_file_t.
  *
  * Errors return -1 or nullptr and set errno, as the system calls do (EIO, ENOSPC, ENOENT from
- * page_file_open, ENOMEM), with these of its own: ENOENT from page_file_read for a page beyond the
- * end of the file; EBADMSG for a page that is truncated, fails its checksum or fails page_validate;
- * EIO from page_file_write for a short write. page_file_read leaves the page unspecified when it
- * fails.
+ * page_file_open, EEXIST from page_file_create, ENOMEM), with these of its own: ENOENT from
+ * page_file_read for a page beyond the end of the file; EBADMSG for a page that is truncated, fails
+ * its checksum or fails page_validate; EIO from page_file_write for a short write. page_file_read
+ * leaves the page unspecified when it fails.
  */
 
 #pragma once
@@ -25,8 +25,11 @@
 
 typedef struct page_file page_file_t;
 
-/** Opens the file for reading and writing, and creates it if it does not exist. */
+/** Opens an existing file for reading and writing; a file that does not exist is ENOENT. */
 [[nodiscard]] page_file_t *page_file_open(const char *path);
+
+/** Creates a new file; a file that already exists is EEXIST, and is not touched. */
+[[nodiscard]] page_file_t *page_file_create(const char *path);
 
 /** Closes the file and frees the handle, also when closing fails. */
 [[nodiscard]] int page_file_close(page_file_t *file);
