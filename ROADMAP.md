@@ -156,9 +156,9 @@ Two milestones, so that the first visible result comes early:
   - [x] Slotted page layout (slot array + tuples)
   - [x] Page-level operations (insert, delete, get tuple)
 - [ ] Row codec, independent of the storage engine (a future LSM engine reuses it)
-  - [ ] Null bitmap (a NULL is a set bit and takes no space; SQL support for NULL comes in Phase 3), then the values of the columns in the stored format of their type, encoded and decoded through the type registry
-  - [ ] Variable-length data (length prefix for TEXT), with a spare bit in the prefix reserved for the overflow pointer of Phase 8+
-  - [ ] A row that does not fit in one page is an error (errno `EFBIG`) that the SQL layer reports; no overflow storage yet
+  - [x] Null bitmap (a NULL is a set bit and takes no space; SQL support for NULL comes in Phase 3), then the values of the columns in the stored format of their type, encoded and decoded through the type registry
+  - [x] Variable-length data (length prefix for TEXT), with a spare bit in the prefix reserved for the overflow pointer of Phase 8+
+  - [ ] A row that does not fit in one page is an error (errno `EFBIG`) that the SQL layer reports; no overflow storage yet (the codec already refuses a value over 32767 bytes with `EFBIG`; the page-sized limit comes with the engine)
 - [ ] Page file: read and write one page of a file, all I/O through `io->`
   - [ ] Checksum (CRC-32C) computed on write and verified on read
   - [ ] `page_validate`: header and slot sanity checks on every page read from disk, so that later page code can trust a page
@@ -208,7 +208,7 @@ Two milestones, so that the first visible result comes early:
   - [x] Random insert/delete operations
   - [x] Compare against simple array model
   - [x] Log RNG seed for reproducibility
-- [ ] Unit tests for the type registry and the row codec round trip
+- [x] Unit tests for the type registry and the row codec round trip
 - [ ] Page file: round trip, a flipped bit is caught by the checksum, a corrupt header or slot is caught by `page_validate`
 - [ ] Restart test: create a table and insert rows, stop the server with SIGTERM, start it again, the rows are there
 - [ ] Shutdown test: SIGTERM while connected saves the data and exits with status 0

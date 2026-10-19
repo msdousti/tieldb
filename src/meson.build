@@ -40,6 +40,7 @@ storage_sources = files(
   'storage/table.c',
   'storage/catalog.c',
   'storage/page.c',
+  'storage/row_codec.c',
 )
 
 # Command-line options
