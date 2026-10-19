@@ -96,6 +96,15 @@ test_page = executable('test_page',
 
 test('page', test_page)
 
+# Test: CRC-32C
+test_crc32c = executable('test_crc32c',
+  'test_crc32c.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('crc32c', test_crc32c)
+
 # Test: page checksum and validation
 test_page_check = executable('test_page_check',
   'test_page_check.c',
