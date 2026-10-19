@@ -633,6 +633,16 @@ static void test_one_page_engine_create_fails_when_memory_runs_out([[maybe_unuse
     assert_int_equal(errno, ENOMEM);
 }
 
+static void test_one_page_engine_load_fails_when_memory_runs_out([[maybe_unused]] void **state)
+{
+    const row_layout_t none = {nullptr, 0};
+
+    will_return(oom_malloc, false);
+    errno = 0;
+    assert_null(one_page_engine_load(&none, "/tmp/tieldb_engine_load_oom"));
+    assert_int_equal(errno, ENOMEM);
+}
+
 static void test_one_page_engine_cursor_fails_when_memory_runs_out([[maybe_unused]] void **state)
 {
     const row_layout_t none = {nullptr, 0};
@@ -851,6 +861,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_hash_map_create_fails_when_memory_runs_out),
     cmocka_unit_test(test_hash_map_keeps_working_when_it_cannot_grow),
     cmocka_unit_test(test_one_page_engine_create_fails_when_memory_runs_out),
+    cmocka_unit_test(test_one_page_engine_load_fails_when_memory_runs_out),
     cmocka_unit_test(test_one_page_engine_cursor_fails_when_memory_runs_out),
     cmocka_unit_test(test_page_file_open_fails_when_the_handle_cannot_be_allocated),
     cmocka_unit_test(test_table_create_fails_when_memory_runs_out),

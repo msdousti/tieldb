@@ -105,6 +105,24 @@ test_one_page_engine = executable('test_one_page_engine',
 
 test('one_page_engine', test_one_page_engine)
 
+# Test: files that hold one page
+test_one_page_file = executable('test_one_page_file',
+  'test_one_page_file.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('one_page_file', test_one_page_file)
+
+# Test: saving and loading the one-page engine
+test_one_page_engine_files = executable('test_one_page_engine_files',
+  'test_one_page_engine_files.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('one_page_engine_files', test_one_page_engine_files)
+
 # Test: files of pages
 test_page_file = executable('test_page_file',
   'test_page_file.c',

@@ -167,9 +167,9 @@ Two milestones, so that the first visible result comes early:
   - [x] Operations on rows and cursors, not on pages or TIDs: insert, and a scan cursor (open, next, close)
   - [ ] Dropping the data of a table: an operation (`storage_drop`) that deletes the persistent data and then destroys the instance. `storage_destroy` only frees memory, because it is also the call at clean shutdown, where the data must stay. Added with the first engine that keeps files
   - [x] Separate the catalog entry (name, columns, engine, engine metadata) from the storage of the rows: `table_t` is the catalog entry and owns an engine instance that holds the rows
-  - [ ] One-page engine
+  - [x] One-page engine
     - [x] The rows of a table are in one page of encoded rows, in memory; an INSERT into a full page is an error (`ENOSPC`), and a row that could never fit is `EFBIG`
-    - [ ] Save and load the whole page through the page file
+    - [x] Save and load the whole page through the page file (`storage_save`, `one_page_engine_load`)
   - [x] The executor and the query handler use the engine for INSERT and SELECT; a full table (`53100`) and a row that could never fit (`54000`) are errors for the client
 - [ ] Catalog file
   - [ ] Save and load the tables: name, engine, each column's name, type id and display position (so a reordering survives a restart), in a page file of its own with a format version
@@ -231,6 +231,7 @@ Two milestones, so that the first visible result comes early:
 - `src/storage/page.{h,c}` - Slotted page implementation
 - `src/storage/row_codec.{h,c}` - Row codec (engine-independent)
 - `src/storage/page_file.{h,c}` - Reading and writing pages of a file
+- `src/storage/one_page_file.{h,c}` - A file that holds exactly one page, saved and loaded as a whole (the one-page engine and the catalog file)
 - `src/storage/storage_engine.h` - Storage engine interface; the one-page engine and later the heap engine implement it
 - `src/storage/catalog.{h,c}` - Catalog (updated: save and load)
 - `src/storage/heap_tuple.{h,c}`, `src/storage/heap_file.{h,c}`, `src/storage/free_space_map.{h,c}` - Heap engine parts (milestone B)
@@ -638,6 +639,15 @@ psql needs only the simple protocol. JDBC, psycopg and most drivers use this one
 
 ### psql Meta-Commands
 - [ ] Minimal `pg_catalog` views (`pg_class`, `pg_attribute`, `pg_namespace`, `pg_type`) over the persistent catalog, so that `\dt` and `\d` work
+
+### Object Storage Backend (S3)
+The storage engine interface (rows and cursors) and path strings are already generic. The layers below are shaped like POSIX files (`io_ops_t` on file descriptors, `page_file` with in-place page writes and `fsync`), so a backend below `page_file` is the seam.
+- [ ] A storage backend interface below `page_file`: read a byte range, write a whole object, delete, list, optionally append; the local backend uses `pread` and `pwrite`, an S3 backend uses ranged GET and PUT. The fault injection moves to this interface, so the crash tests keep working
+- [ ] `one_page_file` and the catalog file on the S3 backend (a PUT is atomic, so they cannot tear)
+- [ ] The data directory lock with conditional writes (`If-None-Match`) in place of the pid file; no directory fsync
+- [ ] A design for in-place updates on immutable objects: the LSM engine (immutable files and a manifest) is the natural fit; a heap engine would need a page server in front of the object store, with the WAL shipped to it
+- [ ] The WAL needs append and fsync: batched objects, or a separate log service
+- [ ] Latency of tens of milliseconds per request: buffer pool with read-ahead, request batching, and a local cache
 
 ### Benchmarks
 - [ ] A small benchmark program on `build-release`: bulk insert, scans, index lookups, using `generate_series` data

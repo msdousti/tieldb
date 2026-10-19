@@ -30,6 +30,7 @@ typedef struct storage_cursor storage_cursor_t;
 typedef struct {
     void (*destroy)(storage_engine_t *engine);
     int (*insert)(storage_engine_t *engine, const row_value_t *values);
+    int (*save)(storage_engine_t *engine, const char *path);
     storage_cursor_t *(*open_cursor)(storage_engine_t *engine);
     int (*next)(storage_cursor_t *cursor, row_value_t *values);
     void (*close_cursor)(storage_cursor_t *cursor);
@@ -53,6 +54,16 @@ static inline void storage_destroy(storage_engine_t *engine)
 [[nodiscard]] static inline int storage_insert(storage_engine_t *engine, const row_value_t *values)
 {
     return engine->ops->insert(engine, values);
+}
+
+/**
+ * Writes all rows durably to the file at path, which the engine creates or replaces. How an
+ * engine is loaded again is up to the engine (a constructor that takes the path); the caller must
+ * give it the same layout. Errors are those of the I/O (EIO, ENOSPC) and of the file (page_file.h).
+ */
+[[nodiscard]] static inline int storage_save(storage_engine_t *engine, const char *path)
+{
+    return engine->ops->save(engine, path);
 }
 
 /** Opens a cursor before the first row; rows come in the order they were inserted. */
