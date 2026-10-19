@@ -62,9 +62,17 @@ static int put_unsupported_error(wire_writer_t *out, [[maybe_unused]] const void
                                        UNSUPPORTED_MESSAGE);
 }
 
+// The context of the rows step and the tag step of a SELECT: the rows step reports through
+// row_count how many rows it wrote, for the tag
+typedef struct {
+    const table_t *table;
+    size_t *row_count;
+} table_response_t;
+
 static int put_table_description(wire_writer_t *out, const void *context)
 {
-    const table_t *table = context;
+    const table_response_t *response = context;
+    const table_t *table = response->table;
     size_t count = table_column_count(table);
     protocol_column_t columns[TABLE_MAX_COLUMNS];
     for (size_t i = 0; i < count; i++) {
@@ -74,57 +82,78 @@ static int put_table_description(wire_writer_t *out, const void *context)
     return protocol_put_row_description(out, columns, count);
 }
 
-static size_t row_text_capacity(const table_t *table, size_t row)
+static size_t row_text_capacity(const table_t *table, const row_value_t *cells)
 {
     size_t capacity = 0;
     for (size_t i = 0; i < table_column_count(table); i++) {
-        table_value_t cell = table_cell(table, row, i);
-        capacity += table_column(table, i)->type->output_capacity(cell.length);
+        capacity += table_column(table, i)->type->output_capacity(cells[i].length);
     }
     return capacity;
 }
 
-static void format_row(const table_t *table, size_t row, char *buffer, protocol_value_t *values)
+static void format_row(const table_t *table, const row_value_t *cells, char *buffer,
+                       protocol_value_t *values)
 {
     for (size_t i = 0; i < table_column_count(table); i++) {
         size_t physical = table_physical_index(table, i);
         const type_info_t *type = table_column(table, physical)->type;
-        table_value_t cell = table_cell(table, row, physical);
-        size_t capacity = type->output_capacity(cell.length);
-        ssize_t length = type->output(cell.data, cell.length, buffer, capacity);
+        size_t capacity = type->output_capacity(cells[physical].length);
+        ssize_t length =
+            type->output(cells[physical].data, cells[physical].length, buffer, capacity);
         values[i] = (protocol_value_t){buffer, (size_t) length};
         buffer += capacity;
     }
 }
 
-static int put_table_row(wire_writer_t *out, const table_t *table, size_t row)
+static int put_table_row(wire_writer_t *out, const table_t *table, const row_value_t *cells)
 {
     protocol_value_t values[TABLE_MAX_COLUMNS];
     char *buffer =
-        malloc(row_text_capacity(table, row) + 1); // never zero, for tables without columns
+        malloc(row_text_capacity(table, cells) + 1); // never zero, for tables without columns
     if (buffer == nullptr) {
         return -1;
     }
-    format_row(table, row, buffer, values);
+    format_row(table, cells, buffer, values);
     int result = protocol_put_data_row(out, values, table_column_count(table));
     free(buffer);
     return result;
 }
 
+// Returns 1 after writing a row, 0 at the end of the table, -1 on failure
+static int put_next_row(wire_writer_t *out, const table_response_t *response,
+                        storage_cursor_t *cursor)
+{
+    row_value_t cells[TABLE_MAX_COLUMNS];
+    int found = storage_next(cursor, cells);
+    if (found != 1) {
+        return found;
+    }
+    if (put_table_row(out, response->table, cells) != 0) {
+        return -1;
+    }
+    (*response->row_count)++;
+    return 1;
+}
+
 static int put_table_rows(wire_writer_t *out, const void *context)
 {
-    const table_t *table = context;
-    int result = 0;
-    for (size_t row = 0; row < table_row_count(table) && result == 0; row++) {
-        result = put_table_row(out, table, row);
+    const table_response_t *response = context;
+    storage_cursor_t *cursor = storage_open_cursor(table_engine(response->table));
+    int status = cursor == nullptr ? -1 : 1;
+    while (status == 1) {
+        status = put_next_row(out, response, cursor);
     }
-    return result;
+    if (cursor != nullptr) {
+        storage_close_cursor(cursor);
+    }
+    return status;
 }
 
 static int put_table_tag(wire_writer_t *out, const void *context)
 {
+    const table_response_t *response = context;
     char tag[TAG_CAPACITY];
-    (void) snprintf(tag, sizeof(tag), SELECT_TAG_FORMAT, table_row_count(context));
+    (void) snprintf(tag, sizeof(tag), SELECT_TAG_FORMAT, *response->row_count);
     return protocol_put_command_complete(out, tag);
 }
 
@@ -184,10 +213,12 @@ static int respond_error(const executor_error_t *error, wire_writer_t *out)
 static int respond_select_all(const char *table_name, wire_writer_t *out)
 {
     executor_select_t select;
+    size_t row_count = 0;
     executor_select_all(table_name, &select);
+    const table_response_t response = {select.table, &row_count};
     int result = select.table == nullptr
                      ? respond_error(&select.error, out)
-                     : run_steps(out, TABLE_RESPONSE, STEP_COUNT(TABLE_RESPONSE), select.table);
+                     : run_steps(out, TABLE_RESPONSE, STEP_COUNT(TABLE_RESPONSE), &response);
     executor_select_release(&select);
     return result;
 }

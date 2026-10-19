@@ -60,10 +60,10 @@ static void test_table_without_columns_counts_its_rows([[maybe_unused]] void **s
     }
 
     assert_int_equal(table_column_count(table), 0);
-    assert_int_equal(table_row_count(table), 0);
+    assert_int_equal(count_rows(table), 0);
     assert_int_equal(table_insert(table, no_cells, 0), 0);
     assert_int_equal(table_insert(table, no_cells, 0), 0);
-    assert_int_equal(table_row_count(table), 2);
+    assert_int_equal(count_rows(table), 2);
     table_destroy(table);
 }
 
@@ -71,7 +71,7 @@ static void test_new_table_is_empty([[maybe_unused]] void **state)
 {
     table_t *table = create_pair_table();
 
-    assert_int_equal(table_row_count(table), 0);
+    assert_int_equal(count_rows(table), 0);
     table_destroy(table);
 }
 
@@ -86,7 +86,7 @@ static void test_inserted_rows_are_copied_and_kept_in_order([[maybe_unused]] voi
     text[0] = 'X';
     assert_int_equal(table_insert(table, second, 2), 0);
 
-    assert_int_equal(table_row_count(table), 2);
+    assert_int_equal(count_rows(table), 2);
     assert_cell_text(table, 0, 1, "one");
     assert_cell_text(table, 1, 0, "2");
     assert_cell_text(table, 1, 1, "two");
@@ -102,7 +102,7 @@ static void test_table_grows_past_its_initial_capacity([[maybe_unused]] void **s
         assert_int_equal(table_insert(table, row, 2), 0);
     }
 
-    assert_int_equal(table_row_count(table), 100);
+    assert_int_equal(count_rows(table), 100);
     assert_cell_text(table, 99, 1, "seven");
     table_destroy(table);
 }
@@ -124,7 +124,7 @@ static void test_insert_rejects_bad_arguments([[maybe_unused]] void **state)
     errno = 0;
     assert_int_equal(table_insert_locked(nullptr, row, 2), -1);
     assert_int_equal(errno, EINVAL);
-    assert_int_equal(table_row_count(table), 0);
+    assert_int_equal(count_rows(table), 0);
     table_destroy(table);
 }
 
@@ -134,9 +134,13 @@ static void test_cells_are_stored_in_the_format_of_their_type([[maybe_unused]] v
     const char *row[] = {"007", "007"};
     assert_int_equal(table_insert(table, row, 2), 0);
 
-    assert_int_equal(table_cell(table, 0, 0).length, sizeof(int32_t));
+    storage_cursor_t *cursor = storage_open_cursor(table_engine(table));
+    row_value_t cells[2];
+    assert_int_equal(storage_next(cursor, cells), 1);
+    assert_int_equal(cells[0].length, sizeof(int32_t));
+    assert_int_equal(cells[1].length, strlen("007"));
+    storage_close_cursor(cursor);
     assert_cell_text(table, 0, 0, "7");
-    assert_int_equal(table_cell(table, 0, 1).length, strlen("007"));
     assert_cell_text(table, 0, 1, "007");
     table_destroy(table);
 }
@@ -150,7 +154,7 @@ test_insert_rejects_text_that_does_not_fit_the_column_type([[maybe_unused]] void
     errno = 0;
     assert_int_equal(table_insert(table, row, 2), -1);
     assert_int_equal(errno, EINVAL);
-    assert_int_equal(table_row_count(table), 0);
+    assert_int_equal(count_rows(table), 0);
     table_destroy(table);
 }
 
@@ -233,7 +237,7 @@ static void test_readers_see_a_consistent_display_order([[maybe_unused]] void **
 }
 
 static constexpr size_t INSERT_THREADS = 4;
-static constexpr size_t ROWS_PER_THREAD = 200;
+static constexpr size_t ROWS_PER_THREAD = 100;
 
 static void *insert_rows(void *argument)
 {
@@ -261,7 +265,7 @@ static void test_concurrent_inserts_are_all_kept([[maybe_unused]] void **state)
     }
 
     table_lock(table);
-    assert_int_equal(table_row_count(table), INSERT_THREADS * ROWS_PER_THREAD);
+    assert_int_equal(count_rows(table), INSERT_THREADS * ROWS_PER_THREAD);
     table_unlock(table);
     table_destroy(table);
 }

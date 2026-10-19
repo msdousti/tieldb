@@ -1,16 +1,17 @@
 /**
- * In-memory tables that can grow.
+ * Tables: the catalog entry of a table, and its rows.
  *
- * A table has a name, fixed columns (0 to TABLE_MAX_COLUMNS of them) and any number of rows, kept
- * stored in the format of their column's type (an integer as 4 bytes, see type_registry.h).
- * table_create copies the name and the column names, so the arguments need not outlive the call;
- * table_insert converts the text of each cell to its column's type and stores the result.
+ * A table has a name, fixed columns (0 to TABLE_MAX_COLUMNS of them) and rows. The rows live in a
+ * storage engine instance that the table creates and owns (the one-page engine for now), in the
+ * format of their column's type (an integer as 4 bytes, see type_registry.h). table_create copies
+ * the name and the column names, so the arguments need not outlive the call; table_insert
+ * converts the text of each cell to its column's type and gives the row to the engine.
  *
  * Columns are stored in the order they were defined (the physical order). They are shown in the
  * display order, which starts out the same and can be changed with table_set_display_order
  * without touching the stored rows. Statements that name columns by position, such as
  * SELECT * and INSERT ... VALUES, follow the display order: display index d refers to the column
- * table_physical_index(d). table_column and table_cell take physical indexes.
+ * table_physical_index(d). table_column takes physical indexes, as do the values of a stored row.
  *
  * Tables are shared between connection threads. table_insert locks the table itself. A reader
  * that needs a consistent view of several rows holds table_lock for the whole read, and must not
@@ -19,8 +20,9 @@
  * from the table itself. Tables are found by name through the catalog (catalog.h).
  *
  * Errors return -1 or nullptr and set errno: EINVAL for a null argument, a wrong cell count or a
- * cell whose text is not a valid value of its column's type, ENOMEM when memory runs out. A failed
- * table_insert leaves the table unchanged.
+ * cell whose text is not a valid value of its column's type, ENOMEM when memory runs out, and
+ * those of the engine for an insert (ENOSPC when the table is full, EFBIG for a row that could
+ * never fit; see storage_engine.h). A failed table_insert leaves the table unchanged.
  */
 
 #pragma once
@@ -28,6 +30,7 @@
 #include <stddef.h>
 
 #include "ds/hash_map.h"
+#include "storage/storage_engine.h"
 #include "types/type_registry.h"
 
 /** Most columns a table may have. */
@@ -39,12 +42,6 @@ typedef struct {
 } table_column_t;
 
 typedef struct table table_t;
-
-/** A stored value in the format of its column's type (see type_registry.h). */
-typedef struct {
-    const void *data;
-    size_t length;
-} table_value_t;
 
 [[nodiscard]] table_t *table_create(const char *name, const table_column_t *columns,
                                     size_t column_count);
@@ -80,6 +77,9 @@ void table_unlock(table_t *table);
 [[nodiscard]] size_t table_column_count(const table_t *table);
 [[nodiscard]] size_t table_physical_index(const table_t *table, size_t display_index);
 [[nodiscard]] const table_column_t *table_column(const table_t *table, size_t index);
-[[nodiscard]] size_t table_row_count(const table_t *table);
-/** The value of a cell, in the stored format of its type. Valid until the table is destroyed. */
-[[nodiscard]] table_value_t table_cell(const table_t *table, size_t row, size_t column);
+
+/**
+ * The storage engine instance that holds the rows. Reading goes through a cursor on it
+ * (storage_engine.h), with the table locked from opening the cursor until it is closed.
+ */
+[[nodiscard]] storage_engine_t *table_engine(const table_t *table);

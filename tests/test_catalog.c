@@ -15,6 +15,7 @@
 #include <cmocka.h>
 
 #include "storage/catalog.h"
+#include "table_assert.h"
 
 static const table_column_t PAIR_COLUMNS[] = {{"a", &TYPE_INT4}, {"b", &TYPE_TEXT}};
 
@@ -45,7 +46,7 @@ static void test_created_table_can_be_found([[maybe_unused]] void **state)
 
     assert_ptr_equal(catalog_find("found"), created);
     assert_string_equal(table_name(created), "found");
-    assert_int_equal(table_row_count(created), 0);
+    assert_int_equal(count_rows(created), 0);
     assert_column_is(created, 1, "b", &TYPE_TEXT);
 }
 

@@ -10,6 +10,7 @@
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <stdio.h>
 
 #include <cmocka.h>
 
@@ -29,13 +30,13 @@ static void run_insert(const char *sql, executor_error_t *error)
 static void assert_rejected(const char *sql, const char *sqlstate, const char *message)
 {
     executor_error_t error;
-    size_t rows = table_row_count(catalog_find("user"));
+    size_t rows = count_rows(catalog_find("user"));
 
     run_insert(sql, &error);
 
     assert_string_equal(error.sqlstate, sqlstate);
     assert_string_equal(error.message, message);
-    assert_int_equal(table_row_count(catalog_find("user")), rows);
+    assert_int_equal(count_rows(catalog_find("user")), rows);
 }
 
 static void test_insert_into_a_missing_table_is_an_error([[maybe_unused]] void **state)
@@ -81,7 +82,7 @@ static void test_valid_insert_adds_a_row([[maybe_unused]] void **state)
     run_insert("INSERT INTO user VALUES ('4', 'Dave')", &error);
 
     assert_string_equal(error.sqlstate, "");
-    assert_int_equal(table_row_count(user), 4);
+    assert_int_equal(count_rows(user), 4);
     assert_cell_text(user, 3, 0, "4");
     assert_cell_text(user, 3, 1, "Dave");
 }
@@ -155,7 +156,7 @@ static void test_integer_check_uses_the_column_shown_at_that_position([[maybe_un
 
     assert_string_equal(error.sqlstate, "22P02");
     assert_string_equal(error.message, "invalid input syntax for type integer: \"x\"");
-    assert_int_equal(table_row_count(table), 1);
+    assert_int_equal(count_rows(table), 1);
 }
 
 static void run_create(const char *sql, executor_error_t *error)
@@ -164,6 +165,55 @@ static void run_create(const char *sql, executor_error_t *error)
 
     assert_true(sql_parse_create_table(sql, &create));
     assert_int_equal(executor_create_table(&create, error), 0);
+}
+
+static table_t *create_text_table(const char *name)
+{
+    const table_column_t columns[] = {{"t", &TYPE_TEXT}};
+    table_t *table = catalog_create_table(name, columns, 1);
+    if (table == nullptr) {
+        fail();
+    }
+    return table;
+}
+
+static size_t insert_until_refused(const char *sql, executor_error_t *error)
+{
+    size_t rows = 0;
+
+    do {
+        run_insert(sql, error);
+    } while (error->sqlstate[0] == '\0' && ++rows < 10000);
+    return rows;
+}
+
+static void test_insert_into_a_full_table_is_an_error([[maybe_unused]] void **state)
+{
+    table_t *table = create_text_table("full_table");
+    executor_error_t error;
+    size_t rows = insert_until_refused("INSERT INTO full_table VALUES ('0123456789')", &error);
+
+    assert_string_equal(error.sqlstate, "53100");
+    assert_string_equal(error.message, "table is full");
+    assert_true(rows > 100);
+    assert_int_equal(count_rows(table), rows);
+}
+
+static void test_insert_of_a_row_too_big_for_a_table_is_an_error([[maybe_unused]] void **state)
+{
+    static char sql[10000];
+    static char scratch[10000];
+    table_t *table = create_text_table("big_row_table");
+    sql_insert_t insert;
+    executor_error_t error;
+
+    snprintf(sql, sizeof(sql), "INSERT INTO big_row_table VALUES ('%09000d')", 7);
+    assert_true(sql_parse_insert(sql, scratch, &insert));
+    assert_int_equal(executor_insert(&insert, &error), 0);
+
+    assert_string_equal(error.sqlstate, "54000");
+    assert_string_equal(error.message, "row is too big");
+    assert_int_equal(count_rows(table), 0);
 }
 
 static void test_create_table_makes_a_table_with_the_given_columns([[maybe_unused]] void **state)
@@ -180,7 +230,7 @@ static void test_create_table_makes_a_table_with_the_given_columns([[maybe_unuse
     assert_ptr_equal(table_column(made, 1)->type, &TYPE_TEXT);
     assert_ptr_equal(table_column(made, 2)->type, &TYPE_INT4);
     assert_ptr_equal(table_column(made, 3)->type, &TYPE_INT4);
-    assert_int_equal(table_row_count(made), 0);
+    assert_int_equal(count_rows(made), 0);
 }
 
 static void test_create_table_without_columns_makes_an_empty_table([[maybe_unused]] void **state)
@@ -231,6 +281,8 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_valid_insert_adds_a_row),
     cmocka_unit_test(test_number_in_a_text_column_is_stored_as_text),
     cmocka_unit_test(test_select_gives_the_locked_table_until_released),
+    cmocka_unit_test(test_insert_into_a_full_table_is_an_error),
+    cmocka_unit_test(test_insert_of_a_row_too_big_for_a_table_is_an_error),
     cmocka_unit_test(test_create_table_makes_a_table_with_the_given_columns),
     cmocka_unit_test(test_create_table_without_columns_makes_an_empty_table),
     cmocka_unit_test(test_create_table_with_an_unknown_type_is_an_error),
