@@ -26,6 +26,10 @@ static constexpr char DUPLICATE_COLUMN_SQLSTATE[] = "42701";
 static constexpr char DUPLICATE_COLUMN_FORMAT[] = "column \"%s\" specified more than once";
 static constexpr char TABLE_EXISTS_SQLSTATE[] = "42P07";
 static constexpr char TABLE_EXISTS_FORMAT[] = "relation \"%s\" already exists";
+static constexpr char TABLE_FULL_SQLSTATE[] = "53100";
+static constexpr char TABLE_FULL_MESSAGE[] = "table is full";
+static constexpr char ROW_TOO_BIG_SQLSTATE[] = "54000";
+static constexpr char ROW_TOO_BIG_MESSAGE[] = "row is too big";
 static constexpr char INVALID_INTEGER_FORMAT[] = "invalid input syntax for type integer: \"%s\"";
 
 static void set_error(executor_error_t *error, const char *sqlstate)
@@ -44,13 +48,28 @@ static const char *find_invalid_integer(const table_t *table, const sql_insert_t
     return invalid;
 }
 
-static int insert_row(table_t *table, const sql_insert_t *insert)
+static void set_storage_error(executor_error_t *error, int storage_errno)
+{
+    bool is_full = storage_errno == ENOSPC;
+    set_error(error, is_full ? TABLE_FULL_SQLSTATE : ROW_TOO_BIG_SQLSTATE);
+    snprintf(error->message, sizeof(error->message), "%s",
+             is_full ? TABLE_FULL_MESSAGE : ROW_TOO_BIG_MESSAGE);
+}
+
+static int insert_row(table_t *table, const sql_insert_t *insert, executor_error_t *error)
 {
     const char *cells[SQL_MAX_INSERT_VALUES];
     for (size_t i = 0; i < insert->count; i++) {
         cells[table_physical_index(table, i)] = insert->values[i].text;
     }
-    return table_insert_locked(table, cells, insert->count);
+    if (table_insert_locked(table, cells, insert->count) == 0) {
+        return 0;
+    }
+    if (errno != ENOSPC && errno != EFBIG) {
+        return -1;
+    }
+    set_storage_error(error, errno);
+    return 0;
 }
 
 static void set_missing_table_error(executor_error_t *error, const char *table_name)
@@ -72,7 +91,7 @@ static int insert_checked(table_t *table, const sql_insert_t *insert, executor_e
         snprintf(error->message, sizeof(error->message), INVALID_INTEGER_FORMAT, invalid);
         return 0;
     }
-    return insert_row(table, insert);
+    return insert_row(table, insert, error);
 }
 
 int executor_insert(const sql_insert_t *insert, executor_error_t *error)

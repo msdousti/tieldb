@@ -1,5 +1,5 @@
 /**
- * In-memory tables that can grow.
+ * Tables: the catalog entry of a table, with a storage engine instance that holds its rows.
  */
 
 #include "storage/table.h"
@@ -10,26 +10,18 @@
 #include <string.h>
 #include <sys/types.h>
 
-static constexpr size_t INITIAL_CELL_CAPACITY = 16;
+#include "storage/one_page_engine.h"
 
 typedef struct {
     table_column_t column;
     size_t display_position;
 } column_slot_t;
 
-typedef struct {
-    void *data;
-    size_t length;
-} cell_t;
-
 struct table {
     hash_node_t node; // for the catalog's hash map
     const char *name;
     size_t column_count;
-    cell_t *cells;
-    size_t cell_count;
-    size_t cell_capacity;
-    size_t row_count; // kept apart from the cells, because a table may have no columns
+    storage_engine_t *engine;
     pthread_mutex_t lock;
     column_slot_t columns[]; // followed in the same allocation by the table and column names
 };
@@ -62,10 +54,24 @@ static void fill_owned(table_t *table, const char *name, const table_column_t *c
     }
 }
 
+static storage_engine_t *create_engine(const table_column_t *columns, size_t column_count)
+{
+    const type_info_t *types[TABLE_MAX_COLUMNS];
+    for (size_t i = 0; i < column_count; i++) {
+        types[i] = columns[i].type;
+    }
+    return one_page_engine_create(&(row_layout_t){types, column_count});
+}
+
 table_t *table_create(const char *name, const table_column_t *columns, size_t column_count)
 {
     table_t *table = calloc(1, sizeof(*table) + owned_size(name, columns, column_count));
     if (table == nullptr) {
+        return nullptr;
+    }
+    table->engine = create_engine(columns, column_count);
+    if (table->engine == nullptr) {
+        free(table);
         return nullptr;
     }
     table->column_count = column_count;
@@ -76,31 +82,9 @@ table_t *table_create(const char *name, const table_column_t *columns, size_t co
 
 void table_destroy(table_t *table)
 {
-    for (size_t i = 0; i < table->cell_count; i++) {
-        free(table->cells[i].data);
-    }
-    free(table->cells);
+    storage_destroy(table->engine);
     pthread_mutex_destroy(&table->lock);
     free(table);
-}
-
-static int reserve_cells(table_t *table, size_t extra)
-{
-    size_t capacity = table->cell_capacity;
-    size_t needed = table->cell_count + extra;
-    while (capacity < needed) {
-        capacity = capacity == 0 ? INITIAL_CELL_CAPACITY : capacity * 2;
-    }
-    if (capacity == table->cell_capacity) {
-        return 0;
-    }
-    cell_t *grown = realloc(table->cells, capacity * sizeof(*grown));
-    if (grown == nullptr) {
-        return -1;
-    }
-    table->cells = grown;
-    table->cell_capacity = capacity;
-    return 0;
 }
 
 static size_t stored_capacity(const type_info_t *type, const char *text)
@@ -108,38 +92,50 @@ static size_t stored_capacity(const type_info_t *type, const char *text)
     return type->storage_size == TYPE_VARIABLE_LENGTH ? strlen(text) + 1 : type->storage_size;
 }
 
-static int append_cell(table_t *table, const type_info_t *type, const char *text)
+static size_t total_capacity(const table_t *table, const char *const *cells)
 {
-    size_t capacity = stored_capacity(type, text);
-    void *data = malloc(capacity);
-    if (data == nullptr) {
-        return -1;
+    size_t total = 0;
+    for (size_t i = 0; i < table->column_count; i++) {
+        total += stored_capacity(table->columns[i].column.type, cells[i]);
     }
-    ssize_t length = type->input(text, data, capacity);
+    return total;
+}
+
+static int convert_cell(const type_info_t *type, const char *text, unsigned char *buffer,
+                        row_value_t *value)
+{
+    ssize_t length = type->input(text, buffer, stored_capacity(type, text));
     if (length < 0) {
-        free(data);
         return -1;
     }
-    table->cells[table->cell_count++] = (cell_t){data, (size_t) length};
+    *value = (row_value_t){buffer, (size_t) length};
     return 0;
 }
 
-static void drop_cells_after(table_t *table, size_t count)
+static int convert_cells(const table_t *table, const char *const *cells, unsigned char *buffer,
+                         row_value_t *values)
 {
-    while (table->cell_count > count) {
-        free(table->cells[--table->cell_count].data);
+    int status = 0;
+    for (size_t i = 0; i < table->column_count && status == 0; i++) {
+        const type_info_t *type = table->columns[i].column.type;
+        status = convert_cell(type, cells[i], buffer, &values[i]);
+        buffer += stored_capacity(type, cells[i]);
     }
+    return status;
 }
 
-static int append_row(table_t *table, const char *const *cells, size_t count)
+static int insert_converted(table_t *table, const char *const *cells)
 {
-    size_t start = table->cell_count;
-    int status = reserve_cells(table, count);
-    for (size_t i = 0; i < count && status == 0; i++) {
-        status = append_cell(table, table->columns[i].column.type, cells[i]);
+    row_value_t values[TABLE_MAX_COLUMNS];
+    unsigned char *buffer = malloc(total_capacity(table, cells) + 1); // never zero
+    if (buffer == nullptr) {
+        return -1;
     }
-    drop_cells_after(table, status == 0 ? table->cell_count : start);
-    table->row_count += status == 0 ? 1 : 0;
+    int status = convert_cells(table, cells, buffer, values);
+    if (status == 0) {
+        status = storage_insert(table->engine, values);
+    }
+    free(buffer);
     return status;
 }
 
@@ -149,7 +145,7 @@ int table_insert_locked(table_t *table, const char *const *cells, size_t count)
         errno = EINVAL;
         return -1;
     }
-    return append_row(table, cells, count);
+    return insert_converted(table, cells);
 }
 
 int table_insert(table_t *table, const char *const *cells, size_t count)
@@ -242,13 +238,7 @@ const table_column_t *table_column(const table_t *table, size_t index)
     return &table->columns[index].column;
 }
 
-size_t table_row_count(const table_t *table)
+storage_engine_t *table_engine(const table_t *table)
 {
-    return table->row_count;
-}
-
-table_value_t table_cell(const table_t *table, size_t row, size_t column)
-{
-    const cell_t *cell = &table->cells[(row * table->column_count) + column];
-    return (table_value_t){cell->data, cell->length};
+    return table->engine;
 }

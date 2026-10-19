@@ -3,12 +3,14 @@
  *
  * executor_insert runs an INSERT. It separates two kinds of failure:
  *
- *   - the statement is wrong (unknown table, wrong number of values, text in an integer column):
- *     the call returns 0 and fills in the error with a SQLSTATE and message for the client;
+ *   - the statement is wrong (unknown table, wrong number of values, text in an integer column,
+ *     a table that is full or a row that is too big for it): the call returns 0 and fills in the
+ *     error with a SQLSTATE and message for the client;
  *   - the server fails (memory runs out): the call returns -1 and sets errno to ENOMEM.
  *
  * On success the error's sqlstate is empty. Integer values are checked to be valid 32-bit
- * integers and are stored as written.
+ * integers. A table holds what fits in one 8 KB page for now: a full table is 53100 and a row
+ * that could never fit is 54000.
  *
  * executor_create_table runs CREATE TABLE and fails the same two ways. A wrong statement is an
  * unknown column type (INTEGER, INT, INT4 and TEXT exist), a column named twice, or a table that
