@@ -95,7 +95,7 @@ static void test_a_bad_header_is_corrupt([[maybe_unused]] void **state)
 {
     page_t page = page_with_tuples();
 
-    poke16(&page, TYPE_OFFSET, PAGE_TYPE_COUNT);
+    poke16(&page, TYPE_OFFSET, UINT16_MAX);
     assert_corrupt(&page);
     page = page_with_tuples();
     poke16(&page, UPPER_OFFSET, PAGE_SIZE + 1);

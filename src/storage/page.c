@@ -28,6 +28,8 @@ typedef struct {
 } slot_t;
 
 static constexpr size_t PAGE_HEADER_SIZE = 24;
+// Keep this the value after the last page_type_t, or page_validate rejects the new type
+static constexpr unsigned PAGE_TYPE_LIMIT = PAGE_TYPE_HEAP + 1;
 static constexpr unsigned STATE_SHIFT = 14;
 static constexpr uint16_t OFFSET_MASK = (1U << STATE_SHIFT) - 1;
 
@@ -263,7 +265,7 @@ static bool is_valid_slot(const page_t *page, const page_header_t *header, size_
 int page_validate(const page_t *page)
 {
     page_header_t header = load_header(page);
-    bool is_valid = header.type < PAGE_TYPE_COUNT && header.upper <= PAGE_SIZE &&
+    bool is_valid = header.type < PAGE_TYPE_LIMIT && header.upper <= PAGE_SIZE &&
                     slot_position(header.slot_count) <= header.upper;
     for (size_t slot = 0; is_valid && slot < header.slot_count; slot++) {
         is_valid = is_valid_slot(page, &header, slot);
