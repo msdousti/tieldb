@@ -17,6 +17,6 @@ find build-cov -name '*.gcda' -delete
 meson test -C build-cov
 
 status=0
-ninja -C build-cov coverage-text || status=$?
+ninja -C build-cov coverage-text 2>&1 | tee build-cov/meson-logs/coverage-summary.log || status=$?
 cat build-cov/meson-logs/coverage.txt
 exit "$status"

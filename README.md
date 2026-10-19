@@ -1,12 +1,18 @@
+<p align="center">
+  <img src="docs/images/tieldb-logo.png" alt="TielDB: Educational DBMS" width="220">
+</p>
+
 # TielDB - Educational Database Management System
 
 [![CI](https://github.com/msdousti/tieldb/actions/workflows/ci.yml/badge.svg)](https://github.com/msdousti/tieldb/actions/workflows/ci.yml)
+[![Line coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmsdousti%2Ftieldb%2Fbadges%2Fcoverage-lines.json)](https://github.com/msdousti/tieldb/actions/workflows/ci.yml)
+[![Branch coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmsdousti%2Ftieldb%2Fbadges%2Fcoverage-branches.json)](https://github.com/msdousti/tieldb/actions/workflows/ci.yml)
 
 A learning-focused DBMS implementation built from scratch in modern C, modeled after PostgreSQL and MariaDB.
 
 ## Project Status
 
-**Current Phase:** Phase 0 - Project Setup
+**Current Phase:** Phase 2 - Persistence (Phases 0 and 1 are complete: `psql` connects, and `CREATE TABLE`, `INSERT` and `SELECT *` work in memory)
 
 See [ROADMAP.md](ROADMAP.md) for the complete development plan.
 

@@ -99,6 +99,7 @@ meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined   
 ninja -C build-asan && meson test -C build-asan                   # build and test (ASan + UBSan)
 meson setup build-tsan --native-file clang.ini -Db_sanitize=thread  # TSan; same test command
 scripts/coverage.sh                # build-cov; fails below 100% lines/branches
+                                   # on main, CI also publishes the README coverage badges (scripts/coverage-badges.sh)
 scripts/valgrind.sh                # build-valgrind; occasional use
 clang-format-22 -i src/*/*.[ch] tests/*.c
 clang-tidy-22 -p build-asan $(find src tests -name '*.c')
