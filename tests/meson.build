@@ -114,6 +114,15 @@ test_catalog_file = executable('test_catalog_file',
 
 test('catalog_file', test_catalog_file)
 
+# Test: loading the catalog file
+test_catalog_file_load = executable('test_catalog_file_load',
+  'test_catalog_file_load.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('catalog_file_load', test_catalog_file_load)
+
 # Test: files that hold one page
 test_one_page_file = executable('test_one_page_file',
   'test_one_page_file.c',
