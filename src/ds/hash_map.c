@@ -149,3 +149,18 @@ size_t hash_bytes(const void *data, size_t size)
     }
     return (size_t) hash;
 }
+
+static void visit_chain(hash_node_t *node, void (*visit)(hash_node_t *, void *), void *context)
+{
+    for (; node != nullptr; node = node->next) {
+        visit(node, context);
+    }
+}
+
+void hash_map_for_each(const hash_map_t *map, void (*visit)(hash_node_t *node, void *context),
+                       void *context)
+{
+    for (size_t bucket = 0; bucket < map->bucket_count; bucket++) {
+        visit_chain(map->buckets[bucket], visit, context);
+    }
+}

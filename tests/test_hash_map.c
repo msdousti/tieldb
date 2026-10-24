@@ -92,6 +92,33 @@ static void test_inserted_entries_are_found_and_removed([[maybe_unused]] void **
     hash_map_destroy(map);
 }
 
+static void count_visit(hash_node_t *node, void *context)
+{
+    size_t *sum = context;
+    *sum += HASH_MAP_ENTRY(node, entry_t, node)->key;
+}
+
+static size_t sum_of_keys_visited(const hash_map_ops_t *ops)
+{
+    entry_t entries[5];
+    hash_map_t *map = create_map(ops, 8);
+    size_t sum = 0;
+
+    for (uint32_t i = 0; i < 5; i++) {
+        entries[i] = (entry_t){.key = i + 1};
+        hash_map_insert(map, &entries[i].node, &entries[i].key);
+    }
+    hash_map_for_each(map, count_visit, &sum);
+    hash_map_destroy(map);
+    return sum;
+}
+
+static void test_for_each_visits_every_entry_once([[maybe_unused]] void **state)
+{
+    assert_int_equal(sum_of_keys_visited(&OPS), 1 + 2 + 3 + 4 + 5);
+    assert_int_equal(sum_of_keys_visited(&ONE_CHAIN_OPS), 1 + 2 + 3 + 4 + 5);
+}
+
 static void test_create_rejects_missing_operations([[maybe_unused]] void **state)
 {
     errno = 0;
@@ -171,6 +198,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_hash_bytes_matches_known_fnv_1a_values),
     cmocka_unit_test(test_empty_map_finds_nothing),
     cmocka_unit_test(test_inserted_entries_are_found_and_removed),
+    cmocka_unit_test(test_for_each_visits_every_entry_once),
     cmocka_unit_test(test_create_rejects_missing_operations),
     cmocka_unit_test(test_map_agrees_with_a_model_under_random_operations),
 };

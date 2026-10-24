@@ -79,6 +79,12 @@ void table_unlock(table_t *table);
 [[nodiscard]] const table_column_t *table_column(const table_t *table, size_t index);
 
 /**
+ * Saves the rows of the table to a file with the engine of the table (storage_save), holding the
+ * table lock. Errors are those of the engine.
+ */
+[[nodiscard]] int table_save_rows(table_t *table, const char *path);
+
+/**
  * The storage engine instance that holds the rows. Reading goes through a cursor on it
  * (storage_engine.h), with the table locked from opening the cursor until it is closed.
  */

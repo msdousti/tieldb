@@ -9,6 +9,7 @@
 
 #include <errno.h>
 #include <pthread.h>
+#include <stdlib.h>
 #include <string.h>
 
 static constexpr size_t INITIAL_BUCKETS = 64;
@@ -63,4 +64,28 @@ table_t *catalog_create_table(const char *name, const table_column_t *columns, s
     table_t *table = create_locked(name, columns, column_count);
     pthread_rwlock_unlock(&lock);
     return table;
+}
+
+typedef struct {
+    table_t **tables;
+    size_t count;
+} table_list_t;
+
+static void append_table(hash_node_t *node, void *context)
+{
+    table_list_t *list = context;
+    list->tables[list->count++] = table_from_node(node);
+}
+
+table_t **catalog_list_tables(size_t *count)
+{
+    pthread_rwlock_rdlock(&lock);
+    size_t total = tables == nullptr ? 0 : hash_map_count(tables);
+    table_list_t list = {(table_t **) malloc((total + 1) * sizeof(table_t *)), 0}; // never zero
+    if (list.tables != nullptr && tables != nullptr) {
+        hash_map_for_each(tables, append_table, &list);
+    }
+    pthread_rwlock_unlock(&lock);
+    *count = list.count;
+    return list.tables;
 }

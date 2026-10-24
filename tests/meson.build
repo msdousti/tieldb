@@ -114,6 +114,15 @@ test_catalog_file = executable('test_catalog_file',
 
 test('catalog_file', test_catalog_file)
 
+# Test: the data directory
+test_data_dir = executable('test_data_dir',
+  'test_data_dir.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('data_dir', test_data_dir)
+
 # Test: loading the catalog file
 test_catalog_file_load = executable('test_catalog_file_load',
   'test_catalog_file_load.c',

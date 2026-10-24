@@ -22,3 +22,10 @@
 
 [[nodiscard]] table_t *catalog_create_table(const char *name, const table_column_t *columns,
                                             size_t column_count);
+
+/**
+ * The tables, in no particular order, in an array that the caller frees; *count is how many. A
+ * table, once created, lives as long as the process, so the pointers stay valid. Returns nullptr
+ * with errno ENOMEM when memory runs out.
+ */
+[[nodiscard]] table_t **catalog_list_tables(size_t *count);

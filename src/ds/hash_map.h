@@ -66,5 +66,9 @@ hash_node_t *hash_map_remove(hash_map_t *map, const void *key);
 
 [[nodiscard]] size_t hash_map_count(const hash_map_t *map);
 
+/** Calls visit for every entry, in no particular order. The visitor must not change the map. */
+void hash_map_for_each(const hash_map_t *map, void (*visit)(hash_node_t *node, void *context),
+                       void *context);
+
 /** FNV-1a hash of some bytes, for keys that are strings or plain data. */
 [[nodiscard]] size_t hash_bytes(const void *data, size_t size);
