@@ -15,6 +15,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -44,6 +46,19 @@ typedef struct {
     FILE *output;
 } child_t;
 
+// Set by the test that wants the next server to be unable to start a thread
+static bool block_threads_in_child;
+
+static void limit_threads_if_asked(void)
+{
+    if (!block_threads_in_child) {
+        return;
+    }
+    // The leak checker of the sanitizer runs a helper process, which this limit forbids
+    setenv("ASAN_OPTIONS", "detect_leaks=0", 1); // NOLINT(concurrency-mt-unsafe): child, one thread
+    setrlimit(RLIMIT_NPROC, &(struct rlimit){0, 0});
+}
+
 static child_t start_with_arguments(const char *const *arguments)
 {
     int pipe_fds[2];
@@ -51,6 +66,7 @@ static child_t start_with_arguments(const char *const *arguments)
     pid_t pid = fork();
     assert_true(pid >= 0);
     if (pid == 0) {
+        limit_threads_if_asked();
         dup2(pipe_fds[1], STDOUT_FILENO);
         close(pipe_fds[0]);
         close(pipe_fds[1]);
@@ -180,25 +196,36 @@ static int make_data_dir(void)
     return mkdtemp(data_dir) == nullptr ? -1 : 0;
 }
 
-// The session of a client that asks one question and leaves
-static size_t build_session(uint8_t *out, const char *query)
+static size_t put_query(uint8_t *out, const char *query)
+{
+    size_t length = strlen(query) + 1;
+
+    out[0] = 'Q';
+    out[1] = 0;
+    out[2] = 0;
+    out[3] = 0;
+    out[4] = (uint8_t) (4 + length);
+    memcpy(out + 5, query, length);
+    return 5 + length;
+}
+
+// The session of a client that asks some questions and, if it says so, leaves
+static size_t build_session(uint8_t *out, const char *const *queries, size_t count, bool leaves)
 {
     static const uint8_t PREAMBLE[] = {0, 0, 0, 8, 0x04, 0xD2, 0x16, 0x2F, 0,
                                        0, 0, 9, 0, 3,    0,    0,    0};
     static const uint8_t TERMINATE[] = {'X', 0, 0, 0, 4};
-    size_t length = strlen(query) + 1;
     size_t size = sizeof(PREAMBLE);
 
     memcpy(out, PREAMBLE, size);
-    out[size++] = 'Q';
-    out[size++] = 0;
-    out[size++] = 0;
-    out[size++] = 0;
-    out[size++] = (uint8_t) (4 + length);
-    memcpy(out + size, query, length);
-    size += length;
-    memcpy(out + size, TERMINATE, sizeof(TERMINATE));
-    return size + sizeof(TERMINATE);
+    for (size_t i = 0; i < count; i++) {
+        size += put_query(out + size, queries[i]);
+    }
+    if (leaves) {
+        memcpy(out + size, TERMINATE, sizeof(TERMINATE));
+        size += sizeof(TERMINATE);
+    }
+    return size;
 }
 
 static table_t *make_pet_table(void)
@@ -225,7 +252,8 @@ static void test_serves_the_tables_of_the_data_directory([[maybe_unused]] void *
 {
     char reply[REPLY_CAPACITY];
     uint8_t session[REPLY_CAPACITY];
-    size_t session_size = build_session(session, "select * from pet");
+    const char *question[] = {"select * from pet"};
+    size_t session_size = build_session(session, question, 1, true);
     child_t child;
     int fd = -1;
 
@@ -240,6 +268,102 @@ static void test_serves_the_tables_of_the_data_directory([[maybe_unused]] void *
     assert_contains(reply, size, "Rex");
     assert_int_equal(wait_for_exit_status(child), 0);
     remove_data_dir();
+}
+
+static size_t read_until_contains(int fd, char *reply, const char *needle)
+{
+    size_t size = 0;
+    ssize_t count = 0;
+
+    while (memmem(reply, size, needle, strlen(needle)) == nullptr &&
+           (count = read(fd, reply + size, REPLY_CAPACITY - size)) > 0) {
+        size += (size_t) count;
+    }
+    return size;
+}
+
+static void test_a_stop_signal_ends_the_server_cleanly([[maybe_unused]] void **state)
+{
+    const int signals[] = {SIGTERM, SIGINT};
+
+    for (size_t i = 0; i < sizeof(signals) / sizeof(signals[0]); i++) {
+        const char *arguments[] = {tieldb_path, "--port", "0", "--in-memory", nullptr};
+        child_t child = start_with_arguments(arguments);
+        int fd = connect_to(read_announced_port(child));
+
+        assert_int_equal(kill(child.pid, signals[i]), 0);
+        assert_int_equal(wait_for_exit_status(child), 0);
+        close(fd);
+    }
+}
+
+static void save_a_pet_through_a_server_and_stop_it(void)
+{
+    const char *arguments[] = {tieldb_path, "--port", "0", "--data-dir", data_dir, nullptr};
+    const char *writing[] = {"create table pet (id integer, name text)",
+                             "insert into pet values (1, 'Rex')"};
+    char reply[REPLY_CAPACITY] = {};
+    uint8_t session[REPLY_CAPACITY];
+    size_t size = build_session(session, writing, 2, false);
+    child_t child = start_with_arguments(arguments);
+    int fd = connect_to(read_announced_port(child));
+
+    assert_int_equal(write(fd, session, size), (ssize_t) size);
+    assert_contains(reply, read_until_contains(fd, reply, "INSERT 0 1"), "INSERT 0 1");
+    assert_int_equal(kill(child.pid, SIGTERM), 0);
+    assert_int_equal(wait_for_exit_status(child), 0);
+    close(fd);
+}
+
+static void test_a_data_directory_is_saved_when_the_server_is_stopped([[maybe_unused]] void **state)
+{
+    const char *reading[] = {"select * from pet"};
+    char reply[REPLY_CAPACITY];
+    uint8_t session[REPLY_CAPACITY];
+    size_t size = build_session(session, reading, 1, true);
+    child_t child;
+    int fd = -1;
+
+    assert_int_equal(make_data_dir(), 0);
+    save_a_pet_through_a_server_and_stop_it();
+    child = start_in_data_dir(data_dir);
+    fd = connect_to(read_announced_port(child));
+    assert_int_equal(write(fd, session, size), (ssize_t) size);
+    size = read_until_closed(fd, reply);
+    close(fd);
+
+    assert_contains(reply, size, "Rex");
+    assert_int_equal(wait_for_exit_status(child), 0);
+    remove_data_dir();
+}
+
+static void test_fails_when_the_data_directory_cannot_be_saved([[maybe_unused]] void **state)
+{
+    const char *arguments[] = {tieldb_path, "--port", "0", "--data-dir", data_dir, nullptr};
+    child_t child;
+
+    assert_int_equal(make_data_dir(), 0);
+    child = start_with_arguments(arguments);
+    (void) read_announced_port(child);
+    remove_data_dir();
+    assert_int_equal(kill(child.pid, SIGTERM), 0);
+
+    assert_int_equal(wait_for_exit_status(child), 1);
+}
+
+static void test_cannot_watch_for_signals_without_a_thread([[maybe_unused]] void **state)
+{
+    const char *arguments[] = {tieldb_path, "--port", "0", "--in-memory", nullptr};
+    child_t child;
+
+    if (geteuid() == 0) {
+        skip();
+    }
+    block_threads_in_child = true;
+    child = start_with_arguments(arguments);
+    block_threads_in_child = false;
+
+    assert_int_equal(wait_for_exit_status(child), 1);
 }
 
 static void test_refuses_to_start_without_its_data_directory([[maybe_unused]] void **state)
@@ -306,6 +430,10 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_fails_when_the_port_is_taken),
     cmocka_unit_test(test_serves_the_tables_of_the_data_directory),
     cmocka_unit_test(test_requires_a_data_directory_or_in_memory_mode),
+    cmocka_unit_test(test_a_stop_signal_ends_the_server_cleanly),
+    cmocka_unit_test(test_a_data_directory_is_saved_when_the_server_is_stopped),
+    cmocka_unit_test(test_fails_when_the_data_directory_cannot_be_saved),
+    cmocka_unit_test(test_cannot_watch_for_signals_without_a_thread),
     cmocka_unit_test(test_refuses_to_start_without_its_data_directory),
     cmocka_unit_test(test_refuses_to_start_with_a_corrupt_catalog),
 };

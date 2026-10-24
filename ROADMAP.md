@@ -182,12 +182,12 @@ Two milestones, so that the first visible result comes early:
   - [x] Load the catalog and the tables from the directory (`data_dir_load`)
   - [x] `--data-dir` option; the directory is loaded at startup
   - [x] `--in-memory` option: the server needs exactly one of `--data-dir` and `--in-memory`, so that data is never lost by forgetting an option and no default directory is chosen
-  - [ ] Checkpoint on clean shutdown (below)
+  - [x] Checkpoint on clean shutdown (below)
   - [ ] An explicit `CHECKPOINT` statement
   - [x] Data directory format version: a file with a magic number and a format version (like Postgres's `PG_VERSION`), checked at startup so that an old or foreign directory is refused and not misread
   - [ ] One server per data directory: a lock on the directory (a pid file created with `O_EXCL`, as Postgres does, or an advisory lock that the kernel drops when the process dies), so that a second server on the same directory refuses to start and cannot overwrite the first one's pages; it needs a stale-lock check or a lock call in the injectable I/O layer
   - [ ] Directory durability: fsync the data directory after creating a file in it (the injectable I/O layer has no way to open or sync a directory yet)
-  - [ ] Clean shutdown: SIGTERM and SIGINT stop the listener, close the connections, save the data and exit with status 0 (today only SIGPIPE is handled)
+  - [x] Clean shutdown: SIGTERM and SIGINT stop the listener, end the sessions after the statement they are running, save the data and exit with status 0 (a thread waits for the signals with `sigwait`, so no handler runs in the middle of anything)
 
 #### Milestone B: lift the one-page limit
 - [ ] Fuzzing build (its own small PR, before the first fuzz target; `CLAUDE.md` documents `build-fuzz`, but nothing builds it yet)
@@ -225,8 +225,8 @@ Two milestones, so that the first visible result comes early:
   - [x] Log RNG seed for reproducibility
 - [x] Unit tests for the type registry and the row codec round trip
 - [x] Page file: round trip, a flipped bit is caught by the checksum, a corrupt header or slot is caught by `page_validate`
-- [ ] Restart test: create a table and insert rows, stop the server with SIGTERM, start it again, the rows are there
-- [ ] Shutdown test: SIGTERM while connected saves the data and exits with status 0
+- [x] Restart test: create a table and insert rows, stop the server with SIGTERM, start it again, the rows are there (with a real psql, and over the wire)
+- [x] Shutdown test: SIGTERM while connected saves the data and exits with status 0
 - [ ] Fault injection for page file, heap file and buffer pool I/O (short write, fsync failure) through the injectable `io`
   - [x] Page file: write error, torn write, fsync failure, read error
   - [ ] Heap file and buffer pool (milestone B)

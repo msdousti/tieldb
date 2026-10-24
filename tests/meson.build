@@ -299,6 +299,12 @@ if psql.found()
     suite: 'client',
     timeout: 60,
   )
+  test('psql_restart', find_program('bash'),
+    args: [files('psql_restart.sh'), tieldb_exe, psql.full_path(), files('psql_restart.expected')],
+    depends: tieldb_exe,
+    suite: 'client',
+    timeout: 60,
+  )
 else
   warning('psql not found, the psql session test will be skipped')
 endif

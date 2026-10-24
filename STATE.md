@@ -34,7 +34,9 @@ select version();   select current_user;   select current_database();
 - `INSERT INTO t VALUES (...)`: integers and `'strings'` (with `''` as the escape); values are checked
   against the column types (22P02); wrong count gives 42601.
 - `SELECT * FROM t`. Unknown table gives 42P01. Other statements get 0A000 ("unsupported").
-- The server needs `--in-memory` (everything is lost on exit) or `--data-dir PATH` (the directory is loaded at startup; nothing saves it yet, shutdown will). A table holds what fits in one 8 KB page (a few hundred small rows); a full table is error 53100, a row that could never fit 54000.
+- The server needs `--in-memory` (everything is lost on exit) or `--data-dir PATH` (an existing
+  directory: it is loaded at startup and saved when the server is stopped with SIGTERM or SIGINT, so
+  the tables and rows survive a restart; `kill -9` loses what was inserted since the start). A table holds what fits in one 8 KB page (a few hundred small rows); a full table is error 53100, a row that could never fit 54000.
 - One thread per connection. Tables and the catalog are shared and locked.
 - Columns have a display order separate from the storage order (`table_set_display_order`); there
   is no SQL to change it yet (roadmap: `ALTER TABLE ... MODIFY ... AFTER`).
@@ -117,7 +119,8 @@ address; GitHub rejects it).
 ```
 src/
   main.c             the tieldb binary: --port N (default 5432), --once, and one of --data-dir PATH
-                     (loaded at startup; nothing saves it yet) or --in-memory, prints "listening on port N"
+                     (loaded at startup, saved on SIGTERM/SIGINT) or --in-memory,
+                     stops cleanly on SIGTERM/SIGINT through a sigwait thread, prints "listening on port N"
   options.{h,c}      command-line parsing
   io/                injectable I/O (io->read/write/...) for fault injection
   ds/hash_map.{h,c}  reusable chained hash map; entries embed hash_node_t; no locking inside
@@ -181,16 +184,15 @@ counts conditions: a loop condition with `&&` needs a test for each operand bein
 ## What comes next
 
 1. **Phase 2, in the order of the ROADMAP.md plan** (decisions are written there: the catalog in
-   a catalog file first and system tables in milestone B, flush on shutdown and checkpoint since there is no WAL yet, per-table mutex
-   plus a buffer pool lock, rows must fit one page, overflow storage is Phase 8+). Done: the type
-   registry (PRs 1 to 3: registry, lookups through it, typed cells) and the slotted page with its
-   reference-model test. Phase 2 has two milestones (see ROADMAP.md).
-   **A, data survives a restart, with a table being one page:** row codec, page file (checksum and `page_validate`), storage engine interface with the
-   one-page engine wired into the executor, catalog file, then `--data-dir`, the version file and
-   clean shutdown (SIGTERM/SIGINT) with a restart test. **B, lift the one-page limit:** fuzzing
-   build and page fuzz target, heap tuple header, heap file, buffer pool, free space map, heap
-   engine, catalog in system tables, crash test. Phase 3 also lists memory contexts, BOOLEAN, NULL
-   and DEFAULT.
+   a catalog file first and system tables in milestone B, flush on shutdown and checkpoint since
+   there is no WAL yet, per-table mutex plus a buffer pool lock, rows must fit one page, overflow
+   storage is Phase 8+). **Milestone A (a table is one page, data survives a restart) works**: row
+   codec, page file, engine interface and registry, one-page engine, catalog file, data directory,
+   `--data-dir`/`--in-memory`, save on SIGTERM/SIGINT. Left of A: one server per data directory (a
+   lock), directory fsync, and an explicit `CHECKPOINT` statement. **Milestone B, lift the one-page
+   limit:** fuzzing build and page fuzz target, heap tuple header, heap file, buffer pool, free
+   space map, heap engine, catalog in system tables, crash test. Phase 3 also lists memory
+   contexts, BOOLEAN, NULL and DEFAULT.
 2. Phase 3 (already in the roadmap): the real SQL parser and syntax tree first, then expressions,
    `WHERE`, projection, `DELETE`/`UPDATE`/`TRUNCATE`/`INSERT ... SELECT`, `generate_series`,
    `ALTER TABLE ... MODIFY/ADD COLUMN ... AFTER|FIRST`, ORDER BY, aggregates, joins.

@@ -1,7 +1,12 @@
 /**
- * The tieldb server: listens for Postgres clients and serves them one at a time.
+ * The tieldb server: listens for Postgres clients and serves each on its own thread.
+ *
+ * SIGTERM and SIGINT stop it cleanly: it stops accepting, lets the sessions finish the statement
+ * they are running, saves the data directory (if it has one) and exits with status 0.
  */
 
+#include <errno.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,20 +31,82 @@ static int open_data_dir(const char *dir)
     return 0;
 }
 
-static int serve(const options_t *options)
+static void fill_stop_signals(sigset_t *signals)
 {
-    // A client that disconnects mid-reply must produce a write error, not kill the server
-    signal(SIGPIPE, SIG_IGN);
-    server_t *server = server_create(options->port);
+    sigemptyset(signals);
+    sigaddset(signals, SIGTERM);
+    sigaddset(signals, SIGINT);
+}
+
+static void *wait_for_stop_signal(void *argument)
+{
+    sigset_t signals;
+    int received = 0;
+
+    fill_stop_signals(&signals);
+    sigwait(&signals, &received);
+    server_stop(argument);
+    return nullptr;
+}
+
+// SIGTERM and SIGINT are blocked in every thread, so that only this one takes them, and no
+// handler has to run in the middle of whatever a thread is doing
+static int watch_stop_signals(server_t *server)
+{
+    pthread_t thread;
+    int error = pthread_create(&thread, nullptr, wait_for_stop_signal, server);
+    if (error != 0) {
+        errno = error;
+        return -1;
+    }
+    pthread_detach(thread);
+    return 0;
+}
+
+static int save_data_dir(const char *dir)
+{
+    if (dir == nullptr) {
+        return 0;
+    }
+    if (data_dir_checkpoint(dir) != 0) {
+        perror("tieldb: saving the data directory");
+        return -1;
+    }
+    return 0;
+}
+
+static server_t *start_server(uint16_t port)
+{
+    server_t *server = server_create(port);
     if (server == nullptr) {
         perror("tieldb");
+        return nullptr;
+    }
+    if (watch_stop_signals(server) != 0) {
+        perror("tieldb: watching for SIGTERM");
+        server_destroy(server);
+        return nullptr;
+    }
+    return server;
+}
+
+static int serve(const options_t *options)
+{
+    sigset_t signals;
+    fill_stop_signals(&signals);
+    (void) pthread_sigmask(SIG_BLOCK, &signals, nullptr);
+    // A client that disconnects mid-reply must produce a write error, not kill the server
+    signal(SIGPIPE, SIG_IGN);
+    server_t *server = start_server(options->port);
+    if (server == nullptr) {
         return EXIT_FAILURE;
     }
     printf("listening on port %u\n", server_port(server));
     fflush(stdout);
     int status = server_serve(server, options->max_connections);
+    int saved = save_data_dir(options->data_dir);
     server_destroy(server);
-    return status != 0;
+    return (status | saved) != 0; // either failed
 }
 
 int main(int argc, char **argv)

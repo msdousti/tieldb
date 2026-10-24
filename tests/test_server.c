@@ -238,10 +238,126 @@ static void test_serve_fails_when_a_thread_cannot_be_started([[maybe_unused]] vo
     server_destroy(server);
 }
 
+typedef struct {
+    server_t *server;
+    size_t max_connections;
+    int result;
+} serve_job_t;
+
+static void *serve_in_a_thread(void *argument)
+{
+    serve_job_t *job = argument;
+    job->result = server_serve(job->server, job->max_connections);
+    return nullptr;
+}
+
+static int connect_and_wait_for_the_session(const server_t *server)
+{
+    int fd = connect_client(server);
+
+    assert_int_equal(write(fd, SESSION, 9), 9);
+    assert_server_said_authentication_ok(fd);
+    return fd;
+}
+
+// Reads what the server still has to say, and then the end of the connection
+static void assert_hung_up_on(int fd)
+{
+    uint8_t buffer[256];
+    ssize_t count = 0;
+
+    while ((count = read(fd, buffer, sizeof(buffer))) > 0) {}
+    assert_int_equal(count, 0);
+}
+
+static void test_stop_ends_the_sessions_and_serve_returns_zero([[maybe_unused]] void **state)
+{
+    server_t *server = create_server();
+    serve_job_t job = {server, SIZE_MAX, -1};
+    pthread_t thread;
+    int first = -1;
+    int second = -1;
+
+    assert_int_equal(pthread_create(&thread, nullptr, serve_in_a_thread, &job), 0);
+    first = connect_and_wait_for_the_session(server);
+    second = connect_and_wait_for_the_session(server);
+    server_stop(server);
+    server_stop(server);
+    assert_int_equal(pthread_join(thread, nullptr), 0);
+
+    assert_int_equal(job.result, 0);
+    assert_hung_up_on(first);
+    assert_hung_up_on(second);
+    close(first);
+    close(second);
+    server_destroy(server);
+}
+
+static void test_stop_during_the_wait_for_the_last_session([[maybe_unused]] void **state)
+{
+    server_t *server = create_server();
+    serve_job_t job = {server, 1, -1};
+    pthread_t thread;
+    int client = -1;
+
+    assert_int_equal(pthread_create(&thread, nullptr, serve_in_a_thread, &job), 0);
+    client = connect_and_wait_for_the_session(server);
+    server_stop(server);
+    assert_int_equal(pthread_join(thread, nullptr), 0);
+
+    assert_int_equal(job.result, 0);
+    assert_hung_up_on(client);
+    close(client);
+    server_destroy(server);
+}
+
+static void test_stop_before_serving_ends_serve_at_once([[maybe_unused]] void **state)
+{
+    server_t *server = create_server();
+
+    server_stop(server);
+
+    assert_int_equal(server_serve(server, SIZE_MAX), 0);
+    server_destroy(server);
+}
+
+static void leave_with_terminate(int client)
+{
+    static const uint8_t TERMINATE[] = {'X', 0, 0, 0, 4};
+
+    assert_int_equal(write(client, TERMINATE, sizeof(TERMINATE)), 5);
+    assert_hung_up_on(client);
+    close(client);
+}
+
+static void test_sessions_may_end_in_any_order([[maybe_unused]] void **state)
+{
+    server_t *server = create_server();
+    serve_job_t job = {server, SIZE_MAX, -1};
+    pthread_t thread;
+    int clients[3];
+
+    assert_int_equal(pthread_create(&thread, nullptr, serve_in_a_thread, &job), 0);
+    for (size_t i = 0; i < 3; i++) {
+        clients[i] = connect_and_wait_for_the_session(server);
+    }
+    leave_with_terminate(clients[1]); // in the middle of the list of sessions
+    leave_with_terminate(clients[2]); // the newest
+    leave_with_terminate(clients[0]); // the last one
+    server_stop(server);
+    assert_int_equal(pthread_join(thread, nullptr), 0);
+    assert_int_equal(job.result, 0);
+    server_destroy(server);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_create_reports_the_port_it_listens_on),
     cmocka_unit_test(test_create_fails_when_the_port_is_taken),
     cmocka_unit_test(test_serves_connections_in_turn),
+    cmocka_unit_test(test_stop_ends_the_sessions_and_serve_returns_zero),
+    cmocka_unit_test(test_stop_during_the_wait_for_the_last_session),
+    cmocka_unit_test(test_stop_before_serving_ends_serve_at_once),
+    cmocka_unit_test(test_sessions_may_end_in_any_order),
     cmocka_unit_test(test_client_hanging_up_does_not_stop_the_server),
     cmocka_unit_test(test_a_stuck_client_does_not_block_others),
     cmocka_unit_test(test_serve_fails_when_a_thread_cannot_be_started),
