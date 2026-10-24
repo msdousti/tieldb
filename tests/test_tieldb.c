@@ -63,7 +63,8 @@ static child_t start_with_arguments(const char *const *arguments)
 
 static child_t start_tieldb(const char *port_argument, const char *extra_argument)
 {
-    const char *arguments[] = {tieldb_path, "--port", port_argument, extra_argument, nullptr};
+    const char *arguments[] = {tieldb_path,   "--port",       port_argument,
+                               "--in-memory", extra_argument, nullptr};
 
     return start_with_arguments(arguments);
 }
@@ -269,6 +270,14 @@ static void test_refuses_to_start_with_a_corrupt_catalog([[maybe_unused]] void *
     remove_data_dir();
 }
 
+static void test_requires_a_data_directory_or_in_memory_mode([[maybe_unused]] void **state)
+{
+    const char *arguments[] = {tieldb_path, "--port", "0", "--once", nullptr};
+    child_t child = start_with_arguments(arguments);
+
+    assert_int_equal(wait_for_exit_status(child), 2);
+}
+
 static server_t *create_server(void)
 {
     server_t *server = server_create(0);
@@ -296,6 +305,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_rejects_an_unknown_option_with_usage_status),
     cmocka_unit_test(test_fails_when_the_port_is_taken),
     cmocka_unit_test(test_serves_the_tables_of_the_data_directory),
+    cmocka_unit_test(test_requires_a_data_directory_or_in_memory_mode),
     cmocka_unit_test(test_refuses_to_start_without_its_data_directory),
     cmocka_unit_test(test_refuses_to_start_with_a_corrupt_catalog),
 };

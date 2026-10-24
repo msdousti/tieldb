@@ -34,7 +34,7 @@ select version();   select current_user;   select current_database();
 - `INSERT INTO t VALUES (...)`: integers and `'strings'` (with `''` as the escape); values are checked
   against the column types (22P02); wrong count gives 42601.
 - `SELECT * FROM t`. Unknown table gives 42P01. Other statements get 0A000 ("unsupported").
-- Everything is in memory and lost on restart (Phase 2 adds persistence). A table holds what fits in one 8 KB page (a few hundred small rows); a full table is error 53100, a row that could never fit 54000.
+- The server needs `--in-memory` (everything is lost on exit) or `--data-dir PATH` (the directory is loaded at startup; nothing saves it yet, shutdown will). A table holds what fits in one 8 KB page (a few hundred small rows); a full table is error 53100, a row that could never fit 54000.
 - One thread per connection. Tables and the catalog are shared and locked.
 - Columns have a display order separate from the storage order (`table_set_display_order`); there
   is no SQL to change it yet (roadmap: `ALTER TABLE ... MODIFY ... AFTER`).
@@ -93,7 +93,7 @@ themselves and expect a short triage (real / skipped, with reasons) before any f
 ## Daily commands
 
 ```bash
-scripts/dev.sh                     # build build-asan, start tieldb on 5432, open psql; stops on exit
+scripts/dev.sh                     # build build-asan, start tieldb --in-memory on 5432, open psql; stops on exit
 scripts/dev.sh -c "select 1"       # psql arguments pass through; PORT=5433 and BUILD_DIR override
 meson setup build-asan --native-file clang.ini -Db_sanitize=address,undefined   # once
 ninja -C build-asan && meson test -C build-asan                   # build and test (ASan + UBSan)
@@ -116,8 +116,8 @@ address; GitHub rejects it).
 
 ```
 src/
-  main.c             the tieldb binary: --port N (default 5432), --once, --data-dir PATH (loaded at
-                     startup; nothing saves it yet), prints "listening on port N"
+  main.c             the tieldb binary: --port N (default 5432), --once, and one of --data-dir PATH
+                     (loaded at startup; nothing saves it yet) or --in-memory, prints "listening on port N"
   options.{h,c}      command-line parsing
   io/                injectable I/O (io->read/write/...) for fault injection
   ds/hash_map.{h,c}  reusable chained hash map; entries embed hash_node_t; no locking inside

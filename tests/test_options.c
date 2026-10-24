@@ -26,19 +26,20 @@ static void test_defaults_to_the_postgres_port_and_no_limit([[maybe_unused]] voi
 {
     options_t options;
 
-    char *const argv[] = {"tieldb"};
+    char *const argv[] = {"tieldb", "--in-memory"};
 
-    assert_int_equal(options_parse(1, argv, &options), 0);
+    assert_int_equal(options_parse(2, argv, &options), 0);
     assert_int_equal(options.port, 5432);
     assert_int_equal(options.max_connections, SIZE_MAX);
     assert_null(options.data_dir);
+    assert_true(options.in_memory);
 }
 
 static void test_port_and_once_can_be_combined([[maybe_unused]] void **state)
 {
     options_t options;
 
-    assert_int_equal(PARSE("--once", "--port", "6000"), 0);
+    assert_int_equal(PARSE("--once", "--port", "6000", "--in-memory"), 0);
     assert_int_equal(options.port, 6000);
     assert_int_equal(options.max_connections, 1);
 }
@@ -50,16 +51,27 @@ static void test_data_dir_takes_a_path([[maybe_unused]] void **state)
     assert_int_equal(PARSE("--data-dir", "/var/tieldb", "--once"), 0);
     assert_string_equal(options.data_dir, "/var/tieldb");
     assert_int_equal(options.max_connections, 1);
+    assert_false(options.in_memory);
     assert_rejected(PARSE("--data-dir"));
+}
+
+static void test_exactly_one_of_data_dir_and_in_memory_is_required([[maybe_unused]] void **state)
+{
+    options_t options;
+
+    assert_rejected(PARSE("--once"));
+    assert_rejected(PARSE("--port", "6000"));
+    assert_rejected(PARSE("--in-memory", "--data-dir", "/var/tieldb"));
+    assert_rejected(PARSE("--data-dir", "/var/tieldb", "--in-memory"));
 }
 
 static void test_port_zero_and_the_maximum_port_are_accepted([[maybe_unused]] void **state)
 {
     options_t options;
 
-    assert_int_equal(PARSE("--port", "0"), 0);
+    assert_int_equal(PARSE("--port", "0", "--in-memory"), 0);
     assert_int_equal(options.port, 0);
-    assert_int_equal(PARSE("--port", "65535"), 0);
+    assert_int_equal(PARSE("--port", "65535", "--in-memory"), 0);
     assert_int_equal(options.port, UINT16_MAX);
 }
 
@@ -92,6 +104,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_defaults_to_the_postgres_port_and_no_limit),
     cmocka_unit_test(test_port_and_once_can_be_combined),
     cmocka_unit_test(test_data_dir_takes_a_path),
+    cmocka_unit_test(test_exactly_one_of_data_dir_and_in_memory_is_required),
     cmocka_unit_test(test_port_zero_and_the_maximum_port_are_accepted),
     cmocka_unit_test(test_unknown_option_is_rejected),
     cmocka_unit_test(test_port_without_a_value_is_rejected),

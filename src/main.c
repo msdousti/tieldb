@@ -11,7 +11,8 @@
 #include "storage/data_dir.h"
 
 static constexpr int EXIT_USAGE = 2;
-static constexpr char USAGE[] = "usage: tieldb [--port N] [--once] [--data-dir PATH]\n";
+static constexpr char USAGE[] =
+    "usage: tieldb [--port N] [--once] (--data-dir PATH | --in-memory)\n";
 
 static int open_data_dir(const char *dir)
 {

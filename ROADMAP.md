@@ -105,7 +105,7 @@ Incremental, test-driven roadmap for building the educational DBMS. Each phase b
 ### Completion Criteria
 ```bash
 # Start the server
-./build-asan/tieldb
+./build-asan/tieldb --in-memory
 
 # In another terminal
 psql -h localhost -U test testdb
@@ -180,6 +180,7 @@ Two milestones, so that the first visible result comes early:
   - [x] The data directory module: a version file (`data_dir_init`) and a checkpoint that saves every table and then the catalog (`data_dir_checkpoint`)
   - [x] Load the catalog and the tables from the directory (`data_dir_load`)
   - [x] `--data-dir` option; the directory is loaded at startup
+  - [x] `--in-memory` option: the server needs exactly one of `--data-dir` and `--in-memory`, so that data is never lost by forgetting an option and no default directory is chosen
   - [ ] Checkpoint on clean shutdown (below)
   - [ ] An explicit `CHECKPOINT` statement
   - [x] Data directory format version: a file with a magic number and a format version (like Postgres's `PG_VERSION`), checked at startup so that an old or foreign directory is refused and not misread
@@ -483,7 +484,7 @@ psql -c "BEGIN; INSERT INTO users VALUES (100, 'Test'); COMMIT;"
 kill -9 $(pgrep tieldb)
 
 # Restart
-./build-asan/tieldb
+./build-asan/tieldb --data-dir /tmp/tieldb-data
 
 # Data is there
 psql -c "SELECT * FROM users WHERE id = 100;"

@@ -17,7 +17,7 @@ fi
 ninja -C "$build_dir"
 
 server_log=$(mktemp)
-"$build_dir/src/tieldb" --port "$port" >"$server_log" 2>&1 &
+"$build_dir/src/tieldb" --port "$port" --in-memory >"$server_log" 2>&1 &
 server_pid=$!
 trap 'kill "$server_pid" 2>/dev/null || true; rm -f "$server_log"' EXIT
 
