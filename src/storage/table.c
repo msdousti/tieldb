@@ -242,3 +242,11 @@ storage_engine_t *table_engine(const table_t *table)
 {
     return table->engine;
 }
+
+int table_save_rows(table_t *table, const char *path)
+{
+    table_lock(table);
+    int status = storage_save(table->engine, path);
+    table_unlock(table);
+    return status;
+}

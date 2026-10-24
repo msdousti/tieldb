@@ -177,8 +177,11 @@ Two milestones, so that the first visible result comes early:
     - [x] Loading (`catalog_file_load`), with the checks of a file that is intact but not a catalog of this format
   - [ ] Store the engine of each table and its engine-specific metadata (an opaque blob to the catalog)
 - [ ] Data directory and shutdown
-  - [ ] `--data-dir` option; load the catalog and the tables at startup, save them on clean shutdown and on an explicit checkpoint
-  - [ ] Data directory format version: a file with a magic number and a format version (like Postgres's `PG_VERSION`), checked at startup so that an old or foreign directory is refused and not misread
+  - [x] The data directory module: a version file (`data_dir_init`) and a checkpoint that saves every table and then the catalog (`data_dir_checkpoint`)
+  - [ ] Load the catalog and the tables from the directory (`data_dir_load`)
+  - [ ] `--data-dir` option; load at startup, and checkpoint on clean shutdown (below)
+  - [ ] An explicit `CHECKPOINT` statement
+  - [x] Data directory format version: a file with a magic number and a format version (like Postgres's `PG_VERSION`), checked at startup so that an old or foreign directory is refused and not misread
   - [ ] One server per data directory: a lock on the directory (a pid file created with `O_EXCL`, as Postgres does, or an advisory lock that the kernel drops when the process dies), so that a second server on the same directory refuses to start and cannot overwrite the first one's pages; it needs a stale-lock check or a lock call in the injectable I/O layer
   - [ ] Directory durability: fsync the data directory after creating a file in it (the injectable I/O layer has no way to open or sync a directory yet)
   - [ ] Clean shutdown: SIGTERM and SIGINT stop the listener, close the connections, save the data and exit with status 0 (today only SIGPIPE is handled)
