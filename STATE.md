@@ -143,6 +143,7 @@ src/
     page               8 KB slotted page, slot states, CRC-32C checksum, page_validate
     page_file          read/write pages of a file through io->, checksum checked on read
     one_page_file   save/load a file that holds exactly one page (one-page engine, catalog file)
+    catalog_file    the table list as rows of one page file: a version row, then a row per table and per column (save only so far)
     crc32c             the page checksum
 tests/               one test_*.c per module (cmocka), test_wire_buffer_oom.c (allocation
                      failures via renamed malloc/calloc/realloc), test_tieldb.c (spawns the
