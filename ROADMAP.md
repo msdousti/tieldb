@@ -172,9 +172,9 @@ Two milestones, so that the first visible result comes early:
     - [x] Save and load the whole page through the page file (`storage_save`, `one_page_engine_load`)
   - [x] The executor and the query handler use the engine for INSERT and SELECT; a full table (`53100`) and a row that could never fit (`54000`) are errors for the client
 - [ ] Catalog file
-  - [ ] Save and load the tables: name, engine, each column's name, type id and display position (so a reordering survives a restart), in a page file of its own with a format version
+  - [x] Save and load the tables: name, engine, each column's name, type id and display position (so a reordering survives a restart), in a page file of its own with a format version
     - [x] The format and saving (`catalog_file_save`)
-    - [ ] Loading (`catalog_file_load`), with the checks of a file that is intact but not a catalog of this format
+    - [x] Loading (`catalog_file_load`), with the checks of a file that is intact but not a catalog of this format
   - [ ] Store the engine of each table and its engine-specific metadata (an opaque blob to the catalog)
 - [ ] Data directory and shutdown
   - [ ] `--data-dir` option; load the catalog and the tables at startup, save them on clean shutdown and on an explicit checkpoint
