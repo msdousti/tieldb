@@ -12,6 +12,7 @@ static constexpr uint16_t DEFAULT_PORT = 5432;
 static constexpr int DECIMAL_BASE = 10;
 static constexpr char OPTION_PORT[] = "--port";
 static constexpr char OPTION_ONCE[] = "--once";
+static constexpr char OPTION_DATA_DIR[] = "--data-dir";
 
 static int parse_port(const char *text, uint16_t *port)
 {
@@ -36,13 +37,18 @@ static int parse_option(int argc, char *const *argv, int *index, options_t *opti
         *index += 1;
         return parse_port(argv[*index], &options->port);
     }
+    if (strcmp(argument, OPTION_DATA_DIR) == 0 && *index + 1 < argc) {
+        *index += 1;
+        options->data_dir = argv[*index];
+        return 0;
+    }
     errno = EINVAL;
     return -1;
 }
 
 int options_parse(int argc, char *const *argv, options_t *options)
 {
-    *options = (options_t){.port = DEFAULT_PORT, .max_connections = SIZE_MAX};
+    *options = (options_t){.port = DEFAULT_PORT, .max_connections = SIZE_MAX, .data_dir = nullptr};
     int status = 0;
     for (int i = 1; i < argc && status == 0; i++) {
         status = parse_option(argc, argv, &i, options);

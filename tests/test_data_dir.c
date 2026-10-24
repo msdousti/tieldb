@@ -1,8 +1,10 @@
 /**
  * Tests for the data directory: the version file and the checkpoint
  *
- * The catalog is one per process, so the test that needs an empty one comes first. Tables made by
- * the tests stay in the catalog, so each test names its tables differently.
+ * The catalog is one per process, so the tests that need an empty one come first: the round trip
+ * builds its database in a child process, which plays the server that stops, while the parent plays
+ * the server that starts again. Tables made by the tests stay in the catalog, so each test names
+ * its tables differently.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -17,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <cmocka.h>
@@ -26,6 +29,8 @@
 #include "storage/catalog_file.h"
 #include "storage/data_dir.h"
 #include "storage/one_page_engine.h"
+#include "storage/one_page_file.h"
+#include "table_assert.h"
 
 static constexpr size_t LONG_NAME = 230;
 
@@ -108,9 +113,76 @@ static void
 test_a_checkpoint_of_an_empty_catalog_saves_an_empty_catalog([[maybe_unused]] void **state)
 {
     assert_int_equal(data_dir_init(dir), 0);
+    assert_int_equal(data_dir_load(dir), 0);
     assert_int_equal(data_dir_checkpoint(dir), 0);
 
     assert_int_equal(read_saved_catalog().tables, 0);
+    assert_int_equal(data_dir_load(dir), 0);
+}
+
+static int fill_kitten_table(table_t *kitten)
+{
+    const char *rows[][2] = {{"1", "Rex"}, {"007", "Tom"}};
+    const size_t order[] = {1, 0};
+    int status = table_set_display_order(kitten, order, 2);
+
+    for (size_t i = 0; status == 0 && i < 2; i++) {
+        status = table_insert(kitten, rows[i], 2);
+    }
+    return status;
+}
+
+static int build_database_in_a_child(void)
+{
+    table_t *kitten = catalog_create_table("kitten", PAIR, 2);
+    table_t *kennel = catalog_create_table("kennel", nullptr, 0);
+
+    if (kitten == nullptr || kennel == nullptr || fill_kitten_table(kitten) != 0) {
+        return 1;
+    }
+    return data_dir_init(dir) != 0 || data_dir_checkpoint(dir) != 0;
+}
+
+static void run_in_a_child(int (*work)(void))
+{
+    int status = 0;
+    pid_t child = fork();
+
+    if (child == 0) {
+        _exit(work());
+    }
+    assert_int_equal(waitpid(child, &status, 0), child);
+    assert_true(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+}
+
+static table_t *find_or_fail(const char *name)
+{
+    table_t *table = catalog_find(name);
+    if (table == nullptr) {
+        fail();
+    }
+    return table;
+}
+
+static void assert_kitten_was_restored(void)
+{
+    table_t *kitten = find_or_fail("kitten");
+
+    assert_int_equal(count_rows(kitten), 2);
+    assert_cell_text(kitten, 1, 0, "7");
+    assert_cell_text(kitten, 1, 1, "Tom");
+    assert_int_equal(table_physical_index(kitten, 0), 1);
+    assert_int_equal(count_rows(find_or_fail("kennel")), 0);
+}
+
+static void test_tables_and_rows_come_back_after_a_restart([[maybe_unused]] void **state)
+{
+    run_in_a_child(build_database_in_a_child);
+
+    assert_int_equal(data_dir_init(dir), 0);
+    assert_int_equal(data_dir_load(dir), 0);
+    assert_kitten_was_restored();
+    assert_fails_with(data_dir_load(dir), EEXIST);
 }
 
 // A directory below dir, with a name of the given length, so that the paths in it get long
@@ -131,6 +203,7 @@ static void test_paths_that_do_not_fit_are_refused([[maybe_unused]] void **state
 
     make_long_directory(longest, LONG_NAME);
     assert_fails_with(data_dir_init(longest), ENAMETOOLONG);
+    assert_fails_with(data_dir_load(longest), ENAMETOOLONG);
     assert_fails_with(data_dir_checkpoint(longest), ENAMETOOLONG);
     remove_directory(longest);
 }
@@ -139,14 +212,20 @@ static void test_a_table_file_path_that_does_not_fit_is_refused([[maybe_unused]]
 {
     char name[61];
     char shorter[DATA_DIR_PATH_CAPACITY];
+    char catalog[DATA_DIR_PATH_CAPACITY + 16];
+    table_t *table = nullptr;
 
     memset(name, 'n', sizeof(name) - 1);
     name[sizeof(name) - 1] = '\0';
-    (void) catalog_create_table(name, nullptr, 0);
+    table = table_create(name, nullptr, 0);
     make_long_directory(shorter, 190 - strlen(dir));
-
+    snprintf(catalog, sizeof(catalog), "%s/catalog", shorter);
+    assert_int_equal(catalog_file_save(catalog, &table, 1), 0);
+    errno = 0;
+    assert_fails_with(data_dir_load(shorter), ENAMETOOLONG);
     assert_fails_with(data_dir_checkpoint(shorter), ENAMETOOLONG);
     remove_directory(shorter);
+    table_destroy(table);
 }
 
 static void insert_pet_rows(table_t *pet)
@@ -210,6 +289,81 @@ static void test_the_saved_table_files_hold_the_rows([[maybe_unused]] void **sta
 
     assert_int_equal(rows_in_saved_file("pet.tbl"), 2);
     assert_int_equal(rows_in_saved_file("pet_empty.tbl"), 0);
+}
+
+static void save_catalog_of(table_t *table)
+{
+    char path[DATA_DIR_PATH_CAPACITY];
+
+    path_of(path, "catalog");
+    assert_int_equal(catalog_file_save(path, &table, 1), 0);
+}
+
+static void test_a_listed_table_without_a_file_is_corrupt([[maybe_unused]] void **state)
+{
+    table_t *table = table_create("lost", PAIR, 2);
+
+    save_catalog_of(table);
+    errno = 0;
+    assert_fails_with(data_dir_load(dir), EBADMSG);
+    table_destroy(table);
+}
+
+static void test_a_corrupt_table_file_is_refused([[maybe_unused]] void **state)
+{
+    char path[DATA_DIR_PATH_CAPACITY];
+    table_t *table = table_create("damaged", PAIR, 2);
+    int fd = -1;
+    char byte = 0;
+
+    save_catalog_of(table);
+    path_of(path, "damaged.tbl");
+    assert_int_equal(table_save_rows(table, path), 0);
+    fd = open(path, O_RDWR);
+    assert_int_equal(pread(fd, &byte, 1, PAGE_SIZE - 1), 1);
+    byte ^= 0x01;
+    assert_int_equal(pwrite(fd, &byte, 1, PAGE_SIZE - 1), 1);
+    close(fd);
+    errno = 0;
+    assert_fails_with(data_dir_load(dir), EBADMSG);
+    table_destroy(table);
+}
+
+static void patch_catalog_row(size_t slot, const void *bytes, size_t length)
+{
+    char path[DATA_DIR_PATH_CAPACITY];
+    page_t page;
+    size_t row_length = 0;
+    unsigned char *row = nullptr;
+
+    path_of(path, "catalog");
+    assert_int_equal(one_page_file_load(path, &page), 0);
+    row = (unsigned char *) page_get(&page, slot, &row_length);
+    memcpy(row + row_length - length, bytes, length);
+    assert_int_equal(one_page_file_save(path, &page), 0);
+}
+
+static void test_an_engine_that_is_not_known_is_refused([[maybe_unused]] void **state)
+{
+    table_t *table = table_create("odd_engine", PAIR, 2);
+
+    save_catalog_of(table);
+    patch_catalog_row(1, "xxx_page", sizeof(ONE_PAGE_ENGINE_NAME) - 1);
+    errno = 0;
+    assert_fails_with(data_dir_load(dir), EBADMSG);
+    table_destroy(table);
+}
+
+static void test_a_display_position_outside_the_table_is_refused([[maybe_unused]] void **state)
+{
+    table_t *table = table_create("odd_order", PAIR, 2);
+    const int32_t outside = 7;
+
+    save_catalog_of(table);
+    patch_catalog_row(2, &outside, sizeof(outside));
+    errno = 0;
+    assert_fails_with(data_dir_load(dir), EBADMSG);
+    table_destroy(table);
 }
 
 static void test_a_failing_table_save_fails_the_checkpoint([[maybe_unused]] void **state)
@@ -283,10 +437,15 @@ static void test_the_version_file_reports_its_io_errors([[maybe_unused]] void **
 
 static const struct CMUnitTest tests[] = {
     SETUP_TEST(test_a_checkpoint_of_an_empty_catalog_saves_an_empty_catalog),
+    SETUP_TEST(test_tables_and_rows_come_back_after_a_restart),
     SETUP_TEST(test_paths_that_do_not_fit_are_refused),
     SETUP_TEST(test_a_checkpoint_saves_every_table_and_the_catalog),
     SETUP_TEST(test_a_table_file_path_that_does_not_fit_is_refused),
     SETUP_TEST(test_the_saved_table_files_hold_the_rows),
+    SETUP_TEST(test_a_listed_table_without_a_file_is_corrupt),
+    SETUP_TEST(test_a_corrupt_table_file_is_refused),
+    SETUP_TEST(test_an_engine_that_is_not_known_is_refused),
+    SETUP_TEST(test_a_display_position_outside_the_table_is_refused),
     SETUP_TEST(test_a_failing_table_save_fails_the_checkpoint),
     SETUP_TEST(test_the_version_file_is_written_and_idempotent),
     SETUP_TEST(test_another_version_is_refused),

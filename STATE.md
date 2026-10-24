@@ -116,7 +116,8 @@ address; GitHub rejects it).
 
 ```
 src/
-  main.c             the tieldb binary: --port N (default 5432), --once, prints "listening on port N"
+  main.c             the tieldb binary: --port N (default 5432), --once, --data-dir PATH (loaded at
+                     startup; nothing saves it yet), prints "listening on port N"
   options.{h,c}      command-line parsing
   io/                injectable I/O (io->read/write/...) for fault injection
   ds/hash_map.{h,c}  reusable chained hash map; entries embed hash_node_t; no locking inside
@@ -144,7 +145,7 @@ src/
     page_file          read/write pages of a file through io->, checksum checked on read
     one_page_file   save/load a file that holds exactly one page (one-page engine, catalog file)
     catalog_file    the table list as rows of one page file: a version row, then a row per table and per column; load checks it and calls a visitor per table
-    data_dir        the data directory: TIELDB_VERSION file, `catalog`, one `<table>.tbl` per table; init and checkpoint (load is next)
+    data_dir        the data directory: TIELDB_VERSION file, `catalog`, one `<table>.tbl` per table; init, load and checkpoint
     crc32c             the page checksum
 tests/               one test_*.c per module (cmocka), test_wire_buffer_oom.c (allocation
                      failures via renamed malloc/calloc/realloc), test_tieldb.c (spawns the

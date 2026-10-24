@@ -80,9 +80,11 @@ void table_unlock(table_t *table);
 
 /**
  * Saves the rows of the table to a file with the engine of the table (storage_save), holding the
- * table lock. Errors are those of the engine.
+ * table lock, and loads them from such a file in place of the rows the table has now. The file
+ * must have been saved from a table with these columns. Errors are those of the engine.
  */
 [[nodiscard]] int table_save_rows(table_t *table, const char *path);
+[[nodiscard]] int table_load_rows(table_t *table, const char *path);
 
 /**
  * The storage engine instance that holds the rows. Reading goes through a cursor on it

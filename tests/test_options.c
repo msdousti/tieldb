@@ -31,6 +31,7 @@ static void test_defaults_to_the_postgres_port_and_no_limit([[maybe_unused]] voi
     assert_int_equal(options_parse(1, argv, &options), 0);
     assert_int_equal(options.port, 5432);
     assert_int_equal(options.max_connections, SIZE_MAX);
+    assert_null(options.data_dir);
 }
 
 static void test_port_and_once_can_be_combined([[maybe_unused]] void **state)
@@ -40,6 +41,16 @@ static void test_port_and_once_can_be_combined([[maybe_unused]] void **state)
     assert_int_equal(PARSE("--once", "--port", "6000"), 0);
     assert_int_equal(options.port, 6000);
     assert_int_equal(options.max_connections, 1);
+}
+
+static void test_data_dir_takes_a_path([[maybe_unused]] void **state)
+{
+    options_t options;
+
+    assert_int_equal(PARSE("--data-dir", "/var/tieldb", "--once"), 0);
+    assert_string_equal(options.data_dir, "/var/tieldb");
+    assert_int_equal(options.max_connections, 1);
+    assert_rejected(PARSE("--data-dir"));
 }
 
 static void test_port_zero_and_the_maximum_port_are_accepted([[maybe_unused]] void **state)
@@ -80,6 +91,7 @@ static void test_malformed_ports_are_rejected([[maybe_unused]] void **state)
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_defaults_to_the_postgres_port_and_no_limit),
     cmocka_unit_test(test_port_and_once_can_be_combined),
+    cmocka_unit_test(test_data_dir_takes_a_path),
     cmocka_unit_test(test_port_zero_and_the_maximum_port_are_accepted),
     cmocka_unit_test(test_unknown_option_is_rejected),
     cmocka_unit_test(test_port_without_a_value_is_rejected),

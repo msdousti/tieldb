@@ -11,6 +11,12 @@
  * old or foreign directory is never misread. The path is at most DATA_DIR_PATH_CAPACITY - 1 bytes
  * including a file name (ENAMETOOLONG otherwise).
  *
+ * data_dir_load puts the tables of the directory into the catalog (catalog.h), which should be
+ * empty (EEXIST for a table that exists), with their rows and display order. A directory without
+ * a catalog file is a new database and loads nothing. A catalog that lists a table whose file is
+ * missing, a table of an engine other than the one-page engine, or a display position outside the
+ * table is EBADMSG.
+ *
  * data_dir_checkpoint saves every table in the catalog, one file at a time, and then the catalog.
  * It is not atomic: a crash in the middle leaves some tables saved a step ahead of the catalog,
  * which is what the WAL (a later phase) is for. A checkpoint does not stop inserts; each table is
@@ -28,5 +34,7 @@ constexpr int DATA_DIR_FORMAT_VERSION = 1;
 constexpr size_t DATA_DIR_PATH_CAPACITY = 256;
 
 [[nodiscard]] int data_dir_init(const char *dir);
+
+[[nodiscard]] int data_dir_load(const char *dir);
 
 [[nodiscard]] int data_dir_checkpoint(const char *dir);
