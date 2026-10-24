@@ -183,7 +183,7 @@ Two milestones, so that the first visible result comes early:
   - [x] `--data-dir` option; the directory is loaded at startup
   - [x] `--in-memory` option: the server needs exactly one of `--data-dir` and `--in-memory`, so that data is never lost by forgetting an option and no default directory is chosen
   - [x] Checkpoint on clean shutdown (below)
-  - [ ] An explicit `CHECKPOINT` statement
+  - [x] An explicit `CHECKPOINT` statement (`55000` when the server has no data directory, `58030` when saving fails)
   - [x] Data directory format version: a file with a magic number and a format version (like Postgres's `PG_VERSION`), checked at startup so that an old or foreign directory is refused and not misread
   - [ ] One server per data directory: a lock on the directory (a pid file created with `O_EXCL`, as Postgres does, or an advisory lock that the kernel drops when the process dies), so that a second server on the same directory refuses to start and cannot overwrite the first one's pages; it needs a stale-lock check or a lock call in the injectable I/O layer
   - [ ] Directory durability: fsync the data directory after creating a file in it (the injectable I/O layer has no way to open or sync a directory yet)

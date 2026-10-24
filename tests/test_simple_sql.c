@@ -36,6 +36,17 @@ static void test_text_without_a_statement_is_empty([[maybe_unused]] void **state
     assert_false(sql_is_empty(" ; x ;"));
 }
 
+static void test_checkpoint_is_recognized([[maybe_unused]] void **state)
+{
+    assert_true(sql_is_checkpoint("CHECKPOINT"));
+    assert_true(sql_is_checkpoint("  checkpoint ;  "));
+    assert_true(sql_is_checkpoint("\nCheckPoint\n"));
+    assert_false(sql_is_checkpoint("checkpoints"));
+    assert_false(sql_is_checkpoint("checkpoint now"));
+    assert_false(sql_is_checkpoint("check"));
+    assert_false(sql_is_checkpoint(""));
+}
+
 static void test_version_query_is_recognized([[maybe_unused]] void **state)
 {
     assert_true(sql_is_version_query("SELECT version()"));
@@ -269,6 +280,7 @@ static void test_create_table_with_too_many_columns_is_rejected([[maybe_unused]]
 
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_text_without_a_statement_is_empty),
+    cmocka_unit_test(test_checkpoint_is_recognized),
     cmocka_unit_test(test_version_query_is_recognized),
     cmocka_unit_test(test_current_user_and_database_queries_are_recognized),
     cmocka_unit_test(test_other_text_is_not_a_version_query),

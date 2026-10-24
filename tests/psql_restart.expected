@@ -4,3 +4,13 @@
   2 | Tom
 (2 rows)
 
+INSERT 0 1
+CHECKPOINT
+INSERT 0 1
+ id | name 
+----+------
+  1 | Rex
+  2 | Tom
+  3 | Kit
+(3 rows)
+

@@ -24,6 +24,7 @@ Start the server and connect with `psql` (one command: `scripts/dev.sh`, see bel
 create table pet (id integer, name text);      CREATE TABLE
 insert into pet values (1, 'Rex');             INSERT 0 1
 select * from pet;                             the rows
+checkpoint;                                    CHECKPOINT (saves the data directory)
 select version();   select current_user;   select current_database();
 ;                                              (an empty statement is fine)
 ```
@@ -189,7 +190,7 @@ counts conditions: a loop condition with `&&` needs a test for each operand bein
    storage is Phase 8+). **Milestone A (a table is one page, data survives a restart) works**: row
    codec, page file, engine interface and registry, one-page engine, catalog file, data directory,
    `--data-dir`/`--in-memory`, save on SIGTERM/SIGINT. Left of A: one server per data directory (a
-   lock), directory fsync, and an explicit `CHECKPOINT` statement. **Milestone B, lift the one-page
+   lock) and directory fsync. `CHECKPOINT` saves the data directory on request. **Milestone B, lift the one-page
    limit:** fuzzing build and page fuzz target, heap tuple header, heap file, buffer pool, free
    space map, heap engine, catalog in system tables, crash test. Phase 3 also lists memory
    contexts, BOOLEAN, NULL and DEFAULT.

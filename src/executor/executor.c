@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "storage/catalog.h"
+#include "storage/data_dir.h"
 #include "types/type_registry.h"
 
 static_assert(SQL_MAX_CREATE_COLUMNS <= TABLE_MAX_COLUMNS);
@@ -30,6 +31,11 @@ static constexpr char TABLE_FULL_SQLSTATE[] = "53100";
 static constexpr char TABLE_FULL_MESSAGE[] = "table is full";
 static constexpr char ROW_TOO_BIG_SQLSTATE[] = "54000";
 static constexpr char ROW_TOO_BIG_MESSAGE[] = "row is too big";
+static constexpr char NO_DATA_DIR_SQLSTATE[] = "55000";
+static constexpr char NO_DATA_DIR_MESSAGE[] =
+    "CHECKPOINT needs a data directory, and the server runs with --in-memory";
+static constexpr char SAVE_FAILED_SQLSTATE[] = "58030";
+static constexpr char SAVE_FAILED_FORMAT[] = "could not save the data directory (error %d)";
 static constexpr char INVALID_INTEGER_FORMAT[] = "invalid input syntax for type integer: \"%s\"";
 
 static void set_error(executor_error_t *error, const char *sqlstate)
@@ -190,5 +196,24 @@ void executor_select_release(executor_select_t *select)
     if (select->table != nullptr) {
         table_unlock(select->table);
         select->table = nullptr;
+    }
+}
+
+static const char *data_dir;
+
+void executor_use_data_dir(const char *dir)
+{
+    data_dir = dir;
+}
+
+void executor_checkpoint(executor_error_t *error)
+{
+    *error = (executor_error_t){};
+    if (data_dir == nullptr) {
+        set_error(error, NO_DATA_DIR_SQLSTATE);
+        snprintf(error->message, sizeof(error->message), "%s", NO_DATA_DIR_MESSAGE);
+    } else if (data_dir_checkpoint(data_dir) != 0) {
+        set_error(error, SAVE_FAILED_SQLSTATE);
+        snprintf(error->message, sizeof(error->message), SAVE_FAILED_FORMAT, errno);
     }
 }
