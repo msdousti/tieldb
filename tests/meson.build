@@ -105,6 +105,15 @@ test_one_page_engine = executable('test_one_page_engine',
 
 test('one_page_engine', test_one_page_engine)
 
+# Test: saving the catalog file
+test_catalog_file = executable('test_catalog_file',
+  'test_catalog_file.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('catalog_file', test_catalog_file)
+
 # Test: files that hold one page
 test_one_page_file = executable('test_one_page_file',
   'test_one_page_file.c',
