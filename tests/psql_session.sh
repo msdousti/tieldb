@@ -17,7 +17,7 @@ trap 'rm -rf "$work"; if [ -n "$server_pid" ]; then kill "$server_pid" 2>/dev/nu
 
 start_server() {
     : >"$work/server.out"
-    "$tieldb" --port 0 --once >"$work/server.out" 2>&1 &
+    "$tieldb" --port 0 --once --in-memory >"$work/server.out" 2>&1 &
     server_pid=$!
     port=""
     for _ in $(seq 100); do

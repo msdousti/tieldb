@@ -12,6 +12,7 @@
 #include "io/io.h"
 #include "storage/catalog.h"
 #include "storage/catalog_file.h"
+#include "storage/one_page_engine.h"
 
 static constexpr char VERSION_FILE[] = "TIELDB_VERSION";
 static constexpr char CATALOG_FILE[] = "catalog";
@@ -93,6 +94,62 @@ int data_dir_init(const char *dir)
         return -1;
     }
     return check_version_file(path, expected);
+}
+
+static int place_in_order(size_t *order, const catalog_file_table_t *entry, size_t column)
+{
+    if (entry->display_position[column] >= entry->column_count) {
+        errno = EBADMSG;
+        return -1;
+    }
+    order[entry->display_position[column]] = column;
+    return 0;
+}
+
+static int restore_display_order(table_t *table, const catalog_file_table_t *entry)
+{
+    size_t order[TABLE_MAX_COLUMNS] = {};
+    int status = 0;
+    for (size_t column = 0; status == 0 && column < entry->column_count; column++) {
+        status = place_in_order(order, entry, column);
+    }
+    return status == 0 ? table_set_display_order(table, order, entry->column_count) : status;
+}
+
+static int restore_rows(table_t *table, const char *dir)
+{
+    char path[DATA_DIR_PATH_CAPACITY];
+    if (make_path(path, dir, table_name(table), TABLE_SUFFIX) != 0) {
+        return -1;
+    }
+    int status = table_load_rows(table, path);
+    if (status != 0 && errno == ENOENT) {
+        errno = EBADMSG;
+    }
+    return status;
+}
+
+static int restore_table(const catalog_file_table_t *entry, void *context)
+{
+    if (strcmp(entry->engine, ONE_PAGE_ENGINE_NAME) != 0) {
+        errno = EBADMSG;
+        return -1;
+    }
+    table_t *table = catalog_create_table(entry->name, entry->columns, entry->column_count);
+    if (table == nullptr || restore_display_order(table, entry) != 0) {
+        return -1;
+    }
+    return restore_rows(table, context);
+}
+
+int data_dir_load(const char *dir)
+{
+    char path[DATA_DIR_PATH_CAPACITY];
+    if (make_path(path, dir, CATALOG_FILE, "") != 0) {
+        return -1;
+    }
+    int status = catalog_file_load(path, restore_table, (void *) dir);
+    return status != 0 && errno == ENOENT ? 0 : status;
 }
 
 static int save_tables(const char *dir, table_t *const *tables, size_t count)

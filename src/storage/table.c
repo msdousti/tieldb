@@ -250,3 +250,21 @@ int table_save_rows(table_t *table, const char *path)
     table_unlock(table);
     return status;
 }
+
+int table_load_rows(table_t *table, const char *path)
+{
+    const type_info_t *types[TABLE_MAX_COLUMNS];
+    for (size_t i = 0; i < table->column_count; i++) {
+        types[i] = table->columns[i].column.type;
+    }
+    storage_engine_t *loaded =
+        one_page_engine_load(&(row_layout_t){types, table->column_count}, path);
+    if (loaded == nullptr) {
+        return -1;
+    }
+    table_lock(table);
+    storage_destroy(table->engine);
+    table->engine = loaded;
+    table_unlock(table);
+    return 0;
+}
