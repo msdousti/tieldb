@@ -37,6 +37,15 @@ ninja -C build-asan
 meson test -C build-asan
 ```
 
+**Run:** the server needs one of two modes, so that data is never lost by forgetting an option:
+```bash
+./build-asan/src/tieldb --in-memory               # everything is lost when the server exits
+mkdir /tmp/tieldb-data
+./build-asan/src/tieldb --data-dir /tmp/tieldb-data   # saved on SIGTERM or Ctrl-C, loaded at startup
+psql -h localhost -U me mydb                      # port 5432; --port N picks another
+```
+`scripts/dev.sh` builds, starts an in-memory server and opens `psql`.
+
 **Install Git Hooks** (recommended):
 ```bash
 ./scripts/install-hooks.sh

@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -16,18 +17,22 @@
 
 static constexpr int LISTEN_BACKLOG = 16;
 
+typedef struct session {
+    server_t *server;
+    int client;
+    struct session *previous;
+    struct session *next;
+} session_t;
+
 struct server {
     int fd;
     uint16_t port;
+    atomic_bool is_stopped;
     pthread_mutex_t lock;
     pthread_cond_t sessions_ended;
+    session_t *sessions; // the running ones, newest first
     size_t active_sessions;
 };
-
-typedef struct {
-    server_t *server;
-    int client;
-} session_t;
 
 // Each call runs even if an earlier one failed, which is harmless here; errno keeps the first
 // failure because successful calls leave it alone
@@ -90,10 +95,32 @@ uint16_t server_port(const server_t *server)
     return server->port;
 }
 
-static void count_session(server_t *server, int change)
+static void attach_session(session_t *session)
 {
+    server_t *server = session->server;
     pthread_mutex_lock(&server->lock);
-    server->active_sessions += (size_t) change;
+    session->next = server->sessions;
+    if (server->sessions != nullptr) {
+        server->sessions->previous = session;
+    }
+    server->sessions = session;
+    server->active_sessions++;
+    pthread_mutex_unlock(&server->lock);
+}
+
+static void detach_session(session_t *session)
+{
+    server_t *server = session->server;
+    pthread_mutex_lock(&server->lock);
+    if (session->previous != nullptr) {
+        session->previous->next = session->next;
+    } else {
+        server->sessions = session->next;
+    }
+    if (session->next != nullptr) {
+        session->next->previous = session->previous;
+    }
+    server->active_sessions--;
     pthread_cond_broadcast(&server->sessions_ended);
     pthread_mutex_unlock(&server->lock);
 }
@@ -101,11 +128,11 @@ static void count_session(server_t *server, int change)
 static void *run_session(void *argument)
 {
     session_t *session = argument;
-    server_t *server = session->server;
-    (void) connection_serve(session->client);
-    close(session->client);
+    int client = session->client;
+    (void) connection_serve(client);
+    detach_session(session); // before close: stop must never use a descriptor that is closed
+    close(client);
     free(session);
-    count_session(server, -1);
     return nullptr;
 }
 
@@ -116,12 +143,12 @@ static int start_session(server_t *server, int client)
         return -1;
     }
     *session = (session_t){.server = server, .client = client};
-    count_session(server, 1);
+    attach_session(session);
     pthread_t thread;
     int error = pthread_create(&thread, nullptr, run_session, session);
     if (error != 0) {
+        detach_session(session);
         free(session);
-        count_session(server, -1);
         errno = error;
         return -1;
     }
@@ -142,6 +169,15 @@ static int serve_next(server_t *server)
     return 0;
 }
 
+static void end_sessions(server_t *server)
+{
+    pthread_mutex_lock(&server->lock);
+    for (session_t *session = server->sessions; session != nullptr; session = session->next) {
+        shutdown(session->client, SHUT_RD);
+    }
+    pthread_mutex_unlock(&server->lock);
+}
+
 static void wait_for_sessions(server_t *server)
 {
     pthread_mutex_lock(&server->lock);
@@ -151,11 +187,22 @@ static void wait_for_sessions(server_t *server)
     pthread_mutex_unlock(&server->lock);
 }
 
+void server_stop(server_t *server)
+{
+    atomic_store(&server->is_stopped, true);
+    shutdown(server->fd, SHUT_RDWR);
+    end_sessions(server);
+}
+
 int server_serve(server_t *server, size_t max_connections)
 {
     int status = 0;
     for (size_t accepted = 0; accepted < max_connections && status == 0; accepted++) {
         status = serve_next(server);
+    }
+    if (atomic_load(&server->is_stopped)) {
+        status = 0;
+        end_sessions(server);
     }
     wait_for_sessions(server);
     return status;
