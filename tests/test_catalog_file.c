@@ -19,6 +19,7 @@
 #include <cmocka.h>
 
 #include "storage/catalog_file.h"
+#include "storage/one_page_engine.h"
 #include "storage/one_page_file.h"
 #include "storage/row_codec.h"
 
@@ -169,6 +170,28 @@ static void test_a_table_is_a_table_row_and_a_row_for_each_column([[maybe_unused
     table_destroy(table);
 }
 
+static storage_engine_t *other_create(const row_layout_t *layout)
+{
+    return one_page_engine_create(layout);
+}
+
+static storage_engine_t *other_load(const row_layout_t *layout, const char *file)
+{
+    return one_page_engine_load(layout, file);
+}
+
+static void test_the_engine_of_each_table_is_saved_by_name([[maybe_unused]] void **state)
+{
+    const storage_engine_factory_t other = {"other_engine", other_create, other_load};
+    table_t *table = table_create_with_engine("pet", PAIR, 2, &other);
+
+    assert_int_equal(catalog_file_save(path, &table, 1), 0);
+
+    load_saved_page();
+    assert_record(1, &(expected_record_t){KIND_TABLE, "pet", "other_engine", nullptr, nullptr});
+    table_destroy(table);
+}
+
 static void test_the_display_position_of_each_column_is_saved([[maybe_unused]] void **state)
 {
     table_t *table = make_table("pet", PAIR, 2);
@@ -246,6 +269,8 @@ static void test_a_path_that_cannot_be_created_is_reported([[maybe_unused]] void
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_an_empty_catalog_has_only_the_version, setup, teardown),
     cmocka_unit_test_setup_teardown(test_a_table_is_a_table_row_and_a_row_for_each_column, setup,
+                                    teardown),
+    cmocka_unit_test_setup_teardown(test_the_engine_of_each_table_is_saved_by_name, setup,
                                     teardown),
     cmocka_unit_test_setup_teardown(test_the_display_position_of_each_column_is_saved, setup,
                                     teardown),

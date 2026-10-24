@@ -114,6 +114,24 @@ test_catalog_file = executable('test_catalog_file',
 
 test('catalog_file', test_catalog_file)
 
+# Test: the engine registry
+test_engine_registry = executable('test_engine_registry',
+  'test_engine_registry.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('engine_registry', test_engine_registry)
+
+# Test: tables and their engines
+test_table_engines = executable('test_table_engines',
+  'test_table_engines.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('table_engines', test_table_engines)
+
 # Test: the data directory
 test_data_dir = executable('test_data_dir',
   'test_data_dir.c',

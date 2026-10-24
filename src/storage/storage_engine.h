@@ -36,6 +36,17 @@ typedef struct {
     void (*close_cursor)(storage_cursor_t *cursor);
 } storage_engine_ops_t;
 
+/**
+ * What an engine type provides to make instances: its name (as the catalog file records it), a
+ * constructor for an empty instance, and one for an instance with the rows that storage_save wrote
+ * to a file (with the same layout). Engines are found by name in the registry (engine_registry.h).
+ */
+typedef struct {
+    const char *name;
+    storage_engine_t *(*create)(const row_layout_t *layout);
+    storage_engine_t *(*load)(const row_layout_t *layout, const char *path);
+} storage_engine_factory_t;
+
 struct storage_engine {
     const storage_engine_ops_t *ops;
 };

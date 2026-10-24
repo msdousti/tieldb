@@ -145,3 +145,9 @@ static const storage_engine_ops_t ONE_PAGE_OPS = {
     .next = one_page_next,
     .close_cursor = one_page_close_cursor,
 };
+
+const storage_engine_factory_t ONE_PAGE_ENGINE = {
+    .name = ONE_PAGE_ENGINE_NAME,
+    .create = one_page_engine_create,
+    .load = one_page_engine_load,
+};

@@ -2,7 +2,8 @@
  * Tables: the catalog entry of a table, and its rows.
  *
  * A table has a name, fixed columns (0 to TABLE_MAX_COLUMNS of them) and rows. The rows live in a
- * storage engine instance that the table creates and owns (the one-page engine for now), in the
+ * storage engine instance that the table creates and owns (the default engine, the one-page engine
+ * for now, unless table_create_with_engine says otherwise), in the
  * format of their column's type (an integer as 4 bytes, see type_registry.h). table_create copies
  * the name and the column names, so the arguments need not outlive the call; table_insert
  * converts the text of each cell to its column's type and gives the row to the engine.
@@ -45,6 +46,11 @@ typedef struct table table_t;
 
 [[nodiscard]] table_t *table_create(const char *name, const table_column_t *columns,
                                     size_t column_count);
+
+/** Like table_create, with the rows in an engine of the given kind and not the default one. */
+[[nodiscard]] table_t *table_create_with_engine(const char *name, const table_column_t *columns,
+                                                size_t column_count,
+                                                const storage_engine_factory_t *factory);
 void table_destroy(table_t *table);
 
 /** Appends a row; count must equal the number of columns. Each text is converted to its column's
@@ -91,3 +97,6 @@ void table_unlock(table_t *table);
  * (storage_engine.h), with the table locked from opening the cursor until it is closed.
  */
 [[nodiscard]] storage_engine_t *table_engine(const table_t *table);
+
+/** The name of the kind of engine that holds the rows, as the catalog file records it. */
+[[nodiscard]] const char *table_engine_name(const table_t *table);

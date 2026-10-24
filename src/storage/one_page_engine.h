@@ -25,3 +25,6 @@ constexpr char ONE_PAGE_ENGINE_NAME[] = "one_page";
  * the file of an engine (see page_file.h), ENOMEM.
  */
 [[nodiscard]] storage_engine_t *one_page_engine_load(const row_layout_t *layout, const char *path);
+
+/** The factory of this engine, for the registry. */
+extern const storage_engine_factory_t ONE_PAGE_ENGINE;
