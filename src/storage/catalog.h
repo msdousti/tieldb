@@ -23,6 +23,12 @@
 [[nodiscard]] table_t *catalog_create_table(const char *name, const table_column_t *columns,
                                             size_t column_count);
 
+/** Like catalog_create_table, with an engine of the given kind (see table_create_with_engine). */
+[[nodiscard]] table_t *catalog_create_table_with_engine(const char *name,
+                                                        const table_column_t *columns,
+                                                        size_t column_count,
+                                                        const storage_engine_factory_t *engine);
+
 /**
  * The tables, in no particular order, in an array that the caller frees; *count is how many. A
  * table, once created, lives as long as the process, so the pointers stay valid. Returns nullptr

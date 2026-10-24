@@ -140,6 +140,7 @@ src/
     catalog            all tables by name in a hash map behind a read-write lock
     storage_engine.h   engine interface: rows and cursors (insert, open/next/close cursor, destroy)
     one_page_engine    the first engine: all rows of a table in one 8 KB page, in memory
+    engine_registry    engines by name (`engine_find`, `engine_default`); tables, the catalog file and the data directory dispatch through it
     row_codec          null bitmap and values of a row as bytes, independent of the engine
     page               8 KB slotted page, slot states, CRC-32C checksum, page_validate
     page_file          read/write pages of a file through io->, checksum checked on read

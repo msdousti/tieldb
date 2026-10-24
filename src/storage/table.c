@@ -10,7 +10,7 @@
 #include <string.h>
 #include <sys/types.h>
 
-#include "storage/one_page_engine.h"
+#include "storage/engine_registry.h"
 
 typedef struct {
     table_column_t column;
@@ -21,6 +21,7 @@ struct table {
     hash_node_t node; // for the catalog's hash map
     const char *name;
     size_t column_count;
+    const storage_engine_factory_t *factory;
     storage_engine_t *engine;
     pthread_mutex_t lock;
     column_slot_t columns[]; // followed in the same allocation by the table and column names
@@ -54,30 +55,38 @@ static void fill_owned(table_t *table, const char *name, const table_column_t *c
     }
 }
 
-static storage_engine_t *create_engine(const table_column_t *columns, size_t column_count)
+static storage_engine_t *create_engine(const storage_engine_factory_t *factory,
+                                       const table_column_t *columns, size_t column_count)
 {
     const type_info_t *types[TABLE_MAX_COLUMNS];
     for (size_t i = 0; i < column_count; i++) {
         types[i] = columns[i].type;
     }
-    return one_page_engine_create(&(row_layout_t){types, column_count});
+    return factory->create(&(row_layout_t){types, column_count});
 }
 
-table_t *table_create(const char *name, const table_column_t *columns, size_t column_count)
+table_t *table_create_with_engine(const char *name, const table_column_t *columns,
+                                  size_t column_count, const storage_engine_factory_t *factory)
 {
     table_t *table = calloc(1, sizeof(*table) + owned_size(name, columns, column_count));
     if (table == nullptr) {
         return nullptr;
     }
-    table->engine = create_engine(columns, column_count);
+    table->engine = create_engine(factory, columns, column_count);
     if (table->engine == nullptr) {
         free(table);
         return nullptr;
     }
+    table->factory = factory;
     table->column_count = column_count;
     table->lock = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
     fill_owned(table, name, columns);
     return table;
+}
+
+table_t *table_create(const char *name, const table_column_t *columns, size_t column_count)
+{
+    return table_create_with_engine(name, columns, column_count, engine_default());
 }
 
 void table_destroy(table_t *table)
@@ -258,7 +267,7 @@ int table_load_rows(table_t *table, const char *path)
         types[i] = table->columns[i].column.type;
     }
     storage_engine_t *loaded =
-        one_page_engine_load(&(row_layout_t){types, table->column_count}, path);
+        table->factory->load(&(row_layout_t){types, table->column_count}, path);
     if (loaded == nullptr) {
         return -1;
     }
@@ -267,4 +276,9 @@ int table_load_rows(table_t *table, const char *path)
     table->engine = loaded;
     table_unlock(table);
     return 0;
+}
+
+const char *table_engine_name(const table_t *table)
+{
+    return table->factory->name;
 }

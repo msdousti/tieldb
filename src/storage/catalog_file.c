@@ -3,7 +3,6 @@
 #include <errno.h>
 #include <string.h>
 
-#include "storage/one_page_engine.h"
 #include "storage/one_page_file.h"
 #include "storage/row_codec.h"
 
@@ -77,7 +76,7 @@ static int put_column(page_t *page, table_t *table, size_t physical)
 
 static int put_table(page_t *page, table_t *table)
 {
-    const record_t record = {RECORD_TABLE, table_name(table), ONE_PAGE_ENGINE_NAME, nullptr,
+    const record_t record = {RECORD_TABLE, table_name(table), table_engine_name(table), nullptr,
                              nullptr};
     int status = put_record(page, &record);
     table_lock(table);

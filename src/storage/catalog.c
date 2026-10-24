@@ -12,6 +12,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "storage/engine_registry.h"
+
 static constexpr size_t INITIAL_BUCKETS = 64;
 
 static pthread_rwlock_t lock = PTHREAD_RWLOCK_INITIALIZER;
@@ -34,7 +36,8 @@ static table_t *find_locked(const char *name)
     return tables == nullptr ? nullptr : table_from_node(hash_map_find(tables, name));
 }
 
-static table_t *create_locked(const char *name, const table_column_t *columns, size_t count)
+static table_t *create_locked(const char *name, const table_column_t *columns, size_t count,
+                              const storage_engine_factory_t *factory)
 {
     if (find_locked(name) != nullptr) {
         errno = EEXIST;
@@ -43,7 +46,8 @@ static table_t *create_locked(const char *name, const table_column_t *columns, s
     if (tables == nullptr) {
         tables = hash_map_create(&TABLE_OPS, INITIAL_BUCKETS);
     }
-    table_t *table = tables == nullptr ? nullptr : table_create(name, columns, count);
+    table_t *table =
+        tables == nullptr ? nullptr : table_create_with_engine(name, columns, count, factory);
     if (table != nullptr) {
         hash_map_insert(tables, table_node(table), table_name(table));
     }
@@ -58,12 +62,19 @@ table_t *catalog_find(const char *name)
     return table;
 }
 
-table_t *catalog_create_table(const char *name, const table_column_t *columns, size_t column_count)
+table_t *catalog_create_table_with_engine(const char *name, const table_column_t *columns,
+                                          size_t column_count,
+                                          const storage_engine_factory_t *engine)
 {
     pthread_rwlock_wrlock(&lock);
-    table_t *table = create_locked(name, columns, column_count);
+    table_t *table = create_locked(name, columns, column_count, engine);
     pthread_rwlock_unlock(&lock);
     return table;
+}
+
+table_t *catalog_create_table(const char *name, const table_column_t *columns, size_t column_count)
+{
+    return catalog_create_table_with_engine(name, columns, column_count, engine_default());
 }
 
 typedef struct {

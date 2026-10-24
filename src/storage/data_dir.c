@@ -12,7 +12,7 @@
 #include "io/io.h"
 #include "storage/catalog.h"
 #include "storage/catalog_file.h"
-#include "storage/one_page_engine.h"
+#include "storage/engine_registry.h"
 
 static constexpr char VERSION_FILE[] = "TIELDB_VERSION";
 static constexpr char CATALOG_FILE[] = "catalog";
@@ -131,11 +131,13 @@ static int restore_rows(table_t *table, const char *dir)
 
 static int restore_table(const catalog_file_table_t *entry, void *context)
 {
-    if (strcmp(entry->engine, ONE_PAGE_ENGINE_NAME) != 0) {
+    const storage_engine_factory_t *engine = engine_find(entry->engine);
+    if (engine == nullptr) {
         errno = EBADMSG;
         return -1;
     }
-    table_t *table = catalog_create_table(entry->name, entry->columns, entry->column_count);
+    table_t *table =
+        catalog_create_table_with_engine(entry->name, entry->columns, entry->column_count, engine);
     if (table == nullptr || restore_display_order(table, entry) != 0) {
         return -1;
     }

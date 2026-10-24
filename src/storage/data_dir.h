@@ -14,8 +14,8 @@
  * data_dir_load puts the tables of the directory into the catalog (catalog.h), which should be
  * empty (EEXIST for a table that exists), with their rows and display order. A directory without
  * a catalog file is a new database and loads nothing. A catalog that lists a table whose file is
- * missing, a table of an engine other than the one-page engine, or a display position outside the
- * table is EBADMSG.
+ * missing, a table of an engine that is not in the engine registry (engine_registry.h), or a
+ * display position outside the table is EBADMSG.
  *
  * data_dir_checkpoint saves every table in the catalog, one file at a time, and then the catalog.
  * It is not atomic: a crash in the middle leaves some tables saved a step ahead of the catalog,
