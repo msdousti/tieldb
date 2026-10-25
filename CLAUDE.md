@@ -383,6 +383,7 @@ Before submitting/committing code:
 - [ ] No comments unless explaining *why*
 - [ ] Module internals are `static`
 - [ ] Stateful module types are opaque (`foo_create`/`foo_destroy`); vtables only where implementations are swappable
+- [ ] A module that consumes an interface (policy, I/O table, storage engine) takes it from the caller and does not include or create a concrete implementation (`.claude/c-guidelines.md` section 6)
 - [ ] Every failure that can occur sets `errno`, documented in the header and asserted in tests (no handling for malformed or hostile clients)
 - [ ] At most 4 parameters per function; use an options struct beyond that
 - [ ] Headers are self-contained with `#pragma once`

@@ -165,6 +165,7 @@ Makefiles, no CMake.
 - Group data and operations: a struct plus `foo_*` functions taking the struct pointer as first argument.
 - Vtables are for places with more than one implementation or a need for injection (I/O, storage engines, callbacks). A concrete type with a single implementation, like a byte buffer, is an opaque handle plus prefixed functions, with no vtable.
 - Use a **vtable of function pointers** for swappable backends (e.g. a storage engine interface, as in Postgres's table access method API) and for callbacks. Always pair a callback with a `void *user_data` argument.
+- **Depend on the abstraction, not on an implementation.** A module that uses something with an interface (the replacement policy, the I/O table, the storage engine interface) takes the abstract type as a parameter and never names a concrete implementation: no `foo_create(n)` that quietly builds a clock policy, even as a convenience. The caller (`main`, an engine setup function, a test) chooses and passes the implementation. A shortcut for the common choice belongs in the caller's layer. Say who owns the object that is passed (who destroys it, also when creation fails) and make a null object `EINVAL`. Check the `.c` file's includes: if it includes a concrete implementation of an abstraction it consumes, move that choice to the caller. (Example: `buffer_pool_create(frame_count, policy)`; `buffer_pool.c` does not include `clock_policy.h`.)
 - Use `typedef` for function-pointer types to keep declarations readable.
 - Use `struct` returns for multiple values (small structs are cheap to return), rather than a pile of out-pointers.
 
@@ -284,6 +285,7 @@ Start with the I/O interface with fault injection, then a first cmocka test for 
 - [ ] No unbounded string functions; every buffer carries a length
 - [ ] Options-struct pattern for functions with optional parameters
 - [ ] Stateful module types are opaque; vtables only for swappable implementations
+- [ ] A module that consumes an interface takes it from the caller and does not include a concrete implementation
 - [ ] Every failure path sets `errno`, documented in the header and asserted in tests
 - [ ] At most 4 parameters per function (clang-tidy enforces it); use an options struct beyond that
 
