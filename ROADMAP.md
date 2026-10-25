@@ -701,6 +701,21 @@ The storage engine interface (rows and cursors) and path strings are already gen
 - [ ] Bloom filters for fast negative lookups
 - [ ] Coexists with heap storage via storage engine API
 
+### A Second Heap Engine: In-Place Updates with Undo Logs
+The first heap engine (`heap_append`) is Postgres-style: an UPDATE adds a new tuple version to the heap, old versions stay there until vacuum, each tuple has `xmin`/`xmax`, and a rolled-back transaction is simply invisible, so redo-only recovery is enough. A second engine (`heap_undo`, InnoDB/Oracle-style) could coexist with it, chosen per table through the engine name that the catalog already stores, and sharing the page, page file, buffer pool and free space map. The two differ like this:
+- `heap_undo` updates a row in place. Its tuple has the ID of the last writing transaction and a roll pointer to an undo record, not `xmin`/`xmax`; a delete sets a delete mark and the deleter's ID. A reader whose snapshot cannot see the tuple follows the roll pointer through the undo records to an older version. TIDs stay stable, and there is no vacuum of old versions, only a purge of undo records that no snapshot needs.
+- Rollback needs the undo records, and so does recovery: this engine needs the full ARIES-style undo of Phase 5 ("Later"), while `heap_append` needs only redo.
+- Its undo records live in pages that go through the buffer pool and are covered by the redo log like any other page.
+
+What the rest of the system must allow, so that this stays possible (decide it while designing the WAL in Phase 5 and the transactions in Phase 6; the cost of adding it later is high):
+- [ ] WAL records carry a resource manager ID (as in Postgres), so that one log serves the whole database and recovery sends each record to the engine that owns it. Redo is per page, not per table
+- [ ] The storage engine interface gets `begin`, `commit`, `abort` and `recover` hooks. A transaction that touches tables of both kinds calls both engines on commit and abort: `heap_append` marks the transaction as aborted, `heap_undo` applies its undo records
+- [ ] Visibility is decided inside the engine: the calls that open a cursor take a transaction or snapshot argument, and the cursor returns only the rows that the snapshot can see, so the executor does not know which engine versions rows
+- [ ] The tuple header layout stays private to each engine and is chosen by its flags (`heap_tuple` already works like that); the transaction ID, roll pointer and delete mark of `heap_undo` are a different layout
+- [ ] Cleanup is per engine (vacuum or undo purge), started by a common background worker
+- [ ] A test that rolls back and recovers transactions that touch tables of both engines
+- [ ] Build `heap_undo` itself: update in place, undo log pages, roll back, rebuild old versions for readers, purge, and crash tests for it
+
 ### More Index Types
 - [ ] Hash indexes (equality only, faster)
 - [ ] GiST (Generalized Search Tree) framework
