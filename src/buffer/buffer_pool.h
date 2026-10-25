@@ -25,7 +25,7 @@
 typedef struct buffer_pool buffer_pool_t;
 
 typedef struct {
-    size_t file;
+    size_t file_number;
     size_t page_number;
 } page_id_t;
 

@@ -86,7 +86,7 @@ static int teardown([[maybe_unused]] void **state)
 
 static page_id_t id_of(size_t file, size_t page_number)
 {
-    return (page_id_t){.file = file_numbers[file], .page_number = page_number};
+    return (page_id_t){.file_number = file_numbers[file], .page_number = page_number};
 }
 
 static page_t *pin(size_t file, size_t page_number)
@@ -181,7 +181,7 @@ static void test_a_file_that_was_not_added_is_refused([[maybe_unused]] void **st
     page_t *page = nullptr;
 
     errno = 0;
-    assert_int_equal(buffer_pool_pin(pool, (page_id_t){.file = FILES}, &page), -1);
+    assert_int_equal(buffer_pool_pin(pool, (page_id_t){.file_number = FILES}, &page), -1);
     assert_int_equal(errno, EINVAL);
 }
 

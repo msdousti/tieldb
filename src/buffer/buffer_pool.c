@@ -120,13 +120,13 @@ static page_t *frame_page(buffer_pool_t *pool, const frame_t *frame)
 
 static frame_t *load_page(buffer_pool_t *pool, page_id_t id)
 {
-    if (id.file >= pool->file_count) {
+    if (id.file_number >= pool->file_count) {
         errno = EINVAL;
         return nullptr;
     }
     frame_t *frame = find_free_frame(pool);
     if (frame == nullptr ||
-        page_file_read(pool->files[id.file], id.page_number, frame_page(pool, frame)) != 0) {
+        page_file_read(pool->files[id.file_number], id.page_number, frame_page(pool, frame)) != 0) {
         return nullptr;
     }
     *frame = (frame_t){.id = id, .in_use = true};
