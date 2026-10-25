@@ -195,7 +195,7 @@ Two milestones, so that the first visible result comes early:
   - [x] CI job that builds them and runs each for 30 seconds on a seed corpus
   - [x] Page deserialization fuzz target (a valid page as seed; later pages in the corpus come from heap tests)
 - [x] Heap tuple header, specific to the heap engine
-  - [x] Header in front of the encoded row: flags, optional xmin/xmax (`heap_tuple.{h,c}`; no tuple has the IDs until Phase 5)
+  - [x] Header in front of the encoded row: flags, optional xmin/xmax (`heap_tuple.{h,c}`; optional because strict 2PL needs no versions; MVCC, Phase 6, sets them on every tuple)
   - [x] Tuple ID (TID): page + slot (`heap_tid_t`); it stays inside the heap engine and is not exposed to the executor
 - [ ] Heap file management
   - [ ] Create/open/close heap files with many pages, all I/O through `io->`

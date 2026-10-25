@@ -2,11 +2,15 @@
  * The heap tuple: a row as the heap engine stores it in a page, with a header in front of it.
  *
  * A tuple is a 16-bit flags word, then the transaction IDs xmin and xmax (64 bits each) when
- * HEAP_TUPLE_HAS_XIDS is set, then the row as the row codec laid it out (see row_codec.h). The
- * IDs are there for the multi-version concurrency control of Phase 5; until then no tuple has
- * them, so a tuple costs two bytes more than its row. The flags that are not named here are
- * reserved and must be zero. Tuples are encoded and decoded in the machine's byte order, like the
- * rows.
+ * HEAP_TUPLE_HAS_XIDS is set, then the row as the row codec laid it out (see row_codec.h).
+ *
+ * The IDs are optional because the heap does not always need them. They are the multi-version
+ * concurrency control (MVCC, Phase 6) of a version of a row; with the strict two-phase locking
+ * that comes first there is one version of each row, locks protect it, and a tuple costs two
+ * bytes more than its row. A database with MVCC sets the flag on every tuple.
+ *
+ * The flags that are not named here are reserved and must be zero. Tuples are encoded and decoded
+ * in the machine's byte order, like the rows.
  *
  * heap_tuple_decode returns a row that points into the bytes it was given. The header says nothing
  * about the length of the row: the length of the tuple, which the page keeps, gives it.
