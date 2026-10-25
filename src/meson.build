@@ -54,6 +54,7 @@ storage_sources = files(
 # Buffer pool module
 buffer_sources = files(
   'buffer/buffer_pool.c',
+  'buffer/clock_policy.c',
 )
 
 # Command-line options

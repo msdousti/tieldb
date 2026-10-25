@@ -204,7 +204,10 @@ Two milestones, so that the first visible result comes early:
 - [ ] Buffer pool
   - [x] Fixed-size pool (the caller chooses the frame count)
   - [x] Pin/unpin interface (`buffer_pool_pin`, `buffer_pool_unpin`; a page is read into a free frame, and a full pool is `ENOBUFS` until the replacement policy below)
-  - [ ] Clock replacement policy
+  - [ ] Replacement policy
+    - [x] A policy interface (`replacement_policy.h`: record access, set evictable, pick victim), so that clock, LRU and FIFO are interchangeable and can be compared in the benchmarks
+    - [x] Clock replacement policy (`clock_policy.{h,c}`), tested alone against a model
+    - [ ] The pool uses it: eviction of an unpinned page, writing back a changed victim first
   - [x] Dirty page tracking (`buffer_pool_mark_changed` while the page is pinned; `buffer_pool_flush_all` writes the marked pages and syncs the files)
   - [x] Page ID (file number + page number)
   - [x] Generic over files and page numbers, with no heap assumptions: an LSM engine keeps its own file formats and block cache
