@@ -194,9 +194,9 @@ Two milestones, so that the first visible result comes early:
   - [x] Meson option `-Dfuzz=true` that builds the `tests/fuzz/` targets with libFuzzer and ASan
   - [x] CI job that builds them and runs each for 30 seconds on a seed corpus
   - [x] Page deserialization fuzz target (a valid page as seed; later pages in the corpus come from heap tests)
-- [ ] Heap tuple header, specific to the heap engine
-  - [ ] Header in front of the encoded row: flags, optional xmin/xmax
-  - [ ] Tuple ID (TID): page + slot; it stays inside the heap engine and is not exposed to the executor
+- [x] Heap tuple header, specific to the heap engine
+  - [x] Header in front of the encoded row: flags, optional xmin/xmax (`heap_tuple.{h,c}`; optional because strict 2PL needs no versions; MVCC, Phase 6, sets them on every tuple)
+  - [x] Tuple ID (TID): page + slot (`heap_tid_t`); it stays inside the heap engine and is not exposed to the executor
 - [ ] Heap file management
   - [ ] Create/open/close heap files with many pages, all I/O through `io->`
   - [ ] Allocate new pages
