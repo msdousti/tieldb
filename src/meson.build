@@ -18,6 +18,7 @@ net_sources = files(
 # Data structures
 ds_sources = files(
   'ds/hash_map.c',
+  'ds/clock_policy.c',
 )
 
 # Type registry

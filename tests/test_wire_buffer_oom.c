@@ -23,6 +23,7 @@
 #include <cmocka.h>
 
 #include "buffer/buffer_pool.h"
+#include "ds/clock_policy.h"
 #include "ds/hash_map.h"
 #include "net/connection.h"
 #include "net/protocol.h"
@@ -820,6 +821,14 @@ static void test_buffer_pool_create_fails_when_memory_runs_out([[maybe_unused]] 
     assert_buffer_pool_create_fails();
 }
 
+static void test_clock_policy_create_fails_when_memory_runs_out([[maybe_unused]] void **state)
+{
+    will_calloc(1, (bool[]){false});
+    errno = 0;
+    assert_true(clock_policy_create(4) == nullptr);
+    assert_int_equal(errno, ENOMEM);
+}
+
 static void test_buffer_pool_add_file_fails_when_memory_runs_out([[maybe_unused]] void **state)
 {
     size_t file_number = 0;
@@ -911,6 +920,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_connection_fails_when_a_packet_cannot_be_buffered),
     cmocka_unit_test(test_server_create_fails_when_memory_runs_out),
     cmocka_unit_test(test_buffer_pool_create_fails_when_memory_runs_out),
+    cmocka_unit_test(test_clock_policy_create_fails_when_memory_runs_out),
     cmocka_unit_test(test_buffer_pool_add_file_fails_when_memory_runs_out),
     cmocka_unit_test(test_hash_map_create_fails_when_memory_runs_out),
     cmocka_unit_test(test_hash_map_keeps_working_when_it_cannot_grow),

@@ -238,6 +238,15 @@ test_buffer_pool = executable('test_buffer_pool',
 
 test('buffer_pool', test_buffer_pool)
 
+# Test: clock replacement policy
+test_clock_policy = executable('test_clock_policy',
+  'test_clock_policy.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('clock_policy', test_clock_policy)
+
 # Test: heap tuple header
 test_heap_tuple = executable('test_heap_tuple',
   'test_heap_tuple.c',
