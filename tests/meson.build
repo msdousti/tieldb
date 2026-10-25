@@ -25,7 +25,7 @@ test_support_dep = declare_dependency(
 # Test: I/O interface
 test_io = executable('test_io',
   'test_io.c',
-  dependencies: [test_support_dep, cmocka_dep],
+  dependencies: [tieldb_dep, cmocka_dep],
   include_directories: inc,
 )
 
