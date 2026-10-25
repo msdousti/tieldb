@@ -229,6 +229,15 @@ test_flags = executable('test_flags',
 
 test('flags', test_flags)
 
+# Test: buffer pool
+test_buffer_pool = executable('test_buffer_pool',
+  'test_buffer_pool.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('buffer_pool', test_buffer_pool)
+
 # Test: heap tuple header
 test_heap_tuple = executable('test_heap_tuple',
   'test_heap_tuple.c',
@@ -310,6 +319,7 @@ wire_buffer_oom_lib = static_library('wire_buffer_oom',
   net_sources,
   sql_sources,
   storage_sources,
+  buffer_sources,
   executor_sources,
   include_directories: inc,
   c_args: ['-Dmalloc=oom_malloc', '-Dcalloc=oom_calloc', '-Drealloc=oom_realloc'],

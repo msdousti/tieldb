@@ -202,13 +202,13 @@ Two milestones, so that the first visible result comes early:
   - [x] Count the pages of a file from its size (`page_file_count_pages`, `io->fstat`)
   - [x] Allocate new pages (`page_file_allocate_page`: appends an empty page of a type and returns its number)
 - [ ] Buffer pool
-  - [ ] Fixed-size pool (e.g., 1000 pages)
-  - [ ] Pin/unpin interface
+  - [x] Fixed-size pool (the caller chooses the frame count)
+  - [x] Pin/unpin interface (`buffer_pool_pin`, `buffer_pool_unpin`; a page is read into a free frame, and a full pool is `ENOBUFS` until the replacement policy below)
   - [ ] Clock replacement policy
   - [ ] Dirty page tracking
-  - [ ] Page ID (file number + page number)
-  - [ ] Generic over files and page numbers, with no heap assumptions: an LSM engine keeps its own file formats and block cache
-  - [ ] Zero outstanding pins asserted at teardown
+  - [x] Page ID (file number + page number)
+  - [x] Generic over files and page numbers, with no heap assumptions: an LSM engine keeps its own file formats and block cache
+  - [x] Zero outstanding pins asserted at teardown (`buffer_pool_destroy` fails with `EBUSY` if a page is still pinned)
   - [ ] Optional direct I/O (`O_DIRECT`, off by default), so that a page is not cached twice: the page buffers are 4096-aligned (`alignas` on `page_t`); the tests run with it on and off, and fall back when the filesystem refuses it (`tmpfs` does); `fsync` is still needed for durability
 - [ ] Free space map (bitmap or simple list)
 - [ ] Heap engine
@@ -233,7 +233,7 @@ Two milestones, so that the first visible result comes early:
   - [x] Page file: write error, torn write, fsync failure, read error
   - [ ] Buffer pool (milestone B)
 - [x] Fault injection moved out of `src/io/io.c` into a test-support library (`tests/io_fault.{h,c}`): the server ships only the real operations, and the fault code no longer counts toward the coverage of `src/`; the cost is that a spawned `tieldb` can no longer be given faults
-- [ ] Unit tests for buffer pool (pin/unpin, eviction)
+- [ ] Unit tests for buffer pool (pin/unpin, eviction; the pin/unpin tests are done)
 - [ ] Crash test: write data, flush, kill -9, restart, verify the flushed data survives
 - [x] Fuzz test for page deserialization (milestone B)
 
