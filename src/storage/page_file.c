@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 
 #include "io/io.h"
@@ -86,4 +87,18 @@ int page_file_write(page_file_t *file, size_t page_number, const page_t *page)
 int page_file_sync(page_file_t *file)
 {
     return io->fsync(file->fd);
+}
+
+int page_file_count_pages(page_file_t *file, size_t *count)
+{
+    struct stat status;
+    if (io->fstat(file->fd, &status) != 0) {
+        return -1;
+    }
+    if ((size_t) status.st_size % PAGE_SIZE != 0) {
+        errno = EBADMSG;
+        return -1;
+    }
+    *count = (size_t) status.st_size / PAGE_SIZE;
+    return 0;
 }

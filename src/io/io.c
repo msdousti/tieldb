@@ -77,6 +77,11 @@ static int real_flock(int fd, int operation)
     return flock(fd, operation);
 }
 
+static int real_fstat(int fd, struct stat *status)
+{
+    return fstat(fd, status);
+}
+
 const io_ops_t io_real_ops = {
     .read = real_read,
     .write = real_write,
@@ -87,6 +92,7 @@ const io_ops_t io_real_ops = {
     .open = real_open,
     .close = real_close,
     .flock = real_flock,
+    .fstat = real_fstat,
 };
 
 /*
@@ -170,6 +176,16 @@ static ssize_t fault_pread(int fd, void *buf, size_t count, off_t offset)
     return real_pread(fd, buf, count, offset);
 }
 
+static int fault_fstat(int fd, struct stat *status)
+{
+    if (should_inject_fault(IO_FAULT_STAT_ERROR)) {
+        errno = EIO;
+        return -1;
+    }
+
+    return real_fstat(fd, status);
+}
+
 const io_ops_t io_fault_inject_ops = {
     .read = fault_read,
     .write = fault_write,
@@ -180,6 +196,7 @@ const io_ops_t io_fault_inject_ops = {
     .open = real_open,
     .close = real_close,
     .flock = real_flock,
+    .fstat = fault_fstat,
 };
 
 /*

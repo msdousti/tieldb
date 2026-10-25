@@ -198,7 +198,8 @@ Two milestones, so that the first visible result comes early:
   - [x] Header in front of the encoded row: flags, optional xmin/xmax (`heap_tuple.{h,c}`; optional because strict 2PL needs no versions; MVCC, Phase 6, sets them on every tuple)
   - [x] Tuple ID (TID): page + slot (`heap_tid_t`); it stays inside the heap engine and is not exposed to the executor
 - [ ] Heap file management
-  - [ ] Create/open/close heap files with many pages, all I/O through `io->`
+  - [x] Create/open/close heap files with many pages, all I/O through `io->` (`page_file`, which is generic: the buffer pool and other engines use it too)
+  - [x] Count the pages of a file from its size (`page_file_count_pages`, `io->fstat`)
   - [ ] Allocate new pages
 - [ ] Buffer pool
   - [ ] Fixed-size pool (e.g., 1000 pages)

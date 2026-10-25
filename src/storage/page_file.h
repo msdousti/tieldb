@@ -6,14 +6,15 @@
  * pages that page_file_read returns. The checksum is set when a page is written, on a copy, so the
  * caller's page is not changed. Writing a page does not make it durable: call page_file_sync.
  *
- * The file does not know how many pages it has; reading past the end is ENOENT. A page that was
- * never written (a gap in the file, which reads as zeros) is corrupt, not empty. One thread at a
- * time uses a page_file_t.
+ * The file has as many pages as its size says (page_file_count_pages); reading past the end is
+ * ENOENT. A page that was never written (a gap in the file, which reads as zeros) is corrupt, not
+ * empty. One thread at a time uses a page_file_t.
  *
  * Errors return -1 or nullptr and set errno, as the system calls do (EIO, ENOSPC, ENOENT from
  * page_file_open, EEXIST from page_file_create, ENOMEM), with these of its own: ENOENT from
  * page_file_read for a page beyond the end of the file; EBADMSG for a page that is truncated, fails
- * its checksum or fails page_validate; EIO from page_file_write for a short write. page_file_read
+ * its checksum or fails page_validate, and from page_file_count_pages for a file that ends in the
+ * middle of a page; EIO from page_file_write for a short write. page_file_read
  * leaves the page unspecified when it fails.
  */
 
@@ -39,3 +40,6 @@ typedef struct page_file page_file_t;
 [[nodiscard]] int page_file_write(page_file_t *file, size_t page_number, const page_t *page);
 
 [[nodiscard]] int page_file_sync(page_file_t *file);
+
+/** The number of pages in the file, from its size: the next page to add is this number. */
+[[nodiscard]] int page_file_count_pages(page_file_t *file, size_t *count);
