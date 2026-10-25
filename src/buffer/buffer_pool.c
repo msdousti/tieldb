@@ -11,6 +11,7 @@ typedef struct {
     page_id_t id;
     size_t pin_count;
     bool in_use;
+    bool is_changed;
 } frame_t;
 
 struct buffer_pool {
@@ -146,13 +147,57 @@ int buffer_pool_pin(buffer_pool_t *pool, page_id_t id, page_t **page)
     return 0;
 }
 
-int buffer_pool_unpin(buffer_pool_t *pool, page_id_t id)
+static frame_t *find_pinned_frame(buffer_pool_t *pool, const page_id_t *id)
 {
-    frame_t *frame = find_frame(pool, &id);
+    frame_t *frame = find_frame(pool, id);
     if (frame == nullptr || frame->pin_count == 0) {
         errno = EINVAL;
+        return nullptr;
+    }
+    return frame;
+}
+
+int buffer_pool_unpin(buffer_pool_t *pool, page_id_t id)
+{
+    frame_t *frame = find_pinned_frame(pool, &id);
+    if (frame == nullptr) {
         return -1;
     }
     frame->pin_count--;
     return 0;
+}
+
+int buffer_pool_mark_changed(buffer_pool_t *pool, page_id_t id)
+{
+    frame_t *frame = find_pinned_frame(pool, &id);
+    if (frame == nullptr) {
+        return -1;
+    }
+    frame->is_changed = true;
+    return 0;
+}
+
+static int write_back(buffer_pool_t *pool, frame_t *frame)
+{
+    if (!frame->in_use || !frame->is_changed) {
+        return 0;
+    }
+    int status = page_file_write(pool->files[frame->id.file_number], frame->id.page_number,
+                                 frame_page(pool, frame));
+    if (status == 0) {
+        frame->is_changed = false;
+    }
+    return status;
+}
+
+int buffer_pool_flush_all(buffer_pool_t *pool)
+{
+    int status = 0;
+    for (size_t i = 0; status == 0 && i < pool->frame_count; i++) {
+        status = write_back(pool, &pool->frames[i]);
+    }
+    for (size_t i = 0; status == 0 && i < pool->file_count; i++) {
+        status = page_file_sync(pool->files[i]);
+    }
+    return status;
 }

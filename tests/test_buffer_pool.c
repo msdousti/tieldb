@@ -18,6 +18,7 @@
 #include <cmocka.h>
 
 #include "buffer/buffer_pool.h"
+#include "io_fault.h"
 #include "test_directory.h"
 
 static constexpr size_t FRAMES = 3;
@@ -65,6 +66,7 @@ static void create_file(size_t file)
 
 static int setup([[maybe_unused]] void **state)
 {
+    io_init(true);
     make_directory(directory);
     pool = buffer_pool_create(FRAMES);
     for (size_t file = 0; file < FILES; file++) {
@@ -75,6 +77,7 @@ static int setup([[maybe_unused]] void **state)
 
 static int teardown([[maybe_unused]] void **state)
 {
+    io_init(true);
     assert_int_equal(buffer_pool_destroy(pool), 0);
     for (size_t file = 0; file < FILES; file++) {
         assert_int_equal(page_file_close(files[file]), 0);
@@ -100,6 +103,11 @@ static page_t *pin(size_t file, size_t page_number)
 static void unpin(size_t file, size_t page_number)
 {
     assert_int_equal(buffer_pool_unpin(pool, id_of(file, page_number)), 0);
+}
+
+static void mark_changed(size_t file, size_t page_number)
+{
+    assert_int_equal(buffer_pool_mark_changed(pool, id_of(file, page_number)), 0);
 }
 
 static void assert_text(const page_t *page, const char *text)
@@ -204,6 +212,86 @@ static void test_destroying_a_pool_with_a_pin_reports_it([[maybe_unused]] void *
     assert_int_equal(errno, EBUSY);
 }
 
+static void change_page(page_t *page)
+{
+    assert_int_equal(page_insert(page, "new", 3), 1);
+}
+
+static void change_and_unpin(size_t file, size_t page_number)
+{
+    change_page(pin(file, page_number));
+    mark_changed(file, page_number);
+    unpin(file, page_number);
+}
+
+static void assert_file_page_slot_count(size_t file, size_t page_number, size_t count)
+{
+    page_t page;
+
+    assert_int_equal(page_file_read(files[file], page_number, &page), 0);
+    assert_int_equal(page_slot_count(&page), count);
+}
+
+static void assert_flush_fails(int error)
+{
+    errno = 0;
+    assert_int_equal(buffer_pool_flush_all(pool), -1);
+    assert_int_equal(errno, error);
+}
+
+static void test_flushing_writes_the_changed_pages_only([[maybe_unused]] void **state)
+{
+    change_and_unpin(0, 1);
+    change_page(pin(0, 2));
+    unpin(0, 2);
+    assert_int_equal(buffer_pool_flush_all(pool), 0);
+    assert_file_page_slot_count(0, 1, 2);
+    assert_file_page_slot_count(0, 2, 1);
+}
+
+static void test_a_marked_page_is_written_while_it_is_pinned([[maybe_unused]] void **state)
+{
+    change_page(pin(0, 0));
+    mark_changed(0, 0);
+    assert_int_equal(buffer_pool_flush_all(pool), 0);
+    assert_file_page_slot_count(0, 0, 2);
+    unpin(0, 0);
+}
+
+static void test_only_a_pinned_page_can_be_marked_changed([[maybe_unused]] void **state)
+{
+    errno = 0;
+    assert_int_equal(buffer_pool_mark_changed(pool, id_of(0, 0)), -1);
+    assert_int_equal(errno, EINVAL);
+}
+
+static void test_a_flushed_page_is_not_written_again([[maybe_unused]] void **state)
+{
+    change_and_unpin(0, 0);
+    assert_int_equal(buffer_pool_flush_all(pool), 0);
+    io_init(false);
+    io_inject_fault(IO_FAULT_WRITE_ERROR, 1);
+    assert_int_equal(buffer_pool_flush_all(pool), 0);
+}
+
+static void test_a_failed_write_keeps_the_page_changed([[maybe_unused]] void **state)
+{
+    change_and_unpin(0, 0);
+    io_init(false);
+    io_inject_fault(IO_FAULT_WRITE_ERROR, 1);
+    assert_flush_fails(EIO);
+    io_init(true);
+    assert_int_equal(buffer_pool_flush_all(pool), 0);
+    assert_file_page_slot_count(0, 0, 2);
+}
+
+static void test_a_failed_sync_is_reported([[maybe_unused]] void **state)
+{
+    io_init(false);
+    io_inject_fault(IO_FAULT_FSYNC_FAIL, 1);
+    assert_flush_fails(EIO);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_a_pinned_page_holds_what_the_file_holds, setup, teardown),
     cmocka_unit_test_setup_teardown(test_the_same_page_number_in_two_files_is_two_pages, setup,
@@ -215,6 +303,13 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_a_file_that_was_not_added_is_refused, setup, teardown),
     cmocka_unit_test_setup_teardown(test_a_pool_needs_a_frame, setup, teardown),
     cmocka_unit_test_setup_teardown(test_destroying_a_pool_with_a_pin_reports_it, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_flushing_writes_the_changed_pages_only, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_a_marked_page_is_written_while_it_is_pinned, setup,
+                                    teardown),
+    cmocka_unit_test_setup_teardown(test_only_a_pinned_page_can_be_marked_changed, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_a_flushed_page_is_not_written_again, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_a_failed_write_keeps_the_page_changed, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_a_failed_sync_is_reported, setup, teardown),
 };
 
 int main(void)

@@ -232,7 +232,7 @@ test('flags', test_flags)
 # Test: buffer pool
 test_buffer_pool = executable('test_buffer_pool',
   'test_buffer_pool.c',
-  dependencies: [tieldb_dep, cmocka_dep],
+  dependencies: [test_support_dep, cmocka_dep],
   include_directories: inc,
 )
 
