@@ -22,6 +22,7 @@
 
 #include <cmocka.h>
 
+#include "buffer/buffer_pool.h"
 #include "ds/hash_map.h"
 #include "net/connection.h"
 #include "net/protocol.h"
@@ -792,6 +793,47 @@ static bool oom_has_key(const hash_node_t *node, const void *key)
 
 static const hash_map_ops_t OOM_MAP_OPS = {.hash = oom_hash_key, .has_key = oom_has_key};
 
+static void will_calloc(size_t count, const bool *results)
+{
+    for (size_t i = 0; i < count; i++) {
+        will_return(oom_calloc, results[i]);
+    }
+}
+
+static void assert_buffer_pool_create_fails(void)
+{
+    errno = 0;
+    assert_null(buffer_pool_create(4));
+    assert_int_equal(errno, ENOMEM);
+}
+
+// The pool, its frames, its pages, then the page table and its buckets
+static void test_buffer_pool_create_fails_when_memory_runs_out([[maybe_unused]] void **state)
+{
+    will_calloc(1, (bool[]){false});
+    assert_buffer_pool_create_fails();
+    will_calloc(5, (bool[]){true, false, true, true, true});
+    assert_buffer_pool_create_fails();
+    will_calloc(5, (bool[]){true, true, false, true, true});
+    assert_buffer_pool_create_fails();
+    will_calloc(4, (bool[]){true, true, true, false});
+    assert_buffer_pool_create_fails();
+}
+
+static void test_buffer_pool_add_file_fails_when_memory_runs_out([[maybe_unused]] void **state)
+{
+    size_t file_number = 0;
+
+    will_calloc(5, (bool[]){true, true, true, true, true});
+    buffer_pool_t *pool = buffer_pool_create(4);
+    assert_true(pool != nullptr);
+    will_return(oom_realloc, false);
+    errno = 0;
+    assert_int_equal(buffer_pool_add_file(pool, nullptr, &file_number), -1);
+    assert_int_equal(errno, ENOMEM);
+    assert_int_equal(buffer_pool_destroy(pool), 0);
+}
+
 static void test_hash_map_create_fails_when_memory_runs_out([[maybe_unused]] void **state)
 {
     will_return(oom_calloc, false);
@@ -868,6 +910,8 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_connection_fails_when_the_writer_cannot_be_created),
     cmocka_unit_test(test_connection_fails_when_a_packet_cannot_be_buffered),
     cmocka_unit_test(test_server_create_fails_when_memory_runs_out),
+    cmocka_unit_test(test_buffer_pool_create_fails_when_memory_runs_out),
+    cmocka_unit_test(test_buffer_pool_add_file_fails_when_memory_runs_out),
     cmocka_unit_test(test_hash_map_create_fails_when_memory_runs_out),
     cmocka_unit_test(test_hash_map_keeps_working_when_it_cannot_grow),
     cmocka_unit_test(test_one_page_engine_create_fails_when_memory_runs_out),

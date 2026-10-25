@@ -51,6 +51,11 @@ storage_sources = files(
   'storage/heap_tuple.c',
 )
 
+# Buffer pool module
+buffer_sources = files(
+  'buffer/buffer_pool.c',
+)
+
 # Command-line options
 cli_sources = files(
   'options.c',
@@ -66,6 +71,7 @@ tieldb_lib = static_library('tieldb',
   net_sources,
   sql_sources,
   storage_sources,
+  buffer_sources,
   executor_sources,
   cli_sources,
   include_directories: inc,
