@@ -11,6 +11,11 @@ static constexpr size_t XMIN_OFFSET = FLAGS_SIZE;
 static constexpr size_t XMAX_OFFSET = XMIN_OFFSET + XMIN_SIZE;
 static constexpr size_t XIDS_SIZE = XMIN_SIZE + XMAX_SIZE;
 
+static bool has_xids(uint16_t flags)
+{
+    return (flags & HEAP_TUPLE_HAS_XIDS) != 0;
+}
+
 static bool has_reserved_flags(uint16_t flags)
 {
     return (flags & ~HEAP_TUPLE_HAS_XIDS) != 0;
@@ -18,8 +23,7 @@ static bool has_reserved_flags(uint16_t flags)
 
 static size_t encoded_header_size(uint16_t flags)
 {
-    bool has_xids = (flags & HEAP_TUPLE_HAS_XIDS) != 0;
-    return FLAGS_SIZE + (has_xids ? XIDS_SIZE : 0);
+    return FLAGS_SIZE + (has_xids(flags) ? XIDS_SIZE : 0);
 }
 
 ssize_t heap_tuple_encoded_size(const heap_tuple_t *tuple)
@@ -34,7 +38,7 @@ ssize_t heap_tuple_encoded_size(const heap_tuple_t *tuple)
 static void write_header(unsigned char *bytes, const heap_tuple_t *tuple)
 {
     memcpy(bytes, &tuple->flags, FLAGS_SIZE);
-    if ((tuple->flags & HEAP_TUPLE_HAS_XIDS) != 0) {
+    if (has_xids(tuple->flags)) {
         memcpy(bytes + XMIN_OFFSET, &tuple->xmin, XMIN_SIZE);
         memcpy(bytes + XMAX_OFFSET, &tuple->xmax, XMAX_SIZE);
     }
@@ -77,7 +81,7 @@ int heap_tuple_decode(const void *bytes, size_t length, heap_tuple_t *tuple)
         errno = EBADMSG;
         return -1;
     }
-    if ((tuple->flags & HEAP_TUPLE_HAS_XIDS) != 0) {
+    if (has_xids(tuple->flags)) {
         read_xids(input, tuple);
     }
     tuple->row.data = input + encoded_header_size(tuple->flags);
