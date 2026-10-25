@@ -205,7 +205,7 @@ Two milestones, so that the first visible result comes early:
   - [x] Fixed-size pool (the caller chooses the frame count)
   - [x] Pin/unpin interface (`buffer_pool_pin`, `buffer_pool_unpin`; a page is read into a free frame, and a full pool is `ENOBUFS` until the replacement policy below)
   - [ ] Clock replacement policy
-  - [x] Dirty page tracking (`buffer_pool_unpin` says whether the page was changed; `buffer_pool_flush_all` writes the changed pages and syncs the files)
+  - [x] Dirty page tracking (`buffer_pool_mark_changed` while the page is pinned; `buffer_pool_flush_all` writes the marked pages and syncs the files)
   - [x] Page ID (file number + page number)
   - [x] Generic over files and page numbers, with no heap assumptions: an LSM engine keeps its own file formats and block cache
   - [x] Zero outstanding pins asserted at teardown (`buffer_pool_destroy` fails with `EBUSY` if a page is still pinned)

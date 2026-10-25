@@ -147,15 +147,33 @@ int buffer_pool_pin(buffer_pool_t *pool, page_id_t id, page_t **page)
     return 0;
 }
 
-int buffer_pool_unpin(buffer_pool_t *pool, page_id_t id, bool is_changed)
+static frame_t *find_pinned_frame(buffer_pool_t *pool, const page_id_t *id)
 {
-    frame_t *frame = find_frame(pool, &id);
+    frame_t *frame = find_frame(pool, id);
     if (frame == nullptr || frame->pin_count == 0) {
         errno = EINVAL;
+        return nullptr;
+    }
+    return frame;
+}
+
+int buffer_pool_unpin(buffer_pool_t *pool, page_id_t id)
+{
+    frame_t *frame = find_pinned_frame(pool, &id);
+    if (frame == nullptr) {
         return -1;
     }
     frame->pin_count--;
-    frame->is_changed = frame->is_changed || is_changed;
+    return 0;
+}
+
+int buffer_pool_mark_changed(buffer_pool_t *pool, page_id_t id)
+{
+    frame_t *frame = find_pinned_frame(pool, &id);
+    if (frame == nullptr) {
+        return -1;
+    }
+    frame->is_changed = true;
     return 0;
 }
 

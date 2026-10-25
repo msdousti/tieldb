@@ -100,14 +100,14 @@ static page_t *pin(size_t file, size_t page_number)
     return page;
 }
 
-static void unpin_with(size_t file, size_t page_number, bool is_changed)
-{
-    assert_int_equal(buffer_pool_unpin(pool, id_of(file, page_number), is_changed), 0);
-}
-
 static void unpin(size_t file, size_t page_number)
 {
-    unpin_with(file, page_number, false);
+    assert_int_equal(buffer_pool_unpin(pool, id_of(file, page_number)), 0);
+}
+
+static void mark_changed(size_t file, size_t page_number)
+{
+    assert_int_equal(buffer_pool_mark_changed(pool, id_of(file, page_number)), 0);
 }
 
 static void assert_text(const page_t *page, const char *text)
@@ -153,12 +153,12 @@ static void test_the_same_page_number_in_two_files_is_two_pages([[maybe_unused]]
 static void test_unpinning_what_is_not_pinned_is_refused([[maybe_unused]] void **state)
 {
     errno = 0;
-    assert_int_equal(buffer_pool_unpin(pool, id_of(0, 0), false), -1);
+    assert_int_equal(buffer_pool_unpin(pool, id_of(0, 0)), -1);
     assert_int_equal(errno, EINVAL);
     assert_true(pin(0, 0) != nullptr);
     unpin(0, 0);
     errno = 0;
-    assert_int_equal(buffer_pool_unpin(pool, id_of(0, 0), false), -1);
+    assert_int_equal(buffer_pool_unpin(pool, id_of(0, 0)), -1);
     assert_int_equal(errno, EINVAL);
 }
 
@@ -220,7 +220,8 @@ static void change_page(page_t *page)
 static void change_and_unpin(size_t file, size_t page_number)
 {
     change_page(pin(file, page_number));
-    unpin_with(file, page_number, true);
+    mark_changed(file, page_number);
+    unpin(file, page_number);
 }
 
 static void assert_file_page_slot_count(size_t file, size_t page_number, size_t count)
@@ -248,14 +249,20 @@ static void test_flushing_writes_the_changed_pages_only([[maybe_unused]] void **
     assert_file_page_slot_count(0, 2, 1);
 }
 
-static void test_a_page_unpinned_as_changed_stays_changed([[maybe_unused]] void **state)
+static void test_a_marked_page_is_written_while_it_is_pinned([[maybe_unused]] void **state)
 {
     change_page(pin(0, 0));
-    assert_true(pin(0, 0) != nullptr);
-    unpin_with(0, 0, true);
-    unpin_with(0, 0, false);
+    mark_changed(0, 0);
     assert_int_equal(buffer_pool_flush_all(pool), 0);
     assert_file_page_slot_count(0, 0, 2);
+    unpin(0, 0);
+}
+
+static void test_only_a_pinned_page_can_be_marked_changed([[maybe_unused]] void **state)
+{
+    errno = 0;
+    assert_int_equal(buffer_pool_mark_changed(pool, id_of(0, 0)), -1);
+    assert_int_equal(errno, EINVAL);
 }
 
 static void test_a_flushed_page_is_not_written_again([[maybe_unused]] void **state)
@@ -297,7 +304,9 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_a_pool_needs_a_frame, setup, teardown),
     cmocka_unit_test_setup_teardown(test_destroying_a_pool_with_a_pin_reports_it, setup, teardown),
     cmocka_unit_test_setup_teardown(test_flushing_writes_the_changed_pages_only, setup, teardown),
-    cmocka_unit_test_setup_teardown(test_a_page_unpinned_as_changed_stays_changed, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_a_marked_page_is_written_while_it_is_pinned, setup,
+                                    teardown),
+    cmocka_unit_test_setup_teardown(test_only_a_pinned_page_can_be_marked_changed, setup, teardown),
     cmocka_unit_test_setup_teardown(test_a_flushed_page_is_not_written_again, setup, teardown),
     cmocka_unit_test_setup_teardown(test_a_failed_write_keeps_the_page_changed, setup, teardown),
     cmocka_unit_test_setup_teardown(test_a_failed_sync_is_reported, setup, teardown),
