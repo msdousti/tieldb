@@ -197,6 +197,8 @@ Makefiles, no CMake.
 - Protect shared data with mutexes or `_Atomic`. Avoid `volatile` as a synchronization mechanism; it does not provide it.
 - Keep thread-local state in `_Thread_local` variables or in per-thread context structs.
 - Run `build-tsan` as soon as a second thread exists.
+- A thread that uses an object must be over before the object is destroyed, and waking the owner is not the same as the thread being done: the clean shutdown once woke `server_serve` from a signal thread, and `main` destroyed the server while that thread was still inside `server_stop`. Keep such threads joinable and join them first; detach only threads that touch nothing but their own data after a counted hand-off.
+- A race depends on timing, so one green run proves little. Run timing-sensitive tests many times under TSan, from a fresh `build-tsan` build (`meson test -C build-tsan psql_restart --repeat 20`), before opening the PR.
 
 ## 8. Testing (TDD in C)
 
