@@ -12,13 +12,18 @@
  * buffer_pool_mark_changed, while the page is pinned and when it changes it. A marked page is
  * written back to its file by buffer_pool_flush_all, which then syncs the files; flushing does not
  * wait for pinned pages, so the caller makes sure that nobody is changing a page while it is
- * flushed. The pool does not write a page by itself.
+ * flushed.
+ *
+ * When a page is pinned and every frame holds a page, the replacement policy (see
+ * ds/replacement_policy.h) picks a page that nobody has pinned and the pool reuses its frame; if
+ * the page is marked changed, it is written back first (without a sync: only buffer_pool_flush_all
+ * syncs). A failed write-back fails the pin and leaves the page in the pool.
  *
  * The pool has no locks yet: one thread at a time uses it. It does not own the page files: they
  * stay open until the pool is destroyed, and the caller closes them.
  *
  * Errors return -1 or nullptr and set errno: ENOMEM; EINVAL for a file number that was not added
- * or a page that is not pinned; ENOBUFS when every frame is in use; EBUSY from buffer_pool_destroy
+ * or a page that is not pinned; ENOBUFS when every frame is pinned; EBUSY from buffer_pool_destroy
  * when pages are still pinned; and what page_file_read, page_file_write and page_file_sync return.
  */
 
@@ -26,6 +31,7 @@
 
 #include <stddef.h>
 
+#include "ds/replacement_policy.h"
 #include "storage/page_file.h"
 
 typedef struct buffer_pool buffer_pool_t;
@@ -35,8 +41,15 @@ typedef struct {
     size_t page_number;
 } page_id_t;
 
-/** A pool of frame_count frames. */
+/** A pool of frame_count frames that replaces pages with the clock policy. */
 [[nodiscard]] buffer_pool_t *buffer_pool_create(size_t frame_count);
+
+/**
+ * A pool that uses the given policy, made for frame_count slots. The pool owns the policy and
+ * destroys it with the pool, and also when this function fails.
+ */
+[[nodiscard]] buffer_pool_t *buffer_pool_create_with_policy(size_t frame_count,
+                                                            replacement_policy_t *policy);
 
 /**
  * Frees the pool, whatever its state: pages that were changed and not flushed are lost. Fails
