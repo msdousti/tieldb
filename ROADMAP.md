@@ -207,7 +207,7 @@ Two milestones, so that the first visible result comes early:
   - [x] Replacement policy
     - [x] A general policy interface in `src/ds` (`replacement_policy.h`: record access, set evictable, pick victim over numbered slots), so that clock, LRU and FIFO are interchangeable, can be compared in the benchmarks and can serve other caches (open files, commit status pages)
     - [x] Clock replacement policy (`ds/clock_policy.{h,c}`), tested alone against a model
-    - [x] The pool uses it: a full pool evicts an unpinned page that the policy picks, writing it back first if it changed (`buffer_pool_create` uses clock, `buffer_pool_create_with_policy` takes any policy)
+    - [x] The pool uses it: a full pool evicts an unpinned page that the policy picks, writing it back first if it changed (the caller passes the policy to `buffer_pool_create`; the pool never names a concrete one)
   - [x] Dirty page tracking (`buffer_pool_mark_changed` while the page is pinned; `buffer_pool_flush_all` writes the marked pages and syncs the files)
   - [x] Page ID (file number + page number)
   - [x] Generic over files and page numbers, with no heap assumptions: an LSM engine keeps its own file formats and block cache

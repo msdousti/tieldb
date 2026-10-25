@@ -18,6 +18,7 @@
 #include <cmocka.h>
 
 #include "buffer/buffer_pool.h"
+#include "ds/clock_policy.h"
 #include "test_random.h"
 #include "io_fault.h"
 #include "test_directory.h"
@@ -69,7 +70,7 @@ static int setup([[maybe_unused]] void **state)
 {
     io_init(true);
     make_directory(directory);
-    pool = buffer_pool_create(FRAMES);
+    pool = buffer_pool_create(FRAMES, clock_policy_create(FRAMES));
     for (size_t file = 0; file < FILES; file++) {
         create_file(file);
     }
@@ -197,13 +198,20 @@ static void test_a_file_that_was_not_added_is_refused([[maybe_unused]] void **st
 static void test_a_pool_needs_a_frame([[maybe_unused]] void **state)
 {
     errno = 0;
-    assert_null(buffer_pool_create(0));
+    assert_null(buffer_pool_create(0, clock_policy_create(1)));
+    assert_int_equal(errno, EINVAL);
+}
+
+static void test_a_pool_needs_a_policy([[maybe_unused]] void **state)
+{
+    errno = 0;
+    assert_null(buffer_pool_create(FRAMES, nullptr));
     assert_int_equal(errno, EINVAL);
 }
 
 static void test_destroying_a_pool_with_a_pin_reports_it([[maybe_unused]] void **state)
 {
-    buffer_pool_t *other = buffer_pool_create(1);
+    buffer_pool_t *other = buffer_pool_create(1, clock_policy_create(1));
 
     assert_true(other != nullptr);
     assert_int_equal(buffer_pool_add_file(other, files[0], &(size_t){}), 0);
@@ -347,7 +355,7 @@ static void use_script_policy(size_t victim)
 {
     assert_int_equal(buffer_pool_destroy(pool), 0);
     script = (script_policy_t){.base = {.ops = &SCRIPT_OPS}, .victim = victim};
-    pool = buffer_pool_create_with_policy(FRAMES, &script.base);
+    pool = buffer_pool_create(FRAMES, &script.base);
     for (size_t file = 0; file < FILES; file++) {
         assert_int_equal(buffer_pool_add_file(pool, files[file], &file_numbers[file]), 0);
     }
@@ -440,7 +448,7 @@ test_a_policy_is_destroyed_when_the_pool_cannot_be_created([[maybe_unused]] void
 {
     script = (script_policy_t){.base = {.ops = &SCRIPT_OPS}};
     errno = 0;
-    assert_true(buffer_pool_create_with_policy(0, &script.base) == nullptr);
+    assert_true(buffer_pool_create(0, &script.base) == nullptr);
     assert_int_equal(errno, EINVAL);
     assert_int_equal(script.destroyed, 1);
 }
@@ -585,6 +593,7 @@ static const struct CMUnitTest tests[] = {
                                     teardown),
     cmocka_unit_test_setup_teardown(test_a_file_that_was_not_added_is_refused, setup, teardown),
     cmocka_unit_test_setup_teardown(test_a_pool_needs_a_frame, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_a_pool_needs_a_policy, setup, teardown),
     cmocka_unit_test_setup_teardown(test_destroying_a_pool_with_a_pin_reports_it, setup, teardown),
     cmocka_unit_test_setup_teardown(test_flushing_writes_the_changed_pages_only, setup, teardown),
     cmocka_unit_test_setup_teardown(test_a_marked_page_is_written_while_it_is_pinned, setup,

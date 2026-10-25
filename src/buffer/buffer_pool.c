@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "ds/clock_policy.h"
 #include "ds/hash_map.h"
 
 typedef struct {
@@ -50,27 +49,37 @@ static void free_pool(buffer_pool_t *pool)
     free(pool);
 }
 
-buffer_pool_t *buffer_pool_create(size_t frame_count)
+static buffer_pool_t *reject_creation(replacement_policy_t *policy, int error)
 {
-    replacement_policy_t *policy = clock_policy_create(frame_count);
-    return policy == nullptr ? nullptr : buffer_pool_create_with_policy(frame_count, policy);
+    replacement_policy_destroy(policy);
+    errno = error;
+    return nullptr;
 }
 
-buffer_pool_t *buffer_pool_create_with_policy(size_t frame_count, replacement_policy_t *policy)
+static bool allocate_tables(buffer_pool_t *pool)
 {
-    buffer_pool_t *pool = frame_count == 0 ? nullptr : calloc(1, sizeof(*pool));
-    if (pool == nullptr) {
-        int error = frame_count == 0 ? EINVAL : ENOMEM;
-        replacement_policy_destroy(policy);
-        errno = error;
+    pool->frames = calloc(pool->frame_count, sizeof(*pool->frames));
+    pool->pages = calloc(pool->frame_count, sizeof(*pool->pages));
+    pool->table = hash_map_create(&PAGE_TABLE_OPS, pool->frame_count);
+    return pool->frames != nullptr && pool->pages != nullptr && pool->table != nullptr;
+}
+
+buffer_pool_t *buffer_pool_create(size_t frame_count, replacement_policy_t *policy)
+{
+    if (policy == nullptr) {
+        errno = EINVAL;
         return nullptr;
+    }
+    if (frame_count == 0) {
+        return reject_creation(policy, EINVAL);
+    }
+    buffer_pool_t *pool = calloc(1, sizeof(*pool));
+    if (pool == nullptr) {
+        return reject_creation(policy, ENOMEM);
     }
     pool->policy = policy;
     pool->frame_count = frame_count;
-    pool->frames = calloc(frame_count, sizeof(*pool->frames));
-    pool->pages = calloc(frame_count, sizeof(*pool->pages));
-    pool->table = hash_map_create(&PAGE_TABLE_OPS, frame_count);
-    if (pool->frames == nullptr || pool->pages == nullptr || pool->table == nullptr) {
+    if (!allocate_tables(pool)) {
         free_pool(pool);
         errno = ENOMEM;
         return nullptr;

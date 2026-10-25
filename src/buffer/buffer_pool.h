@@ -41,15 +41,12 @@ typedef struct {
     size_t page_number;
 } page_id_t;
 
-/** A pool of frame_count frames that replaces pages with the clock policy. */
-[[nodiscard]] buffer_pool_t *buffer_pool_create(size_t frame_count);
-
 /**
- * A pool that uses the given policy, made for frame_count slots. The pool owns the policy and
- * destroys it with the pool, and also when this function fails.
+ * A pool of frame_count frames that replaces pages with the given policy, which must be made for
+ * frame_count slots. The caller chooses the policy; the pool owns it, destroys it with the pool,
+ * and also destroys it when this function fails. A null policy is EINVAL.
  */
-[[nodiscard]] buffer_pool_t *buffer_pool_create_with_policy(size_t frame_count,
-                                                            replacement_policy_t *policy);
+[[nodiscard]] buffer_pool_t *buffer_pool_create(size_t frame_count, replacement_policy_t *policy);
 
 /**
  * Frees the pool, whatever its state: pages that were changed and not flushed are lost. Fails
