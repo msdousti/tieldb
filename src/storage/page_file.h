@@ -43,3 +43,10 @@ typedef struct page_file page_file_t;
 
 /** The number of pages in the file, from its size: the next page to add is this number. */
 [[nodiscard]] int page_file_count_pages(page_file_t *file, size_t *count);
+
+/**
+ * Adds an empty page of the given type at the end of the file and returns its number. The page is
+ * written, but not made durable (see page_file_sync). If the write is torn, the file ends in the
+ * middle of a page and counting its pages fails with EBADMSG until the file is repaired.
+ */
+[[nodiscard]] int page_file_allocate_page(page_file_t *file, page_type_t type, size_t *page_number);

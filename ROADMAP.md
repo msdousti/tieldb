@@ -197,10 +197,10 @@ Two milestones, so that the first visible result comes early:
 - [x] Heap tuple header, specific to the heap engine
   - [x] Header in front of the encoded row: flags, optional xmin/xmax (`heap_tuple.{h,c}`; optional because strict 2PL needs no versions; MVCC, Phase 6, sets them on every tuple)
   - [x] Tuple ID (TID): page + slot (`heap_tid_t`); it stays inside the heap engine and is not exposed to the executor
-- [ ] Heap file management
+- [x] Heap file management
   - [x] Create/open/close heap files with many pages, all I/O through `io->` (`page_file`, which is generic: the buffer pool and other engines use it too)
   - [x] Count the pages of a file from its size (`page_file_count_pages`, `io->fstat`)
-  - [ ] Allocate new pages
+  - [x] Allocate new pages (`page_file_allocate_page`: appends an empty page of a type and returns its number)
 - [ ] Buffer pool
   - [ ] Fixed-size pool (e.g., 1000 pages)
   - [ ] Pin/unpin interface
@@ -231,7 +231,8 @@ Two milestones, so that the first visible result comes early:
 - [x] Shutdown test: SIGTERM while connected saves the data and exits with status 0
 - [ ] Fault injection for page file, heap file and buffer pool I/O (short write, fsync failure) through the injectable `io`
   - [x] Page file: write error, torn write, fsync failure, read error
-  - [ ] Heap file and buffer pool (milestone B)
+  - [ ] Buffer pool (milestone B)
+- [ ] Move the fault-injection I/O table out of `src/io/io.c` into a test-support library (its own small PR): the server then ships only the real operations, and the fault code no longer counts toward the coverage of `src/`; the cost is that a spawned `tieldb` can no longer be given faults
 - [ ] Unit tests for buffer pool (pin/unpin, eviction)
 - [ ] Crash test: write data, flush, kill -9, restart, verify the flushed data survives
 - [x] Fuzz test for page deserialization (milestone B)
@@ -244,7 +245,7 @@ Two milestones, so that the first visible result comes early:
 - `src/storage/one_page_file.{h,c}` - A file that holds exactly one page, saved and loaded as a whole (the one-page engine and the catalog file)
 - `src/storage/storage_engine.h` - Storage engine interface; the one-page engine and later the heap engine implement it
 - `src/storage/catalog.{h,c}` - Catalog (updated: save and load)
-- `src/storage/heap_tuple.{h,c}`, `src/storage/heap_file.{h,c}`, `src/storage/free_space_map.{h,c}` - Heap engine parts (milestone B)
+- `src/storage/heap_tuple.{h,c}`, `src/storage/free_space_map.{h,c}` - Heap engine parts (milestone B); the pages of a heap file are managed by `page_file`, which is generic
 - `src/buffer/buffer_pool.{h,c}` - Buffer pool (milestone B)
 - `tests/fuzz/` - Fuzz targets (milestone B)
 

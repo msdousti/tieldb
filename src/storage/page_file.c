@@ -102,3 +102,18 @@ int page_file_count_pages(page_file_t *file, size_t *count)
     *count = (size_t) status.st_size / PAGE_SIZE;
     return 0;
 }
+
+int page_file_allocate_page(page_file_t *file, page_type_t type, size_t *page_number)
+{
+    size_t next = 0;
+    if (page_file_count_pages(file, &next) != 0) {
+        return -1;
+    }
+    page_t page;
+    page_init(&page, type);
+    if (page_file_write(file, next, &page) != 0) {
+        return -1;
+    }
+    *page_number = next;
+    return 0;
+}
