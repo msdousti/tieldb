@@ -317,8 +317,8 @@ typedef struct io_ops {
 // Production: real syscalls
 extern const io_ops_t *io_real;
 
-// Testing: injectable faults
-extern const io_ops_t *io_fault_inject;
+// Testing: tests/io_fault.h (io_init(false)) points `io` at operations that inject faults;
+// that code is not in src/
 
 // Global pointer (set at startup)
 extern const io_ops_t *io;

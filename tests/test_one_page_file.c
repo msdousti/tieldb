@@ -17,6 +17,7 @@
 #include <cmocka.h>
 
 #include "io/io.h"
+#include "io_fault.h"
 #include "storage/one_page_file.h"
 
 static const char PATH_TEMPLATE[] = "/tmp/tieldb_one_page_file_XXXXXX";
