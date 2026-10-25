@@ -443,6 +443,7 @@ SELECT * FROM users WHERE id >= 10 AND id < 100;
   - [ ] Statement-level autocommit: until Phase 6 every statement is its own transaction, and "commit" below means the end of the statement
   - [ ] WAL records (redo-only first: INSERT, UPDATE, DELETE), also for B+tree page splits and for catalog changes (CREATE/DROP TABLE and INDEX), so that recovery leaves the indexes and the catalog consistent
   - [ ] WAL segment files of a fixed size, recycled after a checkpoint
+  - [ ] Every WAL record carries a resource manager ID (the owner of the record, as in Postgres), so that one log serves several engines and recovery sends each record to its owner; adding it later changes the log format (see "A Second Heap Engine: In-Place Updates with Undo Logs" in Phase 8+)
   - [ ] LSN (log sequence number) per page
   - [ ] WAL buffers + background writer
   - [ ] fsync on commit (force-log-at-commit)
@@ -452,7 +453,7 @@ SELECT * FROM users WHERE id >= 10 AND id < 100;
   - [ ] No-steal policy (dirty pages not evicted before commit) initially
 - [ ] Recovery (redo-only)
   - [ ] Read WAL from last checkpoint
-  - [ ] Replay log records
+  - [ ] Replay log records: each record goes to the redo function of its resource manager, and the recovery loop has no heap-specific code
   - [ ] Verify checksums
 - [ ] Checkpointing
   - [ ] Fuzzy checkpoint (write dirty pages, record checkpoint LSN)
@@ -513,6 +514,7 @@ psql -c "SELECT * FROM users WHERE id = 100;"
   - [ ] ReadyForQuery reports the transaction state (`I` idle, `T` in a transaction, `E` failed; the encoder already supports the three); after an error inside a transaction block, commands are rejected until ROLLBACK
   - [ ] Transaction ID (XID) assignment
   - [ ] Active transaction list
+  - [ ] The storage engine interface gets `begin`, `commit`, `abort` and `recover` hooks, and the calls that open a cursor or change a row take the transaction (later the snapshot) as an argument, so that visibility is decided inside the engine and a transaction that touches several engines calls each of them (see "A Second Heap Engine: In-Place Updates with Undo Logs" in Phase 8+)
 - [ ] Strict 2PL (Two-Phase Locking)
   - [ ] Lock manager (hash table of locks)
   - [ ] Row-level locks (shared, exclusive)
@@ -707,7 +709,7 @@ The first heap engine (`heap_append`) is Postgres-style: an UPDATE adds a new tu
 - Rollback needs the undo records, and so does recovery: this engine needs the full ARIES-style undo of Phase 5 ("Later"), while `heap_append` needs only redo.
 - Its undo records live in pages that go through the buffer pool and are covered by the redo log like any other page.
 
-What the rest of the system must allow, so that this stays possible (decide it while designing the WAL in Phase 5 and the transactions in Phase 6; the cost of adding it later is high):
+What the rest of the system must allow, so that this stays possible (decide it while designing the WAL in Phase 5 and the transactions in Phase 6, where the first three items below are also tasks; the cost of adding it later is high):
 - [ ] WAL records carry a resource manager ID (as in Postgres), so that one log serves the whole database and recovery sends each record to the engine that owns it. Redo is per page, not per table
 - [ ] The storage engine interface gets `begin`, `commit`, `abort` and `recover` hooks. A transaction that touches tables of both kinds calls both engines on commit and abort: `heap_append` marks the transaction as aborted, `heap_undo` applies its undo records
 - [ ] Visibility is decided inside the engine: the calls that open a cursor take a transaction or snapshot argument, and the cursor returns only the rows that the snapshot can see, so the executor does not know which engine versions rows
