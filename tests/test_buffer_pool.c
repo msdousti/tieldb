@@ -29,6 +29,8 @@ static constexpr size_t FILES = 2;
 static constexpr size_t PAGES_PER_FILE = 4;
 
 static char directory[] = "/tmp/tieldb_buffer_pool_XXXXXX";
+static bool use_direct;
+static bool use_direct;
 static page_file_t *files[FILES];
 static buffer_pool_t *pool;
 static size_t file_numbers[FILES];
@@ -61,7 +63,7 @@ static void create_file(size_t file)
     char path[128];
 
     file_path(path, sizeof(path), file);
-    files[file] = page_file_create(path);
+    files[file] = use_direct ? page_file_create_direct(path) : page_file_create(path);
     assert_true(files[file] != nullptr);
     fill_file(file);
     assert_int_equal(buffer_pool_add_file(pool, files[file], &file_numbers[file]), 0);
@@ -698,7 +700,11 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_threads_can_share_the_pool, setup, teardown),
 };
 
+// Every test runs twice: with buffered I/O and with direct I/O
 int main(void)
 {
-    return cmocka_run_group_tests(tests, nullptr, nullptr);
+    use_direct = false;
+    int failed = cmocka_run_group_tests(tests, nullptr, nullptr);
+    use_direct = true;
+    return failed + cmocka_run_group_tests(tests, nullptr, nullptr);
 }

@@ -1,6 +1,7 @@
 #include "storage/one_page_engine.h"
 
 #include <errno.h>
+#include <stdalign.h>
 #include <stdlib.h>
 
 #include "storage/page.h"
@@ -37,7 +38,9 @@ static size_t largest_row_of_an_empty_page(void)
 static one_page_engine_t *allocate_engine(const row_layout_t *layout)
 {
     size_t size = sizeof(one_page_engine_t) + (layout->count * sizeof(layout->types[0]));
-    one_page_engine_t *engine = malloc(size);
+    size_t alignment = alignof(one_page_engine_t);
+    one_page_engine_t *engine =
+        aligned_alloc(alignment, (size + alignment - 1) / alignment * alignment);
     if (engine == nullptr) {
         return nullptr;
     }
