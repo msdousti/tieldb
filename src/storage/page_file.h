@@ -16,6 +16,13 @@
  * its checksum or fails page_validate, and from page_file_count_pages for a file that ends in the
  * middle of a page; EIO from page_file_write for a short write. page_file_read
  * leaves the page unspecified when it fails.
+ *
+ * Direct I/O: a file opened with the _direct functions bypasses the page cache of the operating
+ * system (O_DIRECT), so that a page that the buffer pool caches is not cached a second time. It is
+ * off unless asked for. Pages are aligned as direct I/O needs (see PAGE_ALIGNMENT in page.h), so
+ * any page_t can be read and written. If the file system refuses O_DIRECT (tmpfs did, for a long
+ * time), the file is opened without it and page_file_is_direct says so. Writes are still not
+ * durable until page_file_sync, with or without direct I/O.
  */
 
 #pragma once
@@ -31,6 +38,15 @@ typedef struct page_file page_file_t;
 
 /** Creates a new file; a file that already exists is EEXIST, and is not touched. */
 [[nodiscard]] page_file_t *page_file_create(const char *path);
+
+/** Like page_file_open, with direct I/O if the file system allows it. */
+[[nodiscard]] page_file_t *page_file_open_direct(const char *path);
+
+/** Like page_file_create, with direct I/O if the file system allows it. */
+[[nodiscard]] page_file_t *page_file_create_direct(const char *path);
+
+/** True if the file really uses direct I/O. */
+[[nodiscard]] bool page_file_is_direct(const page_file_t *file);
 
 /** Closes the file and frees the handle, also when closing fails. */
 [[nodiscard]] int page_file_close(page_file_t *file);

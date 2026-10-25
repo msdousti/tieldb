@@ -27,6 +27,7 @@ static constexpr size_t SLOT_COUNT_OFFSET = 16;
 static const char PATH_TEMPLATE[] = "/tmp/tieldb_page_file_XXXXXX";
 static char path[sizeof(PATH_TEMPLATE)];
 static page_file_t *file;
+static bool use_direct;
 
 static int setup([[maybe_unused]] void **state)
 {
@@ -37,7 +38,7 @@ static int setup([[maybe_unused]] void **state)
     }
     close(fd);
     io_init(true);
-    file = page_file_open(path);
+    file = use_direct ? page_file_open_direct(path) : page_file_open(path);
     return file == nullptr ? -1 : 0;
 }
 
@@ -344,6 +345,44 @@ static void test_allocating_reports_a_stat_error([[maybe_unused]] void **state)
     assert_int_equal(errno, EIO);
 }
 
+static void test_direct_io_is_used_when_asked_for_and_allowed([[maybe_unused]] void **state)
+{
+    if (use_direct && !page_file_is_direct(file)) {
+        print_message("the file system refuses O_DIRECT, so this run is buffered\n");
+        return;
+    }
+    assert_true(page_file_is_direct(file) == use_direct);
+}
+
+static void test_a_refused_direct_open_falls_back_to_buffered_io([[maybe_unused]] void **state)
+{
+    page_t page = page_holding("fallback");
+
+    io_init(false);
+    io_inject_fault(IO_FAULT_DIRECT_REFUSED, 1);
+    page_file_t *buffered = page_file_open_direct(path);
+    assert_true(buffered != nullptr);
+    assert_false(page_file_is_direct(buffered));
+    assert_int_equal(page_file_write(buffered, 0, &page), 0);
+    assert_int_equal(page_file_close(buffered), 0);
+    assert_page_holds(0, "fallback");
+}
+
+static void
+test_opening_or_creating_directly_keeps_the_errors_of_the_plain_calls([[maybe_unused]] void **state)
+{
+    errno = 0;
+    assert_null(page_file_create_direct(path));
+    assert_int_equal(errno, EEXIST);
+    assert_int_equal(unlink(path), 0);
+    errno = 0;
+    assert_null(page_file_open_direct(path));
+    assert_int_equal(errno, ENOENT);
+    page_file_t *created = page_file_create_direct(path);
+    assert_true(created != nullptr);
+    assert_int_equal(page_file_close(created), 0);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_a_written_page_reads_back_with_its_checksum, setup,
                                     teardown),
@@ -368,6 +407,12 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_a_torn_allocation_leaves_a_file_that_cannot_be_counted,
                                     setup, teardown),
     cmocka_unit_test_setup_teardown(test_allocating_reports_a_stat_error, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_direct_io_is_used_when_asked_for_and_allowed, setup,
+                                    teardown),
+    cmocka_unit_test_setup_teardown(test_a_refused_direct_open_falls_back_to_buffered_io, setup,
+                                    teardown),
+    cmocka_unit_test_setup_teardown(
+        test_opening_or_creating_directly_keeps_the_errors_of_the_plain_calls, setup, teardown),
     cmocka_unit_test_setup_teardown(test_create_makes_a_new_file, setup, teardown),
     cmocka_unit_test_setup_teardown(test_create_refuses_an_existing_file, setup, teardown),
     cmocka_unit_test_setup_teardown(test_write_and_sync_and_read_report_io_errors, setup, teardown),
@@ -375,7 +420,11 @@ static const struct CMUnitTest tests[] = {
                                     teardown),
 };
 
+// Every test runs twice: with buffered I/O and with direct I/O
 int main(void)
 {
-    return cmocka_run_group_tests(tests, nullptr, nullptr);
+    use_direct = false;
+    int failed = cmocka_run_group_tests(tests, nullptr, nullptr);
+    use_direct = true;
+    return failed + cmocka_run_group_tests(tests, nullptr, nullptr);
 }

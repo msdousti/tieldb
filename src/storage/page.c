@@ -1,6 +1,8 @@
 #include "storage/page.h"
 
 #include <errno.h>
+#include <stdalign.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "storage/crc32c.h"
@@ -275,4 +277,14 @@ int page_validate(const page_t *page)
         return -1;
     }
     return 0;
+}
+
+page_t *page_array_create(size_t count)
+{
+    page_t *pages = aligned_alloc(alignof(page_t), count * sizeof(page_t));
+    if (pages == nullptr) {
+        return nullptr;
+    }
+    memset(pages, 0, count * sizeof(page_t));
+    return pages;
 }
