@@ -450,7 +450,7 @@ Work proceeds as a sequence of small, reviewable pull requests, each leaving `ma
 
 **Phase 2: Persistence** (see `ROADMAP.md`). Phases 0 and 1 are complete.
 
-Done: type registry with typed cells, slotted pages, row codec, page file, storage engine interface and registry, the one-page engine, catalog file, data directory with clean shutdown (data survives a restart). Milestone A is done. Next, milestone B (the fuzzing build is done): heap files, buffer pool, free space map, system tables.
+Done: type registry with typed cells, slotted pages, row codec, page file, storage engine interface and registry, the one-page engine, catalog file, data directory with clean shutdown (data survives a restart). Milestone A is done. Next, milestone B (the fuzzing build and the heap tuple header are done): heap files, buffer pool, free space map, system tables.
 
 **Next phase:** Phase 3 - Real Queries (parser, expressions, WHERE, joins)
 

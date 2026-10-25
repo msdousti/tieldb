@@ -208,6 +208,15 @@ test_row_codec = executable('test_row_codec',
 
 test('row_codec', test_row_codec)
 
+# Test: heap tuple header
+test_heap_tuple = executable('test_heap_tuple',
+  'test_heap_tuple.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('heap_tuple', test_heap_tuple)
+
 # Test: catalog
 test_catalog = executable('test_catalog',
   'test_catalog.c',

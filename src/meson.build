@@ -48,6 +48,7 @@ storage_sources = files(
   'storage/page_file.c',
   'storage/one_page_file.c',
   'storage/row_codec.c',
+  'storage/heap_tuple.c',
 )
 
 # Command-line options
