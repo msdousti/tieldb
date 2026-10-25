@@ -276,6 +276,73 @@ static void test_counting_pages_reports_a_stat_error([[maybe_unused]] void **sta
     assert_int_equal(errno, EIO);
 }
 
+static size_t allocate_page(page_type_t type)
+{
+    size_t page_number = SIZE_MAX;
+
+    assert_int_equal(page_file_allocate_page(file, type, &page_number), 0);
+    return page_number;
+}
+
+static void test_allocated_pages_are_empty_and_numbered_in_order([[maybe_unused]] void **state)
+{
+    page_t page;
+
+    assert_int_equal(allocate_page(PAGE_TYPE_HEAP), 0);
+    assert_int_equal(allocate_page(PAGE_TYPE_CATALOG), 1);
+    assert_int_equal(count_pages(), 2);
+    assert_int_equal(page_file_read(file, 1, &page), 0);
+    assert_int_equal(page_type(&page), PAGE_TYPE_CATALOG);
+    assert_int_equal(page_slot_count(&page), 0);
+}
+
+static void test_allocation_goes_after_the_last_written_page([[maybe_unused]] void **state)
+{
+    page_t page = page_holding("far");
+
+    assert_int_equal(page_file_write(file, 3, &page), 0);
+    assert_int_equal(allocate_page(PAGE_TYPE_HEAP), 4);
+    assert_int_equal(count_pages(), 5);
+}
+
+static void test_a_failed_write_allocates_nothing([[maybe_unused]] void **state)
+{
+    size_t page_number = 0;
+
+    io_init(false);
+    io_inject_fault(IO_FAULT_WRITE_ERROR, 1);
+    errno = 0;
+    assert_int_equal(page_file_allocate_page(file, PAGE_TYPE_HEAP, &page_number), -1);
+    assert_int_equal(errno, EIO);
+    io_init(true);
+    assert_int_equal(count_pages(), 0);
+}
+
+static void
+test_a_torn_allocation_leaves_a_file_that_cannot_be_counted([[maybe_unused]] void **state)
+{
+    size_t page_number = 0;
+
+    io_init(false);
+    io_inject_fault(IO_FAULT_TORN_WRITE, 1);
+    assert_int_equal(page_file_allocate_page(file, PAGE_TYPE_HEAP, &page_number), -1);
+    io_init(true);
+    errno = 0;
+    assert_int_equal(page_file_count_pages(file, &page_number), -1);
+    assert_int_equal(errno, EBADMSG);
+}
+
+static void test_allocating_reports_a_stat_error([[maybe_unused]] void **state)
+{
+    size_t page_number = 0;
+
+    io_init(false);
+    io_inject_fault(IO_FAULT_STAT_ERROR, 1);
+    errno = 0;
+    assert_int_equal(page_file_allocate_page(file, PAGE_TYPE_HEAP, &page_number), -1);
+    assert_int_equal(errno, EIO);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_a_written_page_reads_back_with_its_checksum, setup,
                                     teardown),
@@ -292,6 +359,14 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_a_file_that_ends_in_a_page_cannot_be_counted, setup,
                                     teardown),
     cmocka_unit_test_setup_teardown(test_counting_pages_reports_a_stat_error, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_allocated_pages_are_empty_and_numbered_in_order, setup,
+                                    teardown),
+    cmocka_unit_test_setup_teardown(test_allocation_goes_after_the_last_written_page, setup,
+                                    teardown),
+    cmocka_unit_test_setup_teardown(test_a_failed_write_allocates_nothing, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_a_torn_allocation_leaves_a_file_that_cannot_be_counted,
+                                    setup, teardown),
+    cmocka_unit_test_setup_teardown(test_allocating_reports_a_stat_error, setup, teardown),
     cmocka_unit_test_setup_teardown(test_create_makes_a_new_file, setup, teardown),
     cmocka_unit_test_setup_teardown(test_create_refuses_an_existing_file, setup, teardown),
     cmocka_unit_test_setup_teardown(test_write_and_sync_and_read_report_io_errors, setup, teardown),
