@@ -465,6 +465,14 @@ SELECT * FROM users WHERE id >= 10 AND id < 100;
 - [ ] fsync discipline
   - [ ] Treat fsync failure as PANIC (see c-guidelines.md)
   - [ ] Fault injection test for fsync failure
+- [ ] Torn page protection (a page is 8 KB, but the disk and the OS promise atomic writes only for a sector of 512 B or 4 KB, so a power loss in the middle of a page write can leave a page half new and half old). Today the CRC-32C checksum detects such a page (`EBADMSG`), but nothing repairs it, and a checkpoint writes pages in place, so this is the main way for a crash to lose data after the WAL exists. Decide the design when the WAL and the checkpoint are designed; the candidates are:
+  - Full-page images in the WAL (Postgres, `full_page_writes`): the first change to a page after each checkpoint logs the whole page; recovery restores the image and then replays the later records. Fits the redo-only WAL; costs a burst of WAL volume after every checkpoint (compression helps), and needs the checkpoint's redo position to tell whether a change is the first one
+  - A doublewrite buffer (InnoDB): write each batch of dirty pages to a separate area and sync it, then write them in place; at startup, a page that fails its checksum is restored from the copy. Independent of the WAL record format, so it works with any log, but every page is written twice (the first time sequentially)
+  - Out-of-place writes: write the new version of a page to a new location and switch to it with one atomic update (shadow paging, log-structured storage, an LSM engine's immutable files). Never overwrites, but changes the storage layout, so it is a fit for the LSM engine and not for the heap
+  - Atomic writes from the hardware or the file system (NVMe atomic write units, Linux atomic direct writes with `RWF_ATOMIC`): if the device guarantees 8 KB, no protection is needed. Not portable, so at most an optimization that skips the protection when the guarantee is detected
+  - Smaller pages (4 KB) shrink the problem but do not remove it (a sector is 512 B on some disks) and change the on-disk format, so this is not a candidate by itself
+  - Only detect (what exists): acceptable only as a documented limitation, with a restore from a backup
+  - Test for whichever is chosen: a crash in the middle of a checkpoint flush with `IO_FAULT_TORN_WRITE` at every split point of a page (the first sector, half, all but the last sector), then recovery; every page must be restored and no committed row lost
 - [ ] (Later) ARIES-style undo
   - [ ] Undo records (CLRs)
   - [ ] Analysis, Redo, Undo phases
