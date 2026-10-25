@@ -199,7 +199,10 @@ counts conditions: a loop condition with `&&` needs a test for each operand bein
    `WHERE`, projection, `DELETE`/`UPDATE`/`TRUNCATE`/`INSERT ... SELECT`, `generate_series`,
    `ALTER TABLE ... MODIFY/ADD COLUMN ... AFTER|FIRST`, ORDER BY, aggregates, joins.
 3. Later: user-defined types on top of the registry (`CREATE TYPE ... AS ENUM` first), B+trees, WAL,
-   MVCC.
+   MVCC. Before planning Phase 5 (WAL) and Phase 6 (transactions), read the ROADMAP section "A
+   Second Heap Engine: In-Place Updates with Undo Logs" (Phase 8+): it lists decisions (a resource
+   manager ID in every WAL record, engine hooks, snapshot arguments) that are cheap now and
+   expensive to add later.
 
 ## Troubleshooting
 
