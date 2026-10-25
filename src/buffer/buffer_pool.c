@@ -65,7 +65,7 @@ static bool allocate_tables(buffer_pool_t *pool, size_t frame_count, replacement
     pool->policy = policy;
     pool->frame_count = frame_count;
     pool->frames = calloc(pool->frame_count, sizeof(*pool->frames));
-    pool->pages = calloc(pool->frame_count, sizeof(*pool->pages));
+    pool->pages = page_array_create(pool->frame_count);
     pool->table = hash_map_create(&PAGE_TABLE_OPS, pool->frame_count);
     return pool->frames != nullptr && pool->pages != nullptr && pool->table != nullptr;
 }

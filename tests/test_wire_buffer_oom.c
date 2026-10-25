@@ -57,6 +57,15 @@ void *oom_calloc(size_t count, size_t size)
     return nullptr;
 }
 
+void *oom_aligned_alloc(size_t alignment, size_t size)
+{
+    if (mock_type(bool)) {
+        return aligned_alloc(alignment, size);
+    }
+    errno = ENOMEM;
+    return nullptr;
+}
+
 void *oom_realloc(void *ptr, size_t size)
 {
     if (mock_type(bool)) {
@@ -514,9 +523,10 @@ static void expect_user_table_creation(void)
     will_return(oom_calloc, true);
     will_return(oom_calloc, true);
     will_return(oom_calloc, true);
-    for (size_t i = 0; i < 4; i++) {
+    for (size_t i = 0; i < 3; i++) {
         will_return(oom_malloc, true);
     }
+    will_return(oom_aligned_alloc, true);
 }
 
 static void test_table_response_is_rolled_back_when_a_row_fails([[maybe_unused]] void **state)
@@ -618,7 +628,7 @@ static const table_column_t PAIR_COLUMNS[] = {{"a", &TYPE_INT4}, {"b", &TYPE_TEX
 static table_t *create_pair_table_with_real_allocations(void)
 {
     will_return(oom_calloc, true);
-    will_return(oom_malloc, true);
+    will_return(oom_aligned_alloc, true);
     table_t *table = table_create("pair", PAIR_COLUMNS, 2);
     if (table == nullptr) {
         fail();
@@ -630,7 +640,7 @@ static void test_one_page_engine_create_fails_when_memory_runs_out([[maybe_unuse
 {
     const row_layout_t none = {nullptr, 0};
 
-    will_return(oom_malloc, false);
+    will_return(oom_aligned_alloc, false);
     errno = 0;
     assert_null(one_page_engine_create(&none));
     assert_int_equal(errno, ENOMEM);
@@ -649,7 +659,7 @@ static void test_one_page_engine_load_fails_when_memory_runs_out([[maybe_unused]
 {
     const row_layout_t none = {nullptr, 0};
 
-    will_return(oom_malloc, false);
+    will_return(oom_aligned_alloc, false);
     errno = 0;
     assert_null(one_page_engine_load(&none, "/tmp/tieldb_engine_load_oom"));
     assert_int_equal(errno, ENOMEM);
@@ -659,7 +669,7 @@ static void test_one_page_engine_cursor_fails_when_memory_runs_out([[maybe_unuse
 {
     const row_layout_t none = {nullptr, 0};
 
-    will_return(oom_malloc, true);
+    will_return(oom_aligned_alloc, true);
     storage_engine_t *engine = one_page_engine_create(&none);
     will_return(oom_malloc, false);
     errno = 0;
@@ -706,7 +716,7 @@ static void
 test_table_create_fails_when_the_engine_cannot_be_allocated([[maybe_unused]] void **state)
 {
     will_return(oom_calloc, true);
-    will_return(oom_malloc, false);
+    will_return(oom_aligned_alloc, false);
 
     errno = 0;
     assert_null(table_create("pair", PAIR_COLUMNS, 2));
@@ -808,16 +818,19 @@ static void assert_buffer_pool_create_fails(void)
     assert_int_equal(errno, ENOMEM);
 }
 
-// The clock policy, the pool, its frames, its pages, then the page table and its buckets
+// The clock policy, the pool, its frames, its pages (aligned), then the page table and its buckets
 static void test_buffer_pool_create_fails_when_memory_runs_out([[maybe_unused]] void **state)
 {
     will_calloc(2, (bool[]){true, false});
     assert_buffer_pool_create_fails();
-    will_calloc(6, (bool[]){true, true, false, true, true, true});
+    will_calloc(5, (bool[]){true, true, false, true, true});
+    will_return(oom_aligned_alloc, true);
     assert_buffer_pool_create_fails();
-    will_calloc(6, (bool[]){true, true, true, false, true, true});
+    will_calloc(5, (bool[]){true, true, true, true, true});
+    will_return(oom_aligned_alloc, false);
     assert_buffer_pool_create_fails();
-    will_calloc(5, (bool[]){true, true, true, true, false});
+    will_calloc(4, (bool[]){true, true, true, false});
+    will_return(oom_aligned_alloc, true);
     assert_buffer_pool_create_fails();
 }
 
@@ -833,7 +846,8 @@ static void test_buffer_pool_add_file_fails_when_memory_runs_out([[maybe_unused]
 {
     size_t file_number = 0;
 
-    will_calloc(6, (bool[]){true, true, true, true, true, true});
+    will_calloc(5, (bool[]){true, true, true, true, true});
+    will_return(oom_aligned_alloc, true);
     buffer_pool_t *pool = buffer_pool_create(4, clock_policy_create(4));
     assert_true(pool != nullptr);
     will_return(oom_realloc, false);

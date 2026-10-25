@@ -10,12 +10,13 @@
 
 typedef enum {
     IO_FAULT_NONE,
-    IO_FAULT_TORN_WRITE,  // Partial write (simulate power loss mid-write)
-    IO_FAULT_FSYNC_FAIL,  // fsync returns error
-    IO_FAULT_FSYNC_DROP,  // fsync succeeds but doesn't persist (fsyncgate)
-    IO_FAULT_READ_ERROR,  // read fails
-    IO_FAULT_WRITE_ERROR, // write fails
-    IO_FAULT_STAT_ERROR,  // fstat fails
+    IO_FAULT_TORN_WRITE,     // Partial write (simulate power loss mid-write)
+    IO_FAULT_FSYNC_FAIL,     // fsync returns error
+    IO_FAULT_FSYNC_DROP,     // fsync succeeds but doesn't persist (fsyncgate)
+    IO_FAULT_READ_ERROR,     // read fails
+    IO_FAULT_WRITE_ERROR,    // write fails
+    IO_FAULT_STAT_ERROR,     // fstat fails
+    IO_FAULT_DIRECT_REFUSED, // open with O_DIRECT fails with EINVAL, as on a file system without it
 } io_fault_type_t;
 
 /**

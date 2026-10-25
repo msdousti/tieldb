@@ -2,7 +2,11 @@
  * Fault injection for the I/O interface, for tests only
  */
 
+#define _GNU_SOURCE // O_DIRECT
+
 #include "io_fault.h"
+
+#include <fcntl.h>
 
 #include <errno.h>
 
@@ -98,6 +102,16 @@ static ssize_t fault_pread(int fd, void *buf, size_t count, off_t offset)
     return io_real_ops.pread(fd, buf, count, offset);
 }
 
+static int fault_open(const char *path, int flags, mode_t mode)
+{
+    if ((flags & O_DIRECT) != 0 && should_inject_fault(IO_FAULT_DIRECT_REFUSED)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    return io_real_ops.open(path, flags, mode);
+}
+
 static int fault_fstat(int fd, struct stat *status)
 {
     if (should_inject_fault(IO_FAULT_STAT_ERROR)) {
@@ -119,6 +133,7 @@ static void build_fault_inject_ops(void)
     io_fault_inject_ops.pwrite = fault_pwrite;
     io_fault_inject_ops.fsync = fault_fsync;
     io_fault_inject_ops.fstat = fault_fstat;
+    io_fault_inject_ops.open = fault_open;
 }
 
 /*
