@@ -804,20 +804,20 @@ static void will_calloc(size_t count, const bool *results)
 static void assert_buffer_pool_create_fails(void)
 {
     errno = 0;
-    assert_null(buffer_pool_create(4));
+    assert_null(buffer_pool_create(4, clock_policy_create(4)));
     assert_int_equal(errno, ENOMEM);
 }
 
-// The pool, its frames, its pages, then the page table and its buckets
+// The clock policy, the pool, its frames, its pages, then the page table and its buckets
 static void test_buffer_pool_create_fails_when_memory_runs_out([[maybe_unused]] void **state)
 {
-    will_calloc(1, (bool[]){false});
+    will_calloc(2, (bool[]){true, false});
     assert_buffer_pool_create_fails();
-    will_calloc(5, (bool[]){true, false, true, true, true});
+    will_calloc(6, (bool[]){true, true, false, true, true, true});
     assert_buffer_pool_create_fails();
-    will_calloc(5, (bool[]){true, true, false, true, true});
+    will_calloc(6, (bool[]){true, true, true, false, true, true});
     assert_buffer_pool_create_fails();
-    will_calloc(4, (bool[]){true, true, true, false});
+    will_calloc(5, (bool[]){true, true, true, true, false});
     assert_buffer_pool_create_fails();
 }
 
@@ -833,8 +833,8 @@ static void test_buffer_pool_add_file_fails_when_memory_runs_out([[maybe_unused]
 {
     size_t file_number = 0;
 
-    will_calloc(5, (bool[]){true, true, true, true, true});
-    buffer_pool_t *pool = buffer_pool_create(4);
+    will_calloc(6, (bool[]){true, true, true, true, true, true});
+    buffer_pool_t *pool = buffer_pool_create(4, clock_policy_create(4));
     assert_true(pool != nullptr);
     will_return(oom_realloc, false);
     errno = 0;
