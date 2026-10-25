@@ -51,16 +51,24 @@ static void *wait_for_stop_signal(void *argument)
 
 // SIGTERM and SIGINT are blocked in every thread, so that only this one takes them, and no
 // handler has to run in the middle of whatever a thread is doing
-static int watch_stop_signals(server_t *server)
+static int watch_stop_signals(server_t *server, pthread_t *watcher)
 {
-    pthread_t thread;
-    int error = pthread_create(&thread, nullptr, wait_for_stop_signal, server);
+    int error = pthread_create(watcher, nullptr, wait_for_stop_signal, server);
     if (error != 0) {
         errno = error;
         return -1;
     }
-    pthread_detach(thread);
     return 0;
+}
+
+// The watcher uses the server, so it must be over before the server is destroyed: if it is still
+// waiting (the server ended by itself) a signal of our own wakes it, and in any case it is joined
+static void stop_watching(pthread_t watcher)
+{
+    // SIGINT is blocked everywhere but in the watcher, so this ends nothing but its wait; the call
+    // fails only for a watcher that is over, which is fine
+    (void) pthread_kill(watcher, SIGINT);
+    (void) pthread_join(watcher, nullptr);
 }
 
 static int save_data_dir(const char *dir)
@@ -75,14 +83,14 @@ static int save_data_dir(const char *dir)
     return 0;
 }
 
-static server_t *start_server(uint16_t port)
+static server_t *start_server(uint16_t port, pthread_t *watcher)
 {
     server_t *server = server_create(port);
     if (server == nullptr) {
         perror("tieldb");
         return nullptr;
     }
-    if (watch_stop_signals(server) != 0) {
+    if (watch_stop_signals(server, watcher) != 0) {
         perror("tieldb: watching for SIGTERM");
         server_destroy(server);
         return nullptr;
@@ -97,13 +105,15 @@ static int serve(const options_t *options)
     (void) pthread_sigmask(SIG_BLOCK, &signals, nullptr);
     // A client that disconnects mid-reply must produce a write error, not kill the server
     signal(SIGPIPE, SIG_IGN);
-    server_t *server = start_server(options->port);
+    pthread_t watcher;
+    server_t *server = start_server(options->port, &watcher);
     if (server == nullptr) {
         return EXIT_FAILURE;
     }
     printf("listening on port %u\n", server_port(server));
     fflush(stdout);
     int status = server_serve(server, options->max_connections);
+    stop_watching(watcher);
     int saved = save_data_dir(options->data_dir);
     server_destroy(server);
     return (status | saved) != 0; // either failed
