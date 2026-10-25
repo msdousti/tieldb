@@ -3,6 +3,8 @@
 #include <errno.h>
 #include <string.h>
 
+#include "common/flags.h"
+
 // Every flag that heap_tuple.h defines; a new flag is added here
 static constexpr uint16_t DEFINED_FLAGS = HEAP_TUPLE_HAS_XIDS;
 
@@ -16,12 +18,12 @@ static constexpr size_t XIDS_SIZE = XMIN_SIZE + XMAX_SIZE;
 
 static bool has_xids(uint16_t flags)
 {
-    return (flags & HEAP_TUPLE_HAS_XIDS) != 0;
+    return flags_are_set(flags, HEAP_TUPLE_HAS_XIDS);
 }
 
 static bool has_reserved_flags(uint16_t flags)
 {
-    return (flags & ~DEFINED_FLAGS) != 0;
+    return !flags_are_clear(flags, (uint16_t) ~DEFINED_FLAGS);
 }
 
 static size_t encoded_header_size(uint16_t flags)
