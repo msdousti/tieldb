@@ -19,8 +19,12 @@
  * the page is marked changed, it is written back first (without a sync: only buffer_pool_flush_all
  * syncs). A failed write-back fails the pin and leaves the page in the pool.
  *
- * The pool has no locks yet: one thread at a time uses it. It does not own the page files: they
- * stay open until the pool is destroyed, and the caller closes them.
+ * Several threads may use the pool at the same time: it has one lock, held during each call,
+ * including the reads and writes of a pin that has to evict a page, and during a flush. The lock
+ * protects the pool, not the pages: a pinned page is the business of the caller, who makes sure
+ * that two threads do not change a page at once or while it is flushed. buffer_pool_destroy must
+ * not run while another thread uses the pool. The pool does not own the page files: they stay open
+ * until the pool is destroyed, and the caller closes them.
  *
  * Errors return -1 or nullptr and set errno: ENOMEM; EINVAL for a file number that was not added
  * or a page that is not pinned; ENOBUFS when every frame is pinned; EBUSY from buffer_pool_destroy

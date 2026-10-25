@@ -1,6 +1,7 @@
 #include "buffer/buffer_pool.h"
 
 #include <errno.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -15,6 +16,7 @@ typedef struct {
 } frame_t;
 
 struct buffer_pool {
+    pthread_mutex_t lock;
     frame_t *frames;
     page_t *pages;
     size_t frame_count;
@@ -42,6 +44,7 @@ static void free_pool(buffer_pool_t *pool)
     if (pool->table != nullptr) {
         hash_map_destroy(pool->table);
     }
+    pthread_mutex_destroy(&pool->lock);
     replacement_policy_destroy(pool->policy);
     free((void *) pool->files);
     free(pool->pages);
@@ -56,8 +59,11 @@ static buffer_pool_t *reject_creation(replacement_policy_t *policy, int error)
     return nullptr;
 }
 
-static bool allocate_tables(buffer_pool_t *pool)
+static bool allocate_tables(buffer_pool_t *pool, size_t frame_count, replacement_policy_t *policy)
 {
+    pool->lock = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
+    pool->policy = policy;
+    pool->frame_count = frame_count;
     pool->frames = calloc(pool->frame_count, sizeof(*pool->frames));
     pool->pages = calloc(pool->frame_count, sizeof(*pool->pages));
     pool->table = hash_map_create(&PAGE_TABLE_OPS, pool->frame_count);
@@ -77,9 +83,7 @@ buffer_pool_t *buffer_pool_create(size_t frame_count, replacement_policy_t *poli
     if (pool == nullptr) {
         return reject_creation(policy, ENOMEM);
     }
-    pool->policy = policy;
-    pool->frame_count = frame_count;
-    if (!allocate_tables(pool)) {
+    if (!allocate_tables(pool, frame_count, policy)) {
         free_pool(pool);
         errno = ENOMEM;
         return nullptr;
@@ -101,7 +105,7 @@ int buffer_pool_destroy(buffer_pool_t *pool)
     return 0;
 }
 
-int buffer_pool_add_file(buffer_pool_t *pool, page_file_t *file, size_t *file_number)
+static int add_file_locked(buffer_pool_t *pool, page_file_t *file, size_t *file_number)
 {
     page_file_t **files =
         (page_file_t **) realloc((void *) pool->files, (pool->file_count + 1) * sizeof(*files));
@@ -112,6 +116,14 @@ int buffer_pool_add_file(buffer_pool_t *pool, page_file_t *file, size_t *file_nu
     pool->files[pool->file_count] = file;
     *file_number = pool->file_count++;
     return 0;
+}
+
+int buffer_pool_add_file(buffer_pool_t *pool, page_file_t *file, size_t *file_number)
+{
+    pthread_mutex_lock(&pool->lock);
+    int status = add_file_locked(pool, file, file_number);
+    pthread_mutex_unlock(&pool->lock);
+    return status;
 }
 
 static frame_t *find_frame(const buffer_pool_t *pool, const page_id_t *id)
@@ -190,7 +202,7 @@ static frame_t *load_page(buffer_pool_t *pool, page_id_t id)
     return frame;
 }
 
-int buffer_pool_pin(buffer_pool_t *pool, page_id_t id, page_t **page)
+static int pin_locked(buffer_pool_t *pool, page_id_t id, page_t **page)
 {
     frame_t *frame = find_frame(pool, &id);
     frame = frame != nullptr ? frame : load_page(pool, id);
@@ -204,6 +216,14 @@ int buffer_pool_pin(buffer_pool_t *pool, page_id_t id, page_t **page)
     return 0;
 }
 
+int buffer_pool_pin(buffer_pool_t *pool, page_id_t id, page_t **page)
+{
+    pthread_mutex_lock(&pool->lock);
+    int status = pin_locked(pool, id, page);
+    pthread_mutex_unlock(&pool->lock);
+    return status;
+}
+
 static frame_t *find_pinned_frame(buffer_pool_t *pool, const page_id_t *id)
 {
     frame_t *frame = find_frame(pool, id);
@@ -214,7 +234,7 @@ static frame_t *find_pinned_frame(buffer_pool_t *pool, const page_id_t *id)
     return frame;
 }
 
-int buffer_pool_unpin(buffer_pool_t *pool, page_id_t id)
+static int unpin_locked(buffer_pool_t *pool, page_id_t id)
 {
     frame_t *frame = find_pinned_frame(pool, &id);
     if (frame == nullptr) {
@@ -227,7 +247,15 @@ int buffer_pool_unpin(buffer_pool_t *pool, page_id_t id)
     return 0;
 }
 
-int buffer_pool_mark_changed(buffer_pool_t *pool, page_id_t id)
+int buffer_pool_unpin(buffer_pool_t *pool, page_id_t id)
+{
+    pthread_mutex_lock(&pool->lock);
+    int status = unpin_locked(pool, id);
+    pthread_mutex_unlock(&pool->lock);
+    return status;
+}
+
+static int mark_changed_locked(buffer_pool_t *pool, page_id_t id)
 {
     frame_t *frame = find_pinned_frame(pool, &id);
     if (frame == nullptr) {
@@ -237,7 +265,15 @@ int buffer_pool_mark_changed(buffer_pool_t *pool, page_id_t id)
     return 0;
 }
 
-int buffer_pool_flush_all(buffer_pool_t *pool)
+int buffer_pool_mark_changed(buffer_pool_t *pool, page_id_t id)
+{
+    pthread_mutex_lock(&pool->lock);
+    int status = mark_changed_locked(pool, id);
+    pthread_mutex_unlock(&pool->lock);
+    return status;
+}
+
+static int flush_all_locked(buffer_pool_t *pool)
 {
     int status = 0;
     for (size_t i = 0; status == 0 && i < pool->frame_count; i++) {
@@ -246,5 +282,13 @@ int buffer_pool_flush_all(buffer_pool_t *pool)
     for (size_t i = 0; status == 0 && i < pool->file_count; i++) {
         status = page_file_sync(pool->files[i]);
     }
+    return status;
+}
+
+int buffer_pool_flush_all(buffer_pool_t *pool)
+{
+    pthread_mutex_lock(&pool->lock);
+    int status = flush_all_locked(pool);
+    pthread_mutex_unlock(&pool->lock);
     return status;
 }
