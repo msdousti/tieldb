@@ -185,7 +185,10 @@ static void test_paths_that_do_not_fit_are_refused([[maybe_unused]] void **state
     char longest[DATA_DIR_PATH_CAPACITY + 64];
 
     make_long_directory(longest, LONG_NAME);
+    data_dir_lock_t lock;
+
     assert_fails_with(data_dir_init(longest), ENAMETOOLONG);
+    assert_fails_with(data_dir_lock(longest, &lock), ENAMETOOLONG);
     assert_fails_with(data_dir_load(longest), ENAMETOOLONG);
     assert_fails_with(data_dir_checkpoint(longest), ENAMETOOLONG);
     remove_directory(longest);
@@ -349,6 +352,66 @@ static void test_a_display_position_outside_the_table_is_refused([[maybe_unused]
     table_destroy(table);
 }
 
+static void test_a_directory_is_locked_by_one_holder_at_a_time([[maybe_unused]] void **state)
+{
+    data_dir_lock_t first;
+    data_dir_lock_t second;
+
+    assert_int_equal(data_dir_lock(dir, &first), 0);
+    assert_fails_with(data_dir_lock(dir, &second), EBUSY);
+    data_dir_unlock(&first);
+    assert_int_equal(data_dir_lock(dir, &second), 0);
+    data_dir_unlock(&second);
+}
+
+static void test_a_directory_that_does_not_exist_cannot_be_locked([[maybe_unused]] void **state)
+{
+    data_dir_lock_t lock;
+
+    errno = 0;
+    assert_fails_with(data_dir_lock("/tmp/tieldb_no_such_directory", &lock), ENOENT);
+}
+
+static void test_syncing_the_directory_can_fail([[maybe_unused]] void **state)
+{
+    assert_int_equal(data_dir_init(dir), 0);
+    io_init(false);
+    io_inject_fault(IO_FAULT_FSYNC_FAIL, 1);
+    assert_fails_with(data_dir_init(dir), EIO);
+    io_init(true);
+    assert_int_equal(data_dir_init(dir), 0);
+}
+
+static void test_the_directory_is_synced_after_the_version_file([[maybe_unused]] void **state)
+{
+    io_init(false);
+    io_inject_fault(IO_FAULT_FSYNC_FAIL, 2);
+
+    assert_fails_with(data_dir_init(dir), EIO);
+}
+
+static void test_the_checkpoint_syncs_the_directory_last([[maybe_unused]] void **state)
+{
+    size_t count = 0;
+    free((void *) catalog_list_tables(&count));
+    io_init(false);
+    io_inject_fault(IO_FAULT_FSYNC_FAIL, (int) count + 2); // each table, the catalog, the directory
+
+    assert_fails_with(data_dir_checkpoint(dir), EIO);
+}
+
+static void test_a_directory_that_cannot_be_opened_is_refused([[maybe_unused]] void **state)
+{
+    if (geteuid() == 0) {
+        skip();
+    }
+    assert_int_equal(data_dir_init(dir), 0);
+    assert_int_equal(chmod(dir, 0300), 0); // files can be made in it, but it cannot be read
+
+    assert_fails_with(data_dir_init(dir), EACCES);
+    assert_int_equal(chmod(dir, 0700), 0);
+}
+
 static void test_a_failing_table_save_fails_the_checkpoint([[maybe_unused]] void **state)
 {
     io_init(false);
@@ -429,6 +492,12 @@ static const struct CMUnitTest tests[] = {
     SETUP_TEST(test_a_corrupt_table_file_is_refused),
     SETUP_TEST(test_an_engine_that_is_not_known_is_refused),
     SETUP_TEST(test_a_display_position_outside_the_table_is_refused),
+    SETUP_TEST(test_a_directory_is_locked_by_one_holder_at_a_time),
+    SETUP_TEST(test_a_directory_that_does_not_exist_cannot_be_locked),
+    SETUP_TEST(test_syncing_the_directory_can_fail),
+    SETUP_TEST(test_the_directory_is_synced_after_the_version_file),
+    SETUP_TEST(test_the_checkpoint_syncs_the_directory_last),
+    SETUP_TEST(test_a_directory_that_cannot_be_opened_is_refused),
     SETUP_TEST(test_a_failing_table_save_fails_the_checkpoint),
     SETUP_TEST(test_the_version_file_is_written_and_idempotent),
     SETUP_TEST(test_another_version_is_refused),

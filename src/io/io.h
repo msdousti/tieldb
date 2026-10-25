@@ -54,6 +54,14 @@ typedef struct io_ops {
      * Close file
      */
     int (*close)(int fd);
+
+    /**
+     * Apply or remove an advisory lock on a file (see flock(2)); operation is LOCK_EX, LOCK_SH or
+     * LOCK_UN, possibly with LOCK_NB. A lock belongs to the open file description, so it is
+     * released when the descriptor is closed or the process ends, and two descriptors of the same
+     * file conflict, even in one process.
+     */
+    int (*flock)(int fd, int operation);
 } io_ops_t;
 
 /**

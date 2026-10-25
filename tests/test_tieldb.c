@@ -180,7 +180,7 @@ static char data_dir[sizeof(DIR_TEMPLATE)];
 
 static void remove_data_dir(void)
 {
-    const char *files[] = {"TIELDB_VERSION", "catalog", "pet.tbl"};
+    const char *files[] = {"TIELDB_VERSION", "catalog", "pet.tbl", "tieldb.lock"};
     char path[sizeof(DIR_TEMPLATE) + 32];
 
     for (size_t i = 0; i < sizeof(files) / sizeof(files[0]); i++) {
@@ -366,11 +366,48 @@ static void test_cannot_watch_for_signals_without_a_thread([[maybe_unused]] void
     assert_int_equal(wait_for_exit_status(child), 1);
 }
 
+static void test_a_second_server_cannot_use_a_data_directory_in_use([[maybe_unused]] void **state)
+{
+    const char *arguments[] = {tieldb_path, "--port", "0", "--data-dir", data_dir, nullptr};
+    child_t first;
+    child_t second;
+
+    assert_int_equal(make_data_dir(), 0);
+    first = start_with_arguments(arguments);
+    (void) read_announced_port(first);
+    second = start_with_arguments(arguments);
+
+    assert_int_equal(wait_for_exit_status(second), 1);
+    assert_int_equal(kill(first.pid, SIGTERM), 0);
+    assert_int_equal(wait_for_exit_status(first), 0);
+    remove_data_dir();
+}
+
 static void test_refuses_to_start_without_its_data_directory([[maybe_unused]] void **state)
 {
     child_t child = start_in_data_dir("/tmp/tieldb_it_no_such_directory");
 
     assert_int_equal(wait_for_exit_status(child), 1);
+}
+
+static void test_refuses_to_start_with_another_data_directory_version([[maybe_unused]] void **state)
+{
+    char path[sizeof(DIR_TEMPLATE) + 32];
+    FILE *file = nullptr;
+    child_t child;
+
+    assert_int_equal(make_data_dir(), 0);
+    snprintf(path, sizeof(path), "%s/TIELDB_VERSION", data_dir);
+    file = fopen(path, "w");
+    if (file == nullptr) {
+        fail();
+    }
+    fputs("tieldb-data-dir 99\n", file);
+    fclose(file);
+    child = start_in_data_dir(data_dir);
+
+    assert_int_equal(wait_for_exit_status(child), 1);
+    remove_data_dir();
 }
 
 static void test_refuses_to_start_with_a_corrupt_catalog([[maybe_unused]] void **state)
@@ -432,9 +469,11 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_requires_a_data_directory_or_in_memory_mode),
     cmocka_unit_test(test_a_stop_signal_ends_the_server_cleanly),
     cmocka_unit_test(test_a_data_directory_is_saved_when_the_server_is_stopped),
+    cmocka_unit_test(test_a_second_server_cannot_use_a_data_directory_in_use),
     cmocka_unit_test(test_fails_when_the_data_directory_cannot_be_saved),
     cmocka_unit_test(test_cannot_watch_for_signals_without_a_thread),
     cmocka_unit_test(test_refuses_to_start_without_its_data_directory),
+    cmocka_unit_test(test_refuses_to_start_with_another_data_directory_version),
     cmocka_unit_test(test_refuses_to_start_with_a_corrupt_catalog),
 };
 

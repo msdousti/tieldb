@@ -150,7 +150,8 @@ src/
     page_file          read/write pages of a file through io->, checksum checked on read
     one_page_file   save/load a file that holds exactly one page (one-page engine, catalog file)
     catalog_file    the table list as rows of one page file: a version row, then a row per table and per column; load checks it and calls a visitor per table
-    data_dir        the data directory: TIELDB_VERSION file, `catalog`, one `<table>.tbl` per table; init, load and checkpoint
+    data_dir        the data directory: TIELDB_VERSION file, `catalog`, one `<table>.tbl` per table,
+                    `tieldb.lock`; init, lock, load and checkpoint (syncs the directory)
     crc32c             the page checksum
 tests/               one test_*.c per module (cmocka), test_wire_buffer_oom.c (allocation
                      failures via renamed malloc/calloc/realloc), test_tieldb.c (spawns the
@@ -187,10 +188,10 @@ counts conditions: a loop condition with `&&` needs a test for each operand bein
 1. **Phase 2, in the order of the ROADMAP.md plan** (decisions are written there: the catalog in
    a catalog file first and system tables in milestone B, flush on shutdown and checkpoint since
    there is no WAL yet, per-table mutex plus a buffer pool lock, rows must fit one page, overflow
-   storage is Phase 8+). **Milestone A (a table is one page, data survives a restart) works**: row
+   storage is Phase 8+). **Milestone A (a table is one page, data survives a restart) is done**: row
    codec, page file, engine interface and registry, one-page engine, catalog file, data directory,
-   `--data-dir`/`--in-memory`, save on SIGTERM/SIGINT. Left of A: one server per data directory (a
-   lock) and directory fsync. `CHECKPOINT` saves the data directory on request. **Milestone B, lift the one-page
+   `--data-dir`/`--in-memory`, save on SIGTERM/SIGINT, `CHECKPOINT`, a lock so that one server uses a
+   data directory, and directory fsync. **Milestone B, lift the one-page
    limit:** fuzzing build and page fuzz target, heap tuple header, heap file, buffer pool, free
    space map, heap engine, catalog in system tables, crash test. Phase 3 also lists memory
    contexts, BOOLEAN, NULL and DEFAULT.

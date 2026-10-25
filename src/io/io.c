@@ -3,12 +3,14 @@
  */
 
 #define _POSIX_C_SOURCE 200809L
+#define _DEFAULT_SOURCE // flock
 
 #include "io/io.h"
 
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -70,6 +72,11 @@ static int real_close(int fd)
     return close(fd);
 }
 
+static int real_flock(int fd, int operation)
+{
+    return flock(fd, operation);
+}
+
 const io_ops_t io_real_ops = {
     .read = real_read,
     .write = real_write,
@@ -79,6 +86,7 @@ const io_ops_t io_real_ops = {
     .fdatasync = real_fdatasync,
     .open = real_open,
     .close = real_close,
+    .flock = real_flock,
 };
 
 /*
@@ -171,6 +179,7 @@ const io_ops_t io_fault_inject_ops = {
     .fdatasync = real_fdatasync, // No fault injection for fdatasync yet
     .open = real_open,
     .close = real_close,
+    .flock = real_flock,
 };
 
 /*

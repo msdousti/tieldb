@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/types.h>
 
 #include "io/io.h"
@@ -16,6 +17,7 @@
 
 static constexpr char VERSION_FILE[] = "TIELDB_VERSION";
 static constexpr char CATALOG_FILE[] = "catalog";
+static constexpr char LOCK_FILE[] = "tieldb.lock";
 static constexpr char TABLE_SUFFIX[] = ".tbl";
 static constexpr char VERSION_TEXT_FORMAT[] = "tieldb-data-dir %d\n";
 static constexpr size_t VERSION_TEXT_CAPACITY = 32;
@@ -84,6 +86,19 @@ static int check_version_file(const char *path, const char *expected)
     return 0;
 }
 
+// Makes the files that were created in the directory survive a crash: the file system keeps the
+// names of the files apart from their contents, so syncing the files is not enough
+static int sync_directory(const char *dir)
+{
+    int fd = io->open(dir, O_RDONLY | O_DIRECTORY, 0);
+    if (fd < 0) {
+        return -1;
+    }
+    int status = io->fsync(fd);
+    int closed = io->close(fd);
+    return status != 0 ? status : closed;
+}
+
 int data_dir_init(const char *dir)
 {
     char path[DATA_DIR_PATH_CAPACITY];
@@ -93,7 +108,30 @@ int data_dir_init(const char *dir)
     if (make_path(path, dir, VERSION_FILE, "") != 0) {
         return -1;
     }
-    return check_version_file(path, expected);
+    return check_version_file(path, expected) == 0 ? sync_directory(dir) : -1;
+}
+
+int data_dir_lock(const char *dir, data_dir_lock_t *lock)
+{
+    char path[DATA_DIR_PATH_CAPACITY];
+    if (make_path(path, dir, LOCK_FILE, "") != 0) {
+        return -1;
+    }
+    lock->fd = io->open(path, O_RDWR | O_CREAT, FILE_MODE);
+    if (lock->fd < 0) {
+        return -1;
+    }
+    if (io->flock(lock->fd, LOCK_EX | LOCK_NB) != 0) {
+        (void) io->close(lock->fd);
+        errno = EBUSY;
+        return -1;
+    }
+    return 0;
+}
+
+void data_dir_unlock(data_dir_lock_t *lock)
+{
+    (void) io->close(lock->fd);
 }
 
 static int place_in_order(size_t *order, const catalog_file_table_t *entry, size_t column)
@@ -176,6 +214,7 @@ int data_dir_checkpoint(const char *dir)
     int status = save_tables(dir, tables, count);
     status = status == 0 ? make_path(path, dir, CATALOG_FILE, "") : status;
     status = status == 0 ? catalog_file_save(path, tables, count) : status;
+    status = status == 0 ? sync_directory(dir) : status;
     free((void *) tables);
     return status;
 }

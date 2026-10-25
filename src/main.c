@@ -20,12 +20,12 @@ static constexpr int EXIT_USAGE = 2;
 static constexpr char USAGE[] =
     "usage: tieldb [--port N] [--once] (--data-dir PATH | --in-memory)\n";
 
-static int open_data_dir(const char *dir)
+static int open_data_dir(const char *dir, data_dir_lock_t *lock)
 {
     if (dir == nullptr) {
         return 0;
     }
-    if (data_dir_init(dir) != 0 || data_dir_load(dir) != 0) {
+    if (data_dir_lock(dir, lock) != 0 || data_dir_init(dir) != 0 || data_dir_load(dir) != 0) {
         perror("tieldb: data directory");
         return -1;
     }
@@ -127,9 +127,14 @@ int main(int argc, char **argv)
         fputs(USAGE, stderr);
         return EXIT_USAGE;
     }
-    if (open_data_dir(options.data_dir) != 0) {
+    data_dir_lock_t lock;
+    if (open_data_dir(options.data_dir, &lock) != 0) {
         return EXIT_FAILURE;
     }
     executor_use_data_dir(options.data_dir);
-    return serve(&options);
+    int status = serve(&options); // saves the data directory before it returns
+    if (options.data_dir != nullptr) {
+        data_dir_unlock(&lock);
+    }
+    return status;
 }
