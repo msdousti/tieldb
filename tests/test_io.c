@@ -17,6 +17,7 @@
 #include <cmocka.h>
 
 #include "io/io.h"
+#include "io_fault.h"
 
 static int setup([[maybe_unused]] void **state)
 {

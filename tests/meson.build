@@ -10,10 +10,22 @@ if not cmocka_dep.found()
   subdir_done()
 endif
 
+# Test support: fault injection for the I/O interface (the server does not contain it)
+test_support = static_library('test_support',
+  'io_fault.c',
+  dependencies: [tieldb_dep],
+  include_directories: inc,
+)
+
+test_support_dep = declare_dependency(
+  link_with: test_support,
+  dependencies: tieldb_dep,
+)
+
 # Test: I/O interface
 test_io = executable('test_io',
   'test_io.c',
-  dependencies: [tieldb_dep, cmocka_dep],
+  dependencies: [test_support_dep, cmocka_dep],
   include_directories: inc,
 )
 
@@ -139,7 +151,7 @@ test('table_engines', test_table_engines)
 # Test: the data directory
 test_data_dir = executable('test_data_dir',
   'test_data_dir.c',
-  dependencies: [tieldb_dep, cmocka_dep],
+  dependencies: [test_support_dep, cmocka_dep],
   include_directories: inc,
 )
 
@@ -157,7 +169,7 @@ test('catalog_file_load', test_catalog_file_load)
 # Test: files that hold one page
 test_one_page_file = executable('test_one_page_file',
   'test_one_page_file.c',
-  dependencies: [tieldb_dep, cmocka_dep],
+  dependencies: [test_support_dep, cmocka_dep],
   include_directories: inc,
 )
 
@@ -175,7 +187,7 @@ test('one_page_engine_files', test_one_page_engine_files)
 # Test: files of pages
 test_page_file = executable('test_page_file',
   'test_page_file.c',
-  dependencies: [tieldb_dep, cmocka_dep],
+  dependencies: [test_support_dep, cmocka_dep],
   include_directories: inc,
 )
 

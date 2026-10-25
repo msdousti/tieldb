@@ -25,6 +25,7 @@
 #include <cmocka.h>
 
 #include "io/io.h"
+#include "io_fault.h"
 #include "storage/catalog.h"
 #include "storage/catalog_file.h"
 #include "storage/data_dir.h"

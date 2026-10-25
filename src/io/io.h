@@ -1,9 +1,9 @@
 /**
  * Injectable I/O interface for TielDB
  *
- * All file I/O goes through this interface to enable fault injection
- * during testing. This allows simulation of torn writes, dropped fsyncs,
- * and other failure scenarios critical for testing durability.
+ * All file I/O goes through this interface, so that tests can replace it with operations that
+ * simulate torn writes, dropped fsyncs and other failures (see tests/io_fault.h). The server
+ * contains only the real operations.
  */
 
 #pragma once
@@ -72,7 +72,7 @@ typedef struct io_ops {
 
 /**
  * Global I/O operations pointer
- * Real syscalls by default; io_init selects io_real_ops or io_fault_inject_ops
+ * Real syscalls by default; tests point it at the fault injection operations (tests/io_fault.h)
  */
 extern const io_ops_t *io;
 
@@ -80,41 +80,3 @@ extern const io_ops_t *io;
  * Real I/O operations (direct syscalls)
  */
 extern const io_ops_t io_real_ops;
-
-/**
- * Fault injection operations (for testing)
- */
-extern const io_ops_t io_fault_inject_ops;
-
-/**
- * Fault injection types
- */
-typedef enum {
-    IO_FAULT_NONE,
-    IO_FAULT_TORN_WRITE,  // Partial write (simulate power loss mid-write)
-    IO_FAULT_FSYNC_FAIL,  // fsync returns error
-    IO_FAULT_FSYNC_DROP,  // fsync succeeds but doesn't persist (fsyncgate)
-    IO_FAULT_READ_ERROR,  // read fails
-    IO_FAULT_WRITE_ERROR, // write fails
-    IO_FAULT_STAT_ERROR,  // fstat fails
-} io_fault_type_t;
-
-/**
- * Configure fault injection
- *
- * @param type   Type of fault to inject
- * @param nth    Inject fault on the Nth call (0 = disable)
- */
-void io_inject_fault(io_fault_type_t type, int nth);
-
-/**
- * Reset fault injection state
- */
-void io_reset_faults(void);
-
-/**
- * Initialize I/O subsystem
- *
- * @param use_real  If true, use real I/O; if false, use fault injection
- */
-void io_init(bool use_real);

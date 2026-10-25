@@ -19,6 +19,7 @@
 #include <cmocka.h>
 
 #include "io/io.h"
+#include "io_fault.h"
 #include "storage/page_file.h"
 
 static constexpr size_t SLOT_COUNT_OFFSET = 16;

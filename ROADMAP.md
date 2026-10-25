@@ -232,7 +232,7 @@ Two milestones, so that the first visible result comes early:
 - [ ] Fault injection for page file, heap file and buffer pool I/O (short write, fsync failure) through the injectable `io`
   - [x] Page file: write error, torn write, fsync failure, read error
   - [ ] Buffer pool (milestone B)
-- [ ] Move the fault-injection I/O table out of `src/io/io.c` into a test-support library (its own small PR): the server then ships only the real operations, and the fault code no longer counts toward the coverage of `src/`; the cost is that a spawned `tieldb` can no longer be given faults
+- [x] Fault injection moved out of `src/io/io.c` into a test-support library (`tests/io_fault.{h,c}`): the server ships only the real operations, and the fault code no longer counts toward the coverage of `src/`; the cost is that a spawned `tieldb` can no longer be given faults
 - [ ] Unit tests for buffer pool (pin/unpin, eviction)
 - [ ] Crash test: write data, flush, kill -9, restart, verify the flushed data survives
 - [x] Fuzz test for page deserialization (milestone B)
