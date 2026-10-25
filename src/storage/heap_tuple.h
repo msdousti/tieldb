@@ -25,14 +25,15 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+#include "common/byte_span.h"
+
 constexpr uint16_t HEAP_TUPLE_HAS_XIDS = 1U << 0;
 
 typedef struct {
     uint16_t flags;
     uint64_t xmin; // 0 without HEAP_TUPLE_HAS_XIDS
     uint64_t xmax; // 0 without HEAP_TUPLE_HAS_XIDS
-    const void *row;
-    size_t row_length;
+    byte_span_t row;
 } heap_tuple_t;
 
 typedef struct {

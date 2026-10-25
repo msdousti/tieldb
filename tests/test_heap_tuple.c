@@ -25,7 +25,7 @@ static void assert_fails_with(ssize_t status, int error)
 
 static void test_a_tuple_without_ids_costs_two_bytes([[maybe_unused]] void **state)
 {
-    const heap_tuple_t tuple = {.row = "row", .row_length = 3};
+    const heap_tuple_t tuple = {.row = {"row", 3}};
     unsigned char bytes[8];
     heap_tuple_t decoded;
 
@@ -35,8 +35,8 @@ static void test_a_tuple_without_ids_costs_two_bytes([[maybe_unused]] void **sta
     assert_int_equal(decoded.flags, 0);
     assert_int_equal(decoded.xmin, 0);
     assert_int_equal(decoded.xmax, 0);
-    assert_int_equal(decoded.row_length, 3);
-    assert_memory_equal(decoded.row, "row", 3);
+    assert_int_equal(decoded.row.length, 3);
+    assert_memory_equal(decoded.row.data, "row", 3);
 }
 
 static void test_ids_are_kept_when_the_flag_is_set([[maybe_unused]] void **state)
@@ -50,7 +50,7 @@ static void test_ids_are_kept_when_the_flag_is_set([[maybe_unused]] void **state
     assert_int_equal(heap_tuple_decode(bytes, 18, &decoded), 0);
     assert_int_equal(decoded.xmin, 7);
     assert_int_equal(decoded.xmax, UINT64_MAX);
-    assert_int_equal(decoded.row_length, 0);
+    assert_int_equal(decoded.row.length, 0);
 }
 
 static void test_ids_are_ignored_without_the_flag([[maybe_unused]] void **state)
@@ -68,7 +68,7 @@ static void test_ids_are_ignored_without_the_flag([[maybe_unused]] void **state)
 static void test_encoding_rejects_reserved_flags_and_small_buffers([[maybe_unused]] void **state)
 {
     const heap_tuple_t reserved = {.flags = 1U << 1};
-    const heap_tuple_t tuple = {.row = "row", .row_length = 3};
+    const heap_tuple_t tuple = {.row = {"row", 3}};
     unsigned char bytes[4];
 
     assert_fails_with(heap_tuple_size(&reserved), EINVAL);
@@ -95,7 +95,7 @@ static heap_tuple_t random_tuple(uint64_t *random, unsigned char *row)
     for (size_t b = 0; b < MAX_ROW; b++) {
         row[b] = (unsigned char) next_random(random);
     }
-    heap_tuple_t tuple = {.row = row, .row_length = next_random(random) % (MAX_ROW + 1)};
+    heap_tuple_t tuple = {.row = {row, next_random(random) % (MAX_ROW + 1)}};
     if ((next_random(random) & 1U) != 0) {
         tuple.flags = HEAP_TUPLE_HAS_XIDS;
         tuple.xmin = next_random(random);
@@ -109,8 +109,8 @@ static void assert_same_tuple(const heap_tuple_t *actual, const heap_tuple_t *ex
     assert_int_equal(actual->flags, expected->flags);
     assert_int_equal(actual->xmin, expected->xmin);
     assert_int_equal(actual->xmax, expected->xmax);
-    assert_int_equal(actual->row_length, expected->row_length);
-    assert_memory_equal(actual->row, expected->row, expected->row_length);
+    assert_int_equal(actual->row.length, expected->row.length);
+    assert_memory_equal(actual->row.data, expected->row.data, expected->row.length);
 }
 
 static void round_trip_random_tuples(uint64_t seed)

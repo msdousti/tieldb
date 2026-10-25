@@ -22,7 +22,7 @@ ssize_t heap_tuple_size(const heap_tuple_t *tuple)
         errno = EINVAL;
         return -1;
     }
-    return (ssize_t) (header_size(tuple->flags) + tuple->row_length);
+    return (ssize_t) (header_size(tuple->flags) + tuple->row.length);
 }
 
 static void write_header(unsigned char *bytes, const heap_tuple_t *tuple)
@@ -53,8 +53,8 @@ ssize_t heap_tuple_encode(const heap_tuple_t *tuple, void *buffer, size_t capaci
     }
     unsigned char *bytes = buffer;
     write_header(bytes, tuple);
-    if (tuple->row_length > 0) { // the row of an empty tuple may be nullptr
-        memcpy(bytes + header_size(tuple->flags), tuple->row, tuple->row_length);
+    if (tuple->row.length > 0) { // the span of an empty row may have a null pointer
+        memcpy(bytes + header_size(tuple->flags), tuple->row.data, tuple->row.length);
     }
     return size;
 }
@@ -75,7 +75,7 @@ int heap_tuple_decode(const void *bytes, size_t length, heap_tuple_t *tuple)
     if ((tuple->flags & HEAP_TUPLE_HAS_XIDS) != 0) {
         read_xids(input, tuple);
     }
-    tuple->row = input + header_size(tuple->flags);
-    tuple->row_length = length - header_size(tuple->flags);
+    tuple->row.data = input + header_size(tuple->flags);
+    tuple->row.length = length - header_size(tuple->flags);
     return 0;
 }
