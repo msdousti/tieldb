@@ -3,7 +3,12 @@
 #include <errno.h>
 #include <string.h>
 
-static constexpr size_t XIDS_SIZE = 2 * sizeof(uint64_t);
+static constexpr size_t FLAGS_SIZE = sizeof((heap_tuple_t){}.flags);
+static constexpr size_t XMIN_SIZE = sizeof((heap_tuple_t){}.xmin);
+static constexpr size_t XMAX_SIZE = sizeof((heap_tuple_t){}.xmax);
+static constexpr size_t XMIN_OFFSET = FLAGS_SIZE;
+static constexpr size_t XMAX_OFFSET = XMIN_OFFSET + XMIN_SIZE;
+static constexpr size_t XIDS_SIZE = XMIN_SIZE + XMAX_SIZE;
 
 static bool has_reserved_flags(uint16_t flags)
 {
@@ -13,7 +18,7 @@ static bool has_reserved_flags(uint16_t flags)
 static size_t header_size(uint16_t flags)
 {
     bool has_xids = (flags & HEAP_TUPLE_HAS_XIDS) != 0;
-    return sizeof(uint16_t) + (has_xids ? XIDS_SIZE : 0);
+    return FLAGS_SIZE + (has_xids ? XIDS_SIZE : 0);
 }
 
 ssize_t heap_tuple_size(const heap_tuple_t *tuple)
@@ -27,18 +32,17 @@ ssize_t heap_tuple_size(const heap_tuple_t *tuple)
 
 static void write_header(unsigned char *bytes, const heap_tuple_t *tuple)
 {
-    memcpy(bytes, &tuple->flags, sizeof(tuple->flags));
+    memcpy(bytes, &tuple->flags, FLAGS_SIZE);
     if ((tuple->flags & HEAP_TUPLE_HAS_XIDS) != 0) {
-        memcpy(bytes + sizeof(tuple->flags), &tuple->xmin, sizeof(tuple->xmin));
-        memcpy(bytes + sizeof(tuple->flags) + sizeof(tuple->xmin), &tuple->xmax,
-               sizeof(tuple->xmax));
+        memcpy(bytes + XMIN_OFFSET, &tuple->xmin, XMIN_SIZE);
+        memcpy(bytes + XMAX_OFFSET, &tuple->xmax, XMAX_SIZE);
     }
 }
 
 static void read_xids(const unsigned char *bytes, heap_tuple_t *tuple)
 {
-    memcpy(&tuple->xmin, bytes + sizeof(tuple->flags), sizeof(tuple->xmin));
-    memcpy(&tuple->xmax, bytes + sizeof(tuple->flags) + sizeof(tuple->xmin), sizeof(tuple->xmax));
+    memcpy(&tuple->xmin, bytes + XMIN_OFFSET, XMIN_SIZE);
+    memcpy(&tuple->xmax, bytes + XMAX_OFFSET, XMAX_SIZE);
 }
 
 ssize_t heap_tuple_encode(const heap_tuple_t *tuple, void *buffer, size_t capacity)
@@ -63,11 +67,11 @@ int heap_tuple_decode(const void *bytes, size_t length, heap_tuple_t *tuple)
 {
     const unsigned char *input = bytes;
     *tuple = (heap_tuple_t){};
-    if (length < sizeof(tuple->flags)) {
+    if (length < FLAGS_SIZE) {
         errno = EBADMSG;
         return -1;
     }
-    memcpy(&tuple->flags, input, sizeof(tuple->flags));
+    memcpy(&tuple->flags, input, FLAGS_SIZE);
     if (has_reserved_flags(tuple->flags) || length < header_size(tuple->flags)) {
         errno = EBADMSG;
         return -1;
