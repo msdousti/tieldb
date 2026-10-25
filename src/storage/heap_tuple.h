@@ -41,8 +41,8 @@ typedef struct {
     uint16_t slot;
 } heap_tid_t;
 
-/** The number of bytes that heap_tuple_encode needs. */
-[[nodiscard]] ssize_t heap_tuple_size(const heap_tuple_t *tuple);
+/** The size of the tuple as heap_tuple_encode writes it, not of the struct in memory. */
+[[nodiscard]] ssize_t heap_tuple_encoded_size(const heap_tuple_t *tuple);
 
 /** Writes the tuple; returns its size. */
 [[nodiscard]] ssize_t heap_tuple_encode(const heap_tuple_t *tuple, void *buffer, size_t capacity);

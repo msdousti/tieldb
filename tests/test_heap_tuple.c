@@ -29,7 +29,7 @@ static void test_a_tuple_without_ids_costs_two_bytes([[maybe_unused]] void **sta
     unsigned char bytes[8];
     heap_tuple_t decoded;
 
-    assert_int_equal(heap_tuple_size(&tuple), 5);
+    assert_int_equal(heap_tuple_encoded_size(&tuple), 5);
     assert_int_equal(heap_tuple_encode(&tuple, bytes, sizeof(bytes)), 5);
     assert_int_equal(heap_tuple_decode(bytes, 5, &decoded), 0);
     assert_int_equal(decoded.flags, 0);
@@ -45,7 +45,7 @@ static void test_ids_are_kept_when_the_flag_is_set([[maybe_unused]] void **state
     unsigned char bytes[32];
     heap_tuple_t decoded;
 
-    assert_int_equal(heap_tuple_size(&tuple), 18);
+    assert_int_equal(heap_tuple_encoded_size(&tuple), 18);
     assert_int_equal(heap_tuple_encode(&tuple, bytes, sizeof(bytes)), 18);
     assert_int_equal(heap_tuple_decode(bytes, 18, &decoded), 0);
     assert_int_equal(decoded.xmin, 7);
@@ -71,7 +71,7 @@ static void test_encoding_rejects_reserved_flags_and_small_buffers([[maybe_unuse
     const heap_tuple_t tuple = {.row = {"row", 3}};
     unsigned char bytes[4];
 
-    assert_fails_with(heap_tuple_size(&reserved), EINVAL);
+    assert_fails_with(heap_tuple_encoded_size(&reserved), EINVAL);
     assert_fails_with(heap_tuple_encode(&reserved, bytes, sizeof(bytes)), EINVAL);
     assert_fails_with(heap_tuple_encode(&tuple, bytes, sizeof(bytes)), E2BIG);
 }
