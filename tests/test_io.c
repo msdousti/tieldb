@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/file.h>
 #include <unistd.h>
 
 #include <cmocka.h>
@@ -141,6 +142,23 @@ static void test_real_positioned_and_plain_io([[maybe_unused]] void **state)
     close_scratch_file(fd, path);
 }
 
+static void test_real_flock_conflicts_between_descriptors([[maybe_unused]] void **state)
+{
+    const char *path = "/tmp/tieldb_test_flock.dat";
+    int first = open_scratch_file(path);
+    int second = io->open(path, O_RDWR, 0);
+
+    assert_true(second >= 0);
+    assert_int_equal(io->flock(first, LOCK_EX | LOCK_NB), 0);
+    errno = 0;
+    assert_int_equal(io->flock(second, LOCK_EX | LOCK_NB), -1);
+    assert_int_equal(errno, EWOULDBLOCK);
+    assert_int_equal(io->flock(first, LOCK_UN), 0);
+    assert_int_equal(io->flock(second, LOCK_EX | LOCK_NB), 0);
+    io->close(second);
+    close_scratch_file(first, path);
+}
+
 static void test_fault_read_error_is_one_shot([[maybe_unused]] void **state)
 {
     io_init(false);
@@ -216,24 +234,25 @@ static void test_fault_fsync_drop_reports_success([[maybe_unused]] void **state)
     close_scratch_file(fd, path);
 }
 
+static const struct CMUnitTest tests[] = {
+    // Must stay first: it checks the default before any test calls io_init
+    cmocka_unit_test(test_io_defaults_to_real_operations),
+    cmocka_unit_test_setup_teardown(test_real_io_operations, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_fault_injection_torn_write, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_fault_injection_fsync_fail, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_fault_on_nth_call, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_reset_faults, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_fault_with_nth_zero_is_disabled, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_real_positioned_and_plain_io, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_real_flock_conflicts_between_descriptors, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_fault_read_error_is_one_shot, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_fault_pread_error_is_one_shot, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_fault_pwrite_error_and_torn, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_fault_write_error_sets_eio, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_fault_fsync_drop_reports_success, setup, teardown),
+};
+
 int main(void)
 {
-    const struct CMUnitTest tests[] = {
-        // Must stay first: it checks the default before any test calls io_init
-        cmocka_unit_test(test_io_defaults_to_real_operations),
-        cmocka_unit_test_setup_teardown(test_real_io_operations, setup, teardown),
-        cmocka_unit_test_setup_teardown(test_fault_injection_torn_write, setup, teardown),
-        cmocka_unit_test_setup_teardown(test_fault_injection_fsync_fail, setup, teardown),
-        cmocka_unit_test_setup_teardown(test_fault_on_nth_call, setup, teardown),
-        cmocka_unit_test_setup_teardown(test_reset_faults, setup, teardown),
-        cmocka_unit_test_setup_teardown(test_fault_with_nth_zero_is_disabled, setup, teardown),
-        cmocka_unit_test_setup_teardown(test_real_positioned_and_plain_io, setup, teardown),
-        cmocka_unit_test_setup_teardown(test_fault_read_error_is_one_shot, setup, teardown),
-        cmocka_unit_test_setup_teardown(test_fault_pread_error_is_one_shot, setup, teardown),
-        cmocka_unit_test_setup_teardown(test_fault_pwrite_error_and_torn, setup, teardown),
-        cmocka_unit_test_setup_teardown(test_fault_write_error_sets_eio, setup, teardown),
-        cmocka_unit_test_setup_teardown(test_fault_fsync_drop_reports_success, setup, teardown),
-    };
-
     return cmocka_run_group_tests(tests, nullptr, nullptr);
 }

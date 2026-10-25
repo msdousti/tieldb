@@ -150,34 +150,34 @@ Two milestones, so that the first visible result comes early:
   - [x] Registry module: name, OID, text input and output functions, storage size (fixed or variable length) and comparison function; `INTEGER` and `TEXT` are its first entries
   - [x] The executor and the wire protocol layer look types up through it; this replaces the type-name table in the executor and the type-to-OID mapping in the query handler
   - [x] Values are stored in their type's own format (an integer as 4 bytes), converted from and to text only at the edges; this replaces the `column_type_t` enum and fixes integers being stored as written (`007`)
-- [ ] Page abstraction
+- [x] Page abstraction
   - [x] 8 KB pages
-  - [ ] Page header (LSN, checksum, page type, free space): the fields and the page type are in place; the checksum (CRC-32C) is computed and the LSN set when pages are written (page file, WAL)
+  - [x] Page header (LSN, checksum, page type, free space): the fields, the page type and the CRC-32C checksum (set on write, checked on read) are done; stamping the LSN comes with the WAL (Phase 5)
   - [x] Slotted page layout (slot array + tuples)
   - [x] Page-level operations (insert, delete, get tuple)
-- [ ] Row codec, independent of the storage engine (a future LSM engine reuses it)
+- [x] Row codec, independent of the storage engine (a future LSM engine reuses it)
   - [x] Null bitmap (a NULL is a set bit and takes no space; SQL support for NULL comes in Phase 3), then the values of the columns in the stored format of their type, encoded and decoded through the type registry
   - [x] Variable-length data (length prefix for TEXT), with a spare bit in the prefix reserved for the overflow pointer of Phase 8+
-  - [ ] A row that does not fit in one page is an error (errno `EFBIG`) that the SQL layer reports; no overflow storage yet (the codec already refuses a value over 32767 bytes with `EFBIG`; the page-sized limit comes with the engine)
+  - [x] A row that does not fit in one page is an error (errno `EFBIG`, reported to the client as `54000`); no overflow storage yet (the codec refuses a value over 32767 bytes, the engine a row over the page)
 - [x] Page file: read and write one page of a file, all I/O through `io->`
   - [x] CRC-32C, and `page_set_checksum` / `page_verify_checksum` for the page header
   - [x] `page_validate`: header and slot sanity checks on every page read from disk, so that later page code can trust a page
   - [x] Read and write pages of a file: the checksum is set on write, and verified and validated on read
-- [ ] Storage engine interface (the vtable from `CLAUDE.md`), so that an LSM engine can be added in Phase 8+, and the one-page engine
+- [x] Storage engine interface (the vtable from `CLAUDE.md`), so that an LSM engine can be added in Phase 8+, and the one-page engine
   - [x] Operations on rows and cursors, not on pages or TIDs: insert, and a scan cursor (open, next, close)
-  - [ ] Dropping the data of a table: an operation (`storage_drop`) that deletes the persistent data and then destroys the instance. `storage_destroy` only frees memory, because it is also the call at clean shutdown, where the data must stay. Added with the first engine that keeps files
+  - [x] Dropping the data of a table (`storage_drop`) comes with `DROP TABLE` (Phase 3), which is its only user
   - [x] Separate the catalog entry (name, columns, engine, engine metadata) from the storage of the rows: `table_t` is the catalog entry and owns an engine instance that holds the rows
   - [x] Engine registry: engines are found by name (`engine_find`), a table remembers its engine, the catalog file records the real name, and the data directory loads each table with the engine the file names; a new engine is one registry entry
   - [x] One-page engine
     - [x] The rows of a table are in one page of encoded rows, in memory; an INSERT into a full page is an error (`ENOSPC`), and a row that could never fit is `EFBIG`
     - [x] Save and load the whole page through the page file (`storage_save`, `one_page_engine_load`)
   - [x] The executor and the query handler use the engine for INSERT and SELECT; a full table (`53100`) and a row that could never fit (`54000`) are errors for the client
-- [ ] Catalog file
+- [x] Catalog file
   - [x] Save and load the tables: name, engine, each column's name, type id and display position (so a reordering survives a restart), in a page file of its own with a format version
     - [x] The format and saving (`catalog_file_save`)
     - [x] Loading (`catalog_file_load`), with the checks of a file that is intact but not a catalog of this format
-  - [ ] Store the engine of each table and its engine-specific metadata (an opaque blob to the catalog)
-- [ ] Data directory and shutdown
+  - [x] Store the engine of each table, by name (the engine registry finds it again); the engine's own metadata, an opaque blob to the catalog, comes with the heap engine of milestone B
+- [x] Data directory and shutdown
   - [x] The data directory module: a version file (`data_dir_init`) and a checkpoint that saves every table and then the catalog (`data_dir_checkpoint`)
   - [x] Load the catalog and the tables from the directory (`data_dir_load`)
   - [x] `--data-dir` option; the directory is loaded at startup
@@ -185,8 +185,8 @@ Two milestones, so that the first visible result comes early:
   - [x] Checkpoint on clean shutdown (below)
   - [x] An explicit `CHECKPOINT` statement (`55000` when the server has no data directory, `58030` when saving fails)
   - [x] Data directory format version: a file with a magic number and a format version (like Postgres's `PG_VERSION`), checked at startup so that an old or foreign directory is refused and not misread
-  - [ ] One server per data directory: a lock on the directory (a pid file created with `O_EXCL`, as Postgres does, or an advisory lock that the kernel drops when the process dies), so that a second server on the same directory refuses to start and cannot overwrite the first one's pages; it needs a stale-lock check or a lock call in the injectable I/O layer
-  - [ ] Directory durability: fsync the data directory after creating a file in it (the injectable I/O layer has no way to open or sync a directory yet)
+  - [x] One server per data directory (an advisory `flock` on `tieldb.lock`, held until the process ends, so a crash leaves nothing to clean up; a second server exits with status 1): a lock on the directory (a pid file created with `O_EXCL`, as Postgres does, or an advisory lock that the kernel drops when the process dies), so that a second server on the same directory refuses to start and cannot overwrite the first one's pages; it needs a stale-lock check or a lock call in the injectable I/O layer
+  - [x] Directory durability: the data directory is synced after files are created in it (at start and at every checkpoint)
   - [x] Clean shutdown: SIGTERM and SIGINT stop the listener, end the sessions after the statement they are running, save the data and exit with status 0 (a thread waits for the signals with `sigwait`, so no handler runs in the middle of anything)
 
 #### Milestone B: lift the one-page limit
@@ -211,6 +211,7 @@ Two milestones, so that the first visible result comes early:
   - [ ] Optional direct I/O (`O_DIRECT`, off by default), so that a page is not cached twice: the page buffers are 4096-aligned (`alignas` on `page_t`); the tests run with it on and off, and fall back when the filesystem refuses it (`tmpfs` does); `fsync` is still needed for durability
 - [ ] Free space map (bitmap or simple list)
 - [ ] Heap engine
+  - [ ] Its engine-specific metadata (which file holds the pages of a table) is stored in the catalog as an opaque blob
   - [ ] Implements the storage engine interface and replaces the one-page engine: INSERT finds a page with space, adds a tuple and marks the page dirty; SELECT pins pages, iterates tuples and unpins
   - [ ] An old data directory with one-page tables is upgraded or refused through the format version
 - [ ] Catalog in system tables
@@ -280,6 +281,7 @@ This works at the end of milestone A (a table is one page). At the end of milest
   - [ ] Several statements in one query string (`select 1; select 2`)
   - [ ] Syntax errors with SQLSTATE `42601` and an error position, as in Postgres
   - [ ] Quick wins once it exists: `INSERT INTO t (a, b) VALUES ...` with a column list, multi-row `VALUES (1, 'a'), (2, 'b')`, `CREATE TABLE IF NOT EXISTS`, `DROP TABLE [IF EXISTS]`
+    - [ ] `storage_drop`: an engine operation that deletes the persistent data of a table and then destroys the instance. `storage_destroy` only frees memory, because it is also the call at clean shutdown, where the data must stay
     - [ ] `DROP TABLE` takes the table lock (so it waits for scans that hold it), removes the table from the catalog so that no new statement finds it, then destroys the table and its storage engine instance. A statement that found the table earlier needs the lock or a reference count, because the catalog hands out raw table pointers today
   - [ ] Fuzz test for the parser (random text must never crash it)
 - [ ] Memory contexts (arena allocator, the rule in `CLAUDE.md`; before the operators, which allocate a lot per query)
