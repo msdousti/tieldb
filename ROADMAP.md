@@ -208,6 +208,7 @@ Two milestones, so that the first visible result comes early:
     - [x] A general policy interface in `src/ds` (`replacement_policy.h`: record access, set evictable, pick victim over numbered slots), so that clock, LRU and FIFO are interchangeable, can be compared in the benchmarks and can serve other caches (open files, commit status pages)
     - [x] Clock replacement policy (`ds/clock_policy.{h,c}`), tested alone against a model
     - [x] The pool uses it: a full pool evicts an unpinned page that the policy picks, writing it back first if it changed (the caller passes the policy to `buffer_pool_create`; the pool never names a concrete one)
+  - [x] Internal lock: one mutex held during each call (including the I/O of an eviction or a flush), so that sessions can share the pool; the pages themselves are the caller's business. A TSan test runs threads that pin, change and unpin their own pages in a small pool, and it reports races when the lock is removed
   - [x] Dirty page tracking (`buffer_pool_mark_changed` while the page is pinned; `buffer_pool_flush_all` writes the marked pages and syncs the files)
   - [x] Page ID (file number + page number)
   - [x] Generic over files and page numbers, with no heap assumptions: an LSM engine keeps its own file formats and block cache

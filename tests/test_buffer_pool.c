@@ -8,6 +8,7 @@
  */
 
 #include <errno.h>
+#include <pthread.h>
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -583,6 +584,80 @@ static void test_random_use_agrees_with_a_model_of_the_pages_3([[maybe_unused]] 
     run_the_model(0xdeadbeef);
 }
 
+// Each thread uses the pages p with p % THREADS == its index, so that no two threads change a page
+// and only the pool itself is shared: its frames, its page table and its policy
+static constexpr size_t THREADS = FRAMES;
+static constexpr int ROUNDS = 2000;
+
+typedef struct {
+    pthread_t thread;
+    size_t index;
+    uint64_t random;
+    size_t errors;
+    size_t slot_count[MODEL_PAGES];
+} worker_t;
+
+static void count_error(worker_t *worker, int status)
+{
+    worker->errors += status != 0 ? 1 : 0;
+}
+
+static void use_one_page(worker_t *worker)
+{
+    size_t own_pages = (MODEL_PAGES - worker->index + THREADS - 1) / THREADS;
+    size_t page = worker->index + ((next_random(&worker->random) % own_pages) * THREADS);
+    page_t *frame = nullptr;
+
+    count_error(worker, buffer_pool_pin(pool, model_page_id(page), &frame));
+    count_error(worker, page_slot_count(frame) != worker->slot_count[page] ? -1 : 0);
+    count_error(worker, page_insert(frame, "x", 1) < 0 ? -1 : 0);
+    worker->slot_count[page]++;
+    count_error(worker, buffer_pool_mark_changed(pool, model_page_id(page)));
+    count_error(worker, buffer_pool_unpin(pool, model_page_id(page)));
+}
+
+static void *run_worker(void *argument)
+{
+    worker_t *worker = argument;
+
+    for (int round = 0; round < ROUNDS; round++) {
+        use_one_page(worker);
+    }
+    return nullptr;
+}
+
+static void start_worker(worker_t *worker, size_t index)
+{
+    *worker = (worker_t){.index = index, .random = index + 1};
+    for (size_t page = 0; page < MODEL_PAGES; page++) {
+        worker->slot_count[page] = 1;
+    }
+    assert_int_equal(pthread_create(&worker->thread, nullptr, run_worker, worker), 0);
+}
+
+static void finish_worker(worker_t *worker)
+{
+    assert_int_equal(pthread_join(worker->thread, nullptr), 0);
+    assert_int_equal(worker->errors, 0);
+}
+
+static void test_threads_can_share_the_pool([[maybe_unused]] void **state)
+{
+    static worker_t workers[THREADS];
+
+    for (size_t i = 0; i < THREADS; i++) {
+        start_worker(&workers[i], i);
+    }
+    for (size_t i = 0; i < THREADS; i++) {
+        finish_worker(&workers[i]);
+    }
+    assert_int_equal(buffer_pool_flush_all(pool), 0);
+    for (size_t page = 0; page < MODEL_PAGES; page++) {
+        assert_file_page_slot_count(page / PAGES_PER_FILE, page % PAGES_PER_FILE,
+                                    workers[page % THREADS].slot_count[page]);
+    }
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_a_pinned_page_holds_what_the_file_holds, setup, teardown),
     cmocka_unit_test_setup_teardown(test_the_same_page_number_in_two_files_is_two_pages, setup,
@@ -620,6 +695,7 @@ static const struct CMUnitTest tests[] = {
                                     teardown),
     cmocka_unit_test_setup_teardown(test_random_use_agrees_with_a_model_of_the_pages_3, setup,
                                     teardown),
+    cmocka_unit_test_setup_teardown(test_threads_can_share_the_pool, setup, teardown),
 };
 
 int main(void)
