@@ -232,6 +232,50 @@ static void test_a_torn_write_is_a_failure_and_the_page_is_corrupt([[maybe_unuse
     assert_read_fails(0, EBADMSG);
 }
 
+static size_t count_pages(void)
+{
+    size_t count = SIZE_MAX;
+
+    assert_int_equal(page_file_count_pages(file, &count), 0);
+    return count;
+}
+
+static void test_the_page_count_follows_the_size_of_the_file([[maybe_unused]] void **state)
+{
+    page_t page = page_holding("count");
+
+    assert_int_equal(count_pages(), 0);
+    assert_int_equal(page_file_write(file, 0, &page), 0);
+    assert_int_equal(count_pages(), 1);
+    assert_int_equal(page_file_write(file, 4, &page), 0);
+    assert_int_equal(count_pages(), 5);
+    assert_int_equal(page_file_write(file, 2, &page), 0);
+    assert_int_equal(count_pages(), 5);
+}
+
+static void test_a_file_that_ends_in_a_page_cannot_be_counted([[maybe_unused]] void **state)
+{
+    page_t page = page_holding("cut");
+    size_t count = 0;
+
+    assert_int_equal(page_file_write(file, 1, &page), 0);
+    assert_int_equal(truncate(path, PAGE_SIZE + (PAGE_SIZE / 2)), 0);
+    errno = 0;
+    assert_int_equal(page_file_count_pages(file, &count), -1);
+    assert_int_equal(errno, EBADMSG);
+}
+
+static void test_counting_pages_reports_a_stat_error([[maybe_unused]] void **state)
+{
+    size_t count = 0;
+
+    io_init(false);
+    io_inject_fault(IO_FAULT_STAT_ERROR, 1);
+    errno = 0;
+    assert_int_equal(page_file_count_pages(file, &count), -1);
+    assert_int_equal(errno, EIO);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_a_written_page_reads_back_with_its_checksum, setup,
                                     teardown),
@@ -243,6 +287,11 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_a_page_with_a_good_checksum_but_a_bad_structure_is_corrupt,
                                     setup, teardown),
     cmocka_unit_test_setup_teardown(test_open_does_not_create_a_missing_file, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_the_page_count_follows_the_size_of_the_file, setup,
+                                    teardown),
+    cmocka_unit_test_setup_teardown(test_a_file_that_ends_in_a_page_cannot_be_counted, setup,
+                                    teardown),
+    cmocka_unit_test_setup_teardown(test_counting_pages_reports_a_stat_error, setup, teardown),
     cmocka_unit_test_setup_teardown(test_create_makes_a_new_file, setup, teardown),
     cmocka_unit_test_setup_teardown(test_create_refuses_an_existing_file, setup, teardown),
     cmocka_unit_test_setup_teardown(test_write_and_sync_and_read_report_io_errors, setup, teardown),

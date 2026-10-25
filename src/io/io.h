@@ -9,6 +9,7 @@
 #pragma once
 
 #include <stddef.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 
 /**
@@ -62,6 +63,11 @@ typedef struct io_ops {
      * file conflict, even in one process.
      */
     int (*flock)(int fd, int operation);
+
+    /**
+     * Status of an open file (see fstat(2)); its size is status->st_size
+     */
+    int (*fstat)(int fd, struct stat *status);
 } io_ops_t;
 
 /**
@@ -90,6 +96,7 @@ typedef enum {
     IO_FAULT_FSYNC_DROP,  // fsync succeeds but doesn't persist (fsyncgate)
     IO_FAULT_READ_ERROR,  // read fails
     IO_FAULT_WRITE_ERROR, // write fails
+    IO_FAULT_STAT_ERROR,  // fstat fails
 } io_fault_type_t;
 
 /**

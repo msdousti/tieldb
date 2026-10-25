@@ -142,6 +142,32 @@ static void test_real_positioned_and_plain_io([[maybe_unused]] void **state)
     close_scratch_file(fd, path);
 }
 
+static void assert_size_is_four(int fd)
+{
+    struct stat status;
+
+    assert_int_equal(io->fstat(fd, &status), 0);
+    assert_int_equal(status.st_size, 4);
+}
+
+static void
+test_fstat_reports_the_size_with_and_without_fault_injection([[maybe_unused]] void **state)
+{
+    const char *path = "/tmp/tieldb_test_fstat.dat";
+    int fd = open_scratch_file(path);
+    struct stat status;
+
+    assert_int_equal(io->write(fd, "abcd", 4), 4);
+    assert_size_is_four(fd);
+    io_init(false);
+    assert_size_is_four(fd);
+    io_inject_fault(IO_FAULT_STAT_ERROR, 1);
+    errno = 0;
+    assert_int_equal(io->fstat(fd, &status), -1);
+    assert_int_equal(errno, EIO);
+    close_scratch_file(fd, path);
+}
+
 static void test_real_flock_conflicts_between_descriptors([[maybe_unused]] void **state)
 {
     const char *path = "/tmp/tieldb_test_flock.dat";
@@ -244,6 +270,8 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_reset_faults, setup, teardown),
     cmocka_unit_test_setup_teardown(test_fault_with_nth_zero_is_disabled, setup, teardown),
     cmocka_unit_test_setup_teardown(test_real_positioned_and_plain_io, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_fstat_reports_the_size_with_and_without_fault_injection,
+                                    setup, teardown),
     cmocka_unit_test_setup_teardown(test_real_flock_conflicts_between_descriptors, setup, teardown),
     cmocka_unit_test_setup_teardown(test_fault_read_error_is_one_shot, setup, teardown),
     cmocka_unit_test_setup_teardown(test_fault_pread_error_is_one_shot, setup, teardown),
