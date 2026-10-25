@@ -212,6 +212,11 @@ counts conditions: a loop condition with `&&` needs a test for each operand bein
 - `coverage.sh` fails with stale `.gcno` errors after switching branches: `rm -rf build-cov`.
 - gcov `NegativeHits` errors come from threaded tests; the coverage build uses
   `-fprofile-update=atomic` (already in `scripts/coverage.sh`).
+- The TSan job fails in CI but the suite passed locally: the race depends on timing. Rebuild
+  `build-tsan` and repeat the failing test (`meson test -C build-tsan <name> --repeat 20`); the
+  report names the two threads and the lines.
+- Do not use `pkill -f` with a pattern that also appears in your own command line (it kills the
+  shell running it), and look for leftover `tieldb` processes after killing a test run.
 - Valgrind reports "possibly lost" blocks from glibc's cache of exited detached threads: not a leak
   (`scripts/valgrind.sh` only fails on definite and indirect leaks).
 - RLIMIT_NPROC test (`test_server`) is skipped when run as root.
