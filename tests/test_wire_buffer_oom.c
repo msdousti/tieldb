@@ -23,7 +23,7 @@
 #include <cmocka.h>
 
 #include "buffer/buffer_pool.h"
-#include "buffer/clock_policy.h"
+#include "ds/clock_policy.h"
 #include "ds/hash_map.h"
 #include "net/connection.h"
 #include "net/protocol.h"

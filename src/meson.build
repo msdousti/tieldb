@@ -18,6 +18,7 @@ net_sources = files(
 # Data structures
 ds_sources = files(
   'ds/hash_map.c',
+  'ds/clock_policy.c',
 )
 
 # Type registry
@@ -54,7 +55,6 @@ storage_sources = files(
 # Buffer pool module
 buffer_sources = files(
   'buffer/buffer_pool.c',
-  'buffer/clock_policy.c',
 )
 
 # Command-line options
