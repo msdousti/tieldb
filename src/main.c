@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "executor/executor.h"
 #include "net/server.h"
 #include "options.h"
 #include "storage/data_dir.h"
@@ -129,5 +130,6 @@ int main(int argc, char **argv)
     if (open_data_dir(options.data_dir) != 0) {
         return EXIT_FAILURE;
     }
+    executor_use_data_dir(options.data_dir);
     return serve(&options);
 }

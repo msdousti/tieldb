@@ -31,6 +31,7 @@
 #include "storage/one_page_engine.h"
 #include "storage/one_page_file.h"
 #include "table_assert.h"
+#include "test_directory.h"
 
 static constexpr size_t LONG_NAME = 230;
 
@@ -46,24 +47,6 @@ static int setup([[maybe_unused]] void **state)
     io_init(true);
     return mkdtemp(dir) == nullptr ? -1 : 0;
 }
-
-// Removes the files of a directory, and the directory. The tests run one thread, so readdir is fine
-// NOLINTBEGIN(concurrency-mt-unsafe)
-static void remove_directory(const char *root)
-{
-    char path[512];
-    DIR *handle = opendir(root);
-    for (struct dirent *entry = handle == nullptr ? nullptr : readdir(handle); entry != nullptr;
-         entry = readdir(handle)) {
-        snprintf(path, sizeof(path), "%s/%s", root, entry->d_name);
-        unlink(path);
-    }
-    if (handle != nullptr) {
-        closedir(handle);
-    }
-    rmdir(root);
-}
-// NOLINTEND(concurrency-mt-unsafe)
 
 static int teardown([[maybe_unused]] void **state)
 {

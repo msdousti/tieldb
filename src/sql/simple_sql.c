@@ -10,6 +10,7 @@
 static constexpr char SELECT_KEYWORD[] = "select";
 static constexpr char FROM_KEYWORD[] = "from";
 static constexpr char VERSION_CALL[] = "version()";
+static constexpr char CHECKPOINT_KEYWORD[] = "checkpoint";
 static constexpr char CURRENT_USER[] = "current_user";
 static constexpr char CURRENT_DATABASE_CALL[] = "current_database()";
 static constexpr char STAR = '*';
@@ -92,6 +93,12 @@ bool sql_is_empty(const char *sql)
         cursor++;
     }
     return *cursor == '\0';
+}
+
+bool sql_is_checkpoint(const char *sql)
+{
+    const char *cursor = skip_spaces(sql);
+    return consume_ignoring_case(&cursor, CHECKPOINT_KEYWORD) && is_end_of_statement(cursor);
 }
 
 static bool is_select_of(const char *sql, const char *expression)

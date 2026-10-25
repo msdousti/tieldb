@@ -6,17 +6,22 @@
  * rows.
  */
 
+#define _POSIX_C_SOURCE 200809L
+
 #include <errno.h>
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <cmocka.h>
 
 #include "executor/executor.h"
 #include "storage/catalog.h"
+#include "storage/data_dir.h"
 #include "table_assert.h"
+#include "test_directory.h"
 
 static void run_insert(const char *sql, executor_error_t *error)
 {
@@ -216,6 +221,46 @@ static void test_insert_of_a_row_too_big_for_a_table_is_an_error([[maybe_unused]
     assert_int_equal(count_rows(table), 0);
 }
 
+static void test_checkpoint_without_a_data_directory_is_an_error([[maybe_unused]] void **state)
+{
+    executor_error_t error;
+
+    executor_use_data_dir(nullptr);
+    executor_checkpoint(&error);
+
+    assert_string_equal(error.sqlstate, "55000");
+}
+
+static void test_checkpoint_saves_the_data_directory([[maybe_unused]] void **state)
+{
+    char dir[] = "/tmp/tieldb_executor_dir_XXXXXX";
+    char catalog[sizeof(dir) + 16];
+    executor_error_t error;
+
+    make_directory(dir);
+    snprintf(catalog, sizeof(catalog), "%s/catalog", dir);
+    assert_int_equal(data_dir_init(dir), 0);
+    executor_use_data_dir(dir);
+    executor_checkpoint(&error);
+
+    assert_string_equal(error.sqlstate, "");
+    assert_int_equal(access(catalog, F_OK), 0);
+    executor_use_data_dir(nullptr);
+    remove_directory(dir);
+}
+
+static void test_a_checkpoint_that_cannot_save_is_an_error([[maybe_unused]] void **state)
+{
+    executor_error_t error;
+
+    executor_use_data_dir("/tmp/tieldb_executor_no_such_directory");
+    executor_checkpoint(&error);
+
+    assert_string_equal(error.sqlstate, "58030");
+    assert_string_equal(error.message, "could not save the data directory (error 2)");
+    executor_use_data_dir(nullptr);
+}
+
 static void test_create_table_makes_a_table_with_the_given_columns([[maybe_unused]] void **state)
 {
     executor_error_t error;
@@ -283,6 +328,9 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_select_gives_the_locked_table_until_released),
     cmocka_unit_test(test_insert_into_a_full_table_is_an_error),
     cmocka_unit_test(test_insert_of_a_row_too_big_for_a_table_is_an_error),
+    cmocka_unit_test(test_checkpoint_without_a_data_directory_is_an_error),
+    cmocka_unit_test(test_checkpoint_saves_the_data_directory),
+    cmocka_unit_test(test_a_checkpoint_that_cannot_save_is_an_error),
     cmocka_unit_test(test_create_table_makes_a_table_with_the_given_columns),
     cmocka_unit_test(test_create_table_without_columns_makes_an_empty_table),
     cmocka_unit_test(test_create_table_with_an_unknown_type_is_an_error),

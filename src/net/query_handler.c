@@ -22,9 +22,10 @@ static constexpr char ERROR_SEVERITY[] = "ERROR";
 static constexpr char UNSUPPORTED_SQLSTATE[] = "0A000";
 static constexpr char UNSUPPORTED_MESSAGE[] =
     "only SELECT version(), SELECT current_user, SELECT current_database(), SELECT * FROM "
-    "<table>, INSERT INTO <table> VALUES (...) and CREATE TABLE are supported";
+    "<table>, INSERT INTO <table> VALUES (...), CREATE TABLE and CHECKPOINT are supported";
 static constexpr char INSERT_TAG[] = "INSERT 0 1";
 static constexpr char CREATE_TABLE_TAG[] = "CREATE TABLE";
+static constexpr char CHECKPOINT_TAG[] = "CHECKPOINT";
 static constexpr char SELECT_TAG_FORMAT[] = "SELECT %zu";
 static constexpr size_t TAG_CAPACITY = 32;
 
@@ -167,6 +168,11 @@ static int put_create_table_tag(wire_writer_t *out, [[maybe_unused]] const void 
     return protocol_put_command_complete(out, CREATE_TABLE_TAG);
 }
 
+static int put_checkpoint_tag(wire_writer_t *out, [[maybe_unused]] const void *context)
+{
+    return protocol_put_command_complete(out, CHECKPOINT_TAG);
+}
+
 static int put_executor_error(wire_writer_t *out, const void *context)
 {
     const executor_error_t *error = context;
@@ -190,6 +196,7 @@ static const response_step_t TABLE_RESPONSE[] = {put_table_description, put_tabl
 static const response_step_t INSERT_RESPONSE[] = {put_insert_tag, put_ready};
 static const response_step_t EMPTY_RESPONSE[] = {put_empty_query, put_ready};
 static const response_step_t CREATE_TABLE_RESPONSE[] = {put_create_table_tag, put_ready};
+static const response_step_t CHECKPOINT_RESPONSE[] = {put_checkpoint_tag, put_ready};
 static const response_step_t EXECUTOR_ERROR_RESPONSE[] = {put_executor_error, put_ready};
 static const response_step_t UNSUPPORTED_RESPONSE[] = {put_unsupported_error, put_ready};
 
@@ -221,6 +228,16 @@ static int respond_select_all(const char *table_name, wire_writer_t *out)
                      : run_steps(out, TABLE_RESPONSE, STEP_COUNT(TABLE_RESPONSE), &response);
     executor_select_release(&select);
     return result;
+}
+
+static int respond_checkpoint(wire_writer_t *out)
+{
+    executor_error_t error;
+    executor_checkpoint(&error);
+    if (error.sqlstate[0] != '\0') {
+        return respond_error(&error, out);
+    }
+    return run_steps(out, CHECKPOINT_RESPONSE, STEP_COUNT(CHECKPOINT_RESPONSE), nullptr);
 }
 
 static int respond_insert(const sql_insert_t *insert, wire_writer_t *out)
@@ -286,13 +303,27 @@ static bool respond_if_single_value(const char *sql, const session_info_t *sessi
     return true;
 }
 
+// Returns whether sql is a statement that has no parts; if so, *result is the outcome of answering
+static bool respond_if_utility(const char *sql, wire_writer_t *out, int *result)
+{
+    if (sql_is_empty(sql)) {
+        *result = run_steps(out, EMPTY_RESPONSE, STEP_COUNT(EMPTY_RESPONSE), nullptr);
+        return true;
+    }
+    if (sql_is_checkpoint(sql)) {
+        *result = respond_checkpoint(out);
+        return true;
+    }
+    return false;
+}
+
 static int respond(const char *sql, const session_info_t *session, wire_writer_t *out)
 {
     int result = 0;
     sql_create_table_t create;
     char table_name[SQL_IDENTIFIER_CAPACITY];
-    if (sql_is_empty(sql)) {
-        return run_steps(out, EMPTY_RESPONSE, STEP_COUNT(EMPTY_RESPONSE), nullptr);
+    if (respond_if_utility(sql, out, &result)) {
+        return result;
     }
     if (respond_if_single_value(sql, session, out, &result)) {
         return result;

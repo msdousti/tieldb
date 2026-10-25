@@ -2,18 +2,24 @@
  * Tests for the hardcoded simple-query handler
  */
 
+#define _POSIX_C_SOURCE 200809L
+
 #include <errno.h>
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <cmocka.h>
 
+#include "executor/executor.h"
 #include "net/query_handler.h"
 #include "storage/catalog.h"
+#include "storage/data_dir.h"
+#include "test_directory.h"
 #include "types/type_registry.h"
 
 static const session_info_t SESSION = {.user = "tester", .database = "testdb"};
@@ -44,7 +50,7 @@ static void put_expected_unsupported_response(wire_writer_t *w)
         protocol_put_error_response(
             w, "ERROR", "0A000",
             "only SELECT version(), SELECT current_user, SELECT current_database(), SELECT * FROM "
-            "<table>, INSERT INTO <table> VALUES (...) and CREATE TABLE are supported"),
+            "<table>, INSERT INTO <table> VALUES (...), CREATE TABLE and CHECKPOINT are supported"),
         0);
     assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
 }
@@ -110,6 +116,41 @@ static void assert_response(const char *sql, void (*put_expected)(wire_writer_t 
                         wire_writer_size(expected));
     wire_writer_destroy(actual);
     wire_writer_destroy(expected);
+}
+
+static void put_expected_no_data_dir_response(wire_writer_t *w)
+{
+    assert_int_equal(protocol_put_error_response(
+                         w, "ERROR", "55000",
+                         "CHECKPOINT needs a data directory, and the server runs with --in-memory"),
+                     0);
+    assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
+}
+
+static void put_expected_checkpoint_response(wire_writer_t *w)
+{
+    assert_int_equal(protocol_put_command_complete(w, "CHECKPOINT"), 0);
+    assert_int_equal(protocol_put_ready_for_query(w, TRANSACTION_IDLE), 0);
+}
+
+static void test_checkpoint_without_a_data_directory_is_an_error([[maybe_unused]] void **state)
+{
+    executor_use_data_dir(nullptr);
+
+    assert_response("CHECKPOINT", put_expected_no_data_dir_response);
+}
+
+static void test_checkpoint_saves_the_data_directory([[maybe_unused]] void **state)
+{
+    char dir[] = "/tmp/tieldb_handler_dir_XXXXXX";
+
+    make_directory(dir);
+    assert_int_equal(data_dir_init(dir), 0);
+    executor_use_data_dir(dir);
+
+    assert_response("checkpoint;", put_expected_checkpoint_response);
+    executor_use_data_dir(nullptr);
+    remove_directory(dir);
 }
 
 static void test_version_query_returns_one_row([[maybe_unused]] void **state)
@@ -317,6 +358,8 @@ static void test_inserted_row_shows_up_in_select_star([[maybe_unused]] void **st
 }
 
 static const struct CMUnitTest tests[] = {
+    cmocka_unit_test(test_checkpoint_without_a_data_directory_is_an_error),
+    cmocka_unit_test(test_checkpoint_saves_the_data_directory),
     cmocka_unit_test(test_version_query_returns_one_row),
     cmocka_unit_test(test_version_query_ignores_case_semicolon_and_spaces),
     cmocka_unit_test(test_select_star_returns_every_row_of_the_table),

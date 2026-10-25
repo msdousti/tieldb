@@ -16,6 +16,11 @@
  * unknown column type (INTEGER, INT, INT4 and TEXT exist), a column named twice, or a table that
  * already exists. Names are as the parser produced them, in lower case.
  *
+ * executor_checkpoint runs CHECKPOINT: it saves the data directory that executor_use_data_dir gave
+ * (nullptr, the starting value, is a server without one). A server without a data directory, or
+ * one that cannot save it, answers with an error for the client, as these are not the client's
+ * mistakes but must not end the connection: 55000 and 58030.
+ *
  * executor_select_all runs SELECT * FROM <table>. It cannot fail except by a wrong statement
  * (unknown table), reported in the result's error. On success the result gives the table to read
  * from, locked so the rows cannot change; the caller must call executor_select_release when it
@@ -45,4 +50,9 @@ typedef struct {
 } executor_select_t;
 
 void executor_select_all(const char *table_name, executor_select_t *select);
+
+/** The directory that CHECKPOINT saves into; it must outlive the executor. nullptr for none. */
+void executor_use_data_dir(const char *dir);
+
+void executor_checkpoint(executor_error_t *error);
 void executor_select_release(executor_select_t *select);

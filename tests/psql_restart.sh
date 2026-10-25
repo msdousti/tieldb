@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Stops a real tieldb with SIGTERM, starts it again on the same data directory, and checks with a
-# real psql that the rows are still there, in the display order they had.
+# Stops a real tieldb, starts it again on the same data directory, and checks with a real psql that
+# the rows are still there. Twice: after SIGTERM (a clean stop saves everything), and after a CHECKPOINT
+# statement and kill -9 (the server dies, but what the checkpoint saved is there).
 #
 # usage: psql_restart.sh <tieldb> <psql> <expected-output-file>
 #
@@ -63,6 +64,22 @@ start_server
 run_psql >"$work/after" <<'SQL'
 select * from pet;
 SQL
+
+# A row inserted and checkpointed survives a kill -9; one inserted after the checkpoint does not
+run_psql >"$work/checkpointed" <<'SQL'
+insert into pet values (3, 'Kit');
+checkpoint;
+insert into pet values (4, 'Lost');
+SQL
+kill -KILL "$server_pid"
+wait "$server_pid" 2>/dev/null || true
+server_pid=""
+
+start_server
+run_psql >"$work/killed" <<'SQL'
+select * from pet;
+SQL
 stop_server
 
-diff -u "$expected" "$work/after"
+cat "$work/after" "$work/checkpointed" "$work/killed" >"$work/actual"
+diff -u "$expected" "$work/actual"
