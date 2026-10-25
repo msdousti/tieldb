@@ -1,5 +1,9 @@
 # TielDB tests
 
+if get_option('fuzz')
+  subdir('fuzz')
+endif
+
 if not cmocka_dep.found()
   warning('cmocka not found, tests will be skipped')
   warning('Install with: sudo apt install libcmocka-dev (Ubuntu/Debian)')

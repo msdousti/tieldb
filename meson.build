@@ -26,6 +26,13 @@ add_project_arguments([
   '-Wformat=2',
 ], language: 'c')
 
+if get_option('fuzz')
+  if not get_option('b_sanitize').contains('address')
+    error('The fuzz targets need AddressSanitizer: pass -Db_sanitize=address')
+  endif
+  add_project_arguments('-fsanitize=fuzzer-no-link', language: 'c')
+endif
+
 # Dependencies
 cmocka_dep = dependency('cmocka', required: false)
 

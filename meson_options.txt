@@ -1,0 +1,2 @@
+option('fuzz', type: 'boolean', value: false,
+  description: 'Build the libFuzzer targets in tests/fuzz (needs -Db_sanitize=address)')

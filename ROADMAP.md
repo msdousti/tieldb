@@ -190,10 +190,10 @@ Two milestones, so that the first visible result comes early:
   - [x] Clean shutdown: SIGTERM and SIGINT stop the listener, end the sessions after the statement they are running, save the data and exit with status 0 (a thread waits for the signals with `sigwait`, so no handler runs in the middle of anything)
 
 #### Milestone B: lift the one-page limit
-- [ ] Fuzzing build (its own small PR, before the first fuzz target; `CLAUDE.md` documents `build-fuzz`, but nothing builds it yet)
-  - [ ] Meson option that builds the `tests/fuzz/` targets with libFuzzer and ASan
-  - [ ] CI job that builds them and runs each for a short time on a seed corpus
-  - [ ] Page deserialization fuzz target
+- [x] Fuzzing build and the first target
+  - [x] Meson option `-Dfuzz=true` that builds the `tests/fuzz/` targets with libFuzzer and ASan
+  - [x] CI job that builds them and runs each for 30 seconds on a seed corpus
+  - [x] Page deserialization fuzz target (a valid page as seed; later pages in the corpus come from heap tests)
 - [ ] Heap tuple header, specific to the heap engine
   - [ ] Header in front of the encoded row: flags, optional xmin/xmax
   - [ ] Tuple ID (TID): page + slot; it stays inside the heap engine and is not exposed to the executor
@@ -233,7 +233,7 @@ Two milestones, so that the first visible result comes early:
   - [ ] Heap file and buffer pool (milestone B)
 - [ ] Unit tests for buffer pool (pin/unpin, eviction)
 - [ ] Crash test: write data, flush, kill -9, restart, verify the flushed data survives
-- [ ] Fuzz test for page deserialization (milestone B)
+- [x] Fuzz test for page deserialization (milestone B)
 
 ### Deliverables
 - `src/types/type_registry.{h,c}` - Type registry

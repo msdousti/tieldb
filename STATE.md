@@ -192,7 +192,7 @@ counts conditions: a loop condition with `&&` needs a test for each operand bein
    codec, page file, engine interface and registry, one-page engine, catalog file, data directory,
    `--data-dir`/`--in-memory`, save on SIGTERM/SIGINT, `CHECKPOINT`, a lock so that one server uses a
    data directory, and directory fsync. **Milestone B, lift the one-page
-   limit:** fuzzing build and page fuzz target, heap tuple header, heap file, buffer pool, free
+   limit** (fuzzing build and page fuzz target are done; run it with `-Dfuzz=true`): heap tuple header, heap file, buffer pool, free
    space map, heap engine, catalog in system tables, crash test. Phase 3 also lists memory
    contexts, BOOLEAN, NULL and DEFAULT.
 2. Phase 3 (already in the roadmap): the real SQL parser and syntax tree first, then expressions,
