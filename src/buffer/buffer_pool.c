@@ -11,6 +11,7 @@ typedef struct {
     page_id_t id;
     size_t pin_count;
     bool in_use;
+    bool is_changed;
 } frame_t;
 
 struct buffer_pool {
@@ -146,7 +147,7 @@ int buffer_pool_pin(buffer_pool_t *pool, page_id_t id, page_t **page)
     return 0;
 }
 
-int buffer_pool_unpin(buffer_pool_t *pool, page_id_t id)
+int buffer_pool_unpin(buffer_pool_t *pool, page_id_t id, bool is_changed)
 {
     frame_t *frame = find_frame(pool, &id);
     if (frame == nullptr || frame->pin_count == 0) {
@@ -154,5 +155,31 @@ int buffer_pool_unpin(buffer_pool_t *pool, page_id_t id)
         return -1;
     }
     frame->pin_count--;
+    frame->is_changed = frame->is_changed || is_changed;
     return 0;
+}
+
+static int write_back(buffer_pool_t *pool, frame_t *frame)
+{
+    if (!frame->in_use || !frame->is_changed) {
+        return 0;
+    }
+    int status = page_file_write(pool->files[frame->id.file_number], frame->id.page_number,
+                                 frame_page(pool, frame));
+    if (status == 0) {
+        frame->is_changed = false;
+    }
+    return status;
+}
+
+int buffer_pool_flush_all(buffer_pool_t *pool)
+{
+    int status = 0;
+    for (size_t i = 0; status == 0 && i < pool->frame_count; i++) {
+        status = write_back(pool, &pool->frames[i]);
+    }
+    for (size_t i = 0; status == 0 && i < pool->file_count; i++) {
+        status = page_file_sync(pool->files[i]);
+    }
+    return status;
 }
