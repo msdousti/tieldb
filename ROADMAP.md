@@ -446,6 +446,7 @@ SELECT * FROM users WHERE id >= 10 AND id < 100;
 - [ ] Write-Ahead Log (WAL)
   - [ ] Statement-level autocommit: until Phase 6 every statement is its own transaction, and "commit" below means the end of the statement
   - [ ] WAL records (redo-only first: INSERT, UPDATE, DELETE), also for B+tree page splits and for catalog changes (CREATE/DROP TABLE and INDEX), so that recovery leaves the indexes and the catalog consistent
+  - [ ] WAL records describe the operation (page, slot, bytes), not the whole page: deltas from the first version, as in Postgres. Whole pages appear in the log only as full-page images for torn page repair, or if physical logging is chosen for rarely changed pages such as the catalog (see "Torn page protection" below)
   - [ ] WAL segment files of a fixed size, recycled after a checkpoint
   - [ ] Every WAL record carries a resource manager ID (the owner of the record, as in Postgres), so that one log serves several engines and recovery sends each record to its owner; adding it later changes the log format (see "A Second Heap Engine: In-Place Updates with Undo Logs" in Phase 8+)
   - [ ] LSN (log sequence number) per page
