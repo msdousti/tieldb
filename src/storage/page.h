@@ -36,7 +36,6 @@
 
 #pragma once
 
-#include <stdalign.h>
 #include <stddef.h>
 #include <stdint.h>
 

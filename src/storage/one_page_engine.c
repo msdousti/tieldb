@@ -1,7 +1,6 @@
 #include "storage/one_page_engine.h"
 
 #include <errno.h>
-#include <stdalign.h>
 #include <stdlib.h>
 
 #include "storage/page.h"

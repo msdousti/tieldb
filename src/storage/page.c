@@ -1,7 +1,6 @@
 #include "storage/page.h"
 
 #include <errno.h>
-#include <stdalign.h>
 #include <stdlib.h>
 #include <string.h>
 
