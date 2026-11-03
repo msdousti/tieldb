@@ -243,7 +243,7 @@ Two milestones, so that the first visible result comes early:
   - [ ] Buffer pool (milestone B)
 - [x] Fault injection moved out of `src/io/io.c` into a test-support library (`tests/io_fault.{h,c}`): the server ships only the real operations, and the fault code no longer counts toward the coverage of `src/`; the cost is that a spawned `tieldb` can no longer be given faults
 - [x] Unit tests for buffer pool (pin/unpin, flushing, eviction against a scripted policy, and a random-use test against a model of the pages)
-- [ ] Crash test: write data, flush, kill -9, restart, verify the flushed data survives. Run it in a directory on a disk file system, not in `/tmp` when that is tmpfs, where a `kill -9` tears 8 KB writes at the 4096 boundary (see the limitation of milestone A above)
+- [ ] Crash test: write data, flush, kill -9, restart, verify the flushed data survives. The child tells the parent through a pipe when the flush and the sync have finished, and the parent kills it only then, so no write is in flight and the test does not depend on how the file system treats a kill in the middle of a write (on tmpfs a `kill -9` tears 8 KB writes at the 4096 boundary, and on ext4 and xfs it tears writes of more than 2 MB at a 2 MB boundary; see the limitation of milestone A above). Before the WAL, a kill during the flush of a page in place is not something the test can promise to survive
 - [x] Fuzz test for page deserialization (milestone B)
 
 ### Deliverables
@@ -488,7 +488,7 @@ SELECT * FROM users WHERE id >= 10 AND id < 100;
   - [ ] Steal/no-force buffer policy
 
 ### Tests
-- [ ] **Crash test with fork() + kill -9** (in a directory on a disk file system: on tmpfs a kill alone tears 8 KB page writes, which makes the test fail for a reason that is not the code under test; or inject the torn write on purpose with `IO_FAULT_TORN_WRITE`)
+- [ ] **Crash test with fork() + kill -9** (here tearing is wanted: recovery has to repair torn pages, so a kill at a random moment is a good test of the torn page protection, and tmpfs, which tears often, is a strong place to run it; run it on more than one file system, for example tmpfs and a disk, because they behave differently. The deterministic complement is the injected `IO_FAULT_TORN_WRITE` at every split point of a page, which does not depend on the file system)
   - [ ] Insert data in child process
   - [ ] Kill child at random point
   - [ ] Parent recovers, checks invariants
