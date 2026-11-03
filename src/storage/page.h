@@ -66,9 +66,10 @@ typedef struct {
 static_assert(sizeof(page_t) == PAGE_SIZE);
 
 /**
- * Memory for count pages, all zeros, aligned as page_t requires (malloc does not align that much);
- * free() releases it. A page_t in heap memory must come from here or sit in a struct that is
- * allocated with the alignment of page_t. ENOMEM when memory runs out.
+ * Memory for count pages, not initialized, aligned as page_t requires (malloc does not align that
+ * much); free() releases it. Not zeroing keeps a large array lazy: the operating system gives the
+ * pages only when they are used. A page_t in heap memory must come from here or sit in a struct
+ * that is allocated with the alignment of page_t. ENOMEM when memory runs out.
  */
 [[nodiscard]] page_t *page_array_create(size_t count);
 
