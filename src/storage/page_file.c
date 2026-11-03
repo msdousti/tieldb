@@ -24,7 +24,7 @@ static page_file_t *open_with_flags(const char *path, int flags)
     if (file == nullptr) {
         return nullptr;
     }
-    file->is_direct = false;
+    file->is_direct = (flags & O_DIRECT) != 0;
     file->fd = io->open(path, flags, FILE_MODE);
     if (file->fd < 0) {
         free(file);
@@ -46,11 +46,10 @@ page_file_t *page_file_create(const char *path)
 static page_file_t *open_direct(const char *path, int flags)
 {
     page_file_t *file = open_with_flags(path, flags | O_DIRECT);
-    if (file != nullptr) {
-        file->is_direct = true;
-        return file;
+    if (file == nullptr && errno == EINVAL) {
+        return open_with_flags(path, flags);
     }
-    return errno == EINVAL ? open_with_flags(path, flags) : nullptr;
+    return file;
 }
 
 page_file_t *page_file_open_direct(const char *path)
