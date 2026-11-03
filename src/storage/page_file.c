@@ -32,7 +32,7 @@ static page_file_t *open_with_flags(const char *path, int flags)
     return file;
 }
 
-static constexpr unsigned KNOWN_FLAGS = PAGE_FILE_FLAG_DIRECT;
+static constexpr unsigned KNOWN_FLAGS = PAGE_FILE_FLAG_DIRECT | PAGE_FILE_FLAG_CREATE;
 
 // The open(2) flags for the extra flags, or -1 with EINVAL for a bit that is not known
 static int system_flags(unsigned extra_flags)
@@ -41,7 +41,9 @@ static int system_flags(unsigned extra_flags)
         errno = EINVAL;
         return -1;
     }
-    return flags_are_set(extra_flags, PAGE_FILE_FLAG_DIRECT) ? O_DIRECT : 0;
+    int direct = flags_are_set(extra_flags, PAGE_FILE_FLAG_DIRECT) ? O_DIRECT : 0;
+    int create = flags_are_set(extra_flags, PAGE_FILE_FLAG_CREATE) ? O_CREAT : 0;
+    return direct | create;
 }
 
 static page_file_t *open_with(const char *path, int flags, unsigned extra_flags)

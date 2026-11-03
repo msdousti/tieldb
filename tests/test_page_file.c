@@ -178,6 +178,23 @@ static void test_open_does_not_create_a_missing_file([[maybe_unused]] void **sta
     assert_int_equal(access("/tmp/tieldb_no_such_directory", F_OK), -1);
 }
 
+static void test_open_with_the_create_flag_makes_a_missing_file_and_keeps_an_existing_one(
+    [[maybe_unused]] void **state)
+{
+    page_t page = page_holding("kept");
+
+    assert_int_equal(unlink(path), 0);
+    page_file_t *created = page_file_open(path, PAGE_FILE_FLAG_CREATE);
+    assert_true(created != nullptr);
+    assert_int_equal(page_file_write(created, 0, &page), 0);
+    assert_int_equal(page_file_close(created), 0);
+    page_file_t *reopened = page_file_open(path, PAGE_FILE_FLAG_CREATE);
+    assert_true(reopened != nullptr);
+    assert_int_equal(page_file_close(reopened), 0);
+    reopen_file();
+    assert_page_holds(0, "kept");
+}
+
 static void test_create_makes_a_new_file([[maybe_unused]] void **state)
 {
     page_t page = page_holding("new");
@@ -420,6 +437,9 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_a_refused_direct_open_is_reported, setup, teardown),
     cmocka_unit_test_setup_teardown(
         test_opening_or_creating_directly_keeps_the_errors_of_the_plain_calls, setup, teardown),
+    cmocka_unit_test_setup_teardown(
+        test_open_with_the_create_flag_makes_a_missing_file_and_keeps_an_existing_one, setup,
+        teardown),
     cmocka_unit_test_setup_teardown(test_create_makes_a_new_file, setup, teardown),
     cmocka_unit_test_setup_teardown(test_create_refuses_an_existing_file, setup, teardown),
     cmocka_unit_test_setup_teardown(test_write_and_sync_and_read_report_io_errors, setup, teardown),

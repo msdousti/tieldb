@@ -43,8 +43,13 @@ typedef struct page_file page_file_t;
  */
 constexpr unsigned PAGE_FILE_NO_EXTRA_FLAGS = 0;
 constexpr unsigned PAGE_FILE_FLAG_DIRECT = 1U << 0; // direct I/O; EINVAL if the file system refuses
+constexpr unsigned PAGE_FILE_FLAG_CREATE = 1U << 1; // page_file_open creates a missing file
 
-/** Opens an existing file for reading and writing; a file that does not exist is ENOENT. */
+/**
+ * Opens a file for reading and writing; a file that does not exist is ENOENT, unless
+ * PAGE_FILE_FLAG_CREATE is given: then it is created, in the same step (there is no moment in
+ * which another process can create it first, as there is between a failed open and a create).
+ */
 [[nodiscard]] page_file_t *page_file_open(const char *path, unsigned extra_flags);
 
 /** Creates a new file; a file that already exists is EEXIST, and is not touched. */

@@ -1,7 +1,5 @@
 #include "storage/one_page_file.h"
 
-#include <errno.h>
-
 #include "storage/page_file.h"
 
 static constexpr size_t THE_PAGE = 0;
@@ -12,16 +10,9 @@ static int finish(page_file_t *file, int status)
     return status != 0 ? status : closed;
 }
 
-static page_file_t *open_or_create(const char *path)
-{
-    page_file_t *file = page_file_open(path, PAGE_FILE_NO_EXTRA_FLAGS);
-    return file == nullptr && errno == ENOENT ? page_file_create(path, PAGE_FILE_NO_EXTRA_FLAGS)
-                                              : file;
-}
-
 int one_page_file_save(const char *path, const page_t *page)
 {
-    page_file_t *file = open_or_create(path);
+    page_file_t *file = page_file_open(path, PAGE_FILE_FLAG_CREATE);
     if (file == nullptr) {
         return -1;
     }
