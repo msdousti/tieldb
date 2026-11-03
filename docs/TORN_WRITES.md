@@ -14,7 +14,7 @@ sends `SIGKILL`, waits for the child, reads the block back and calls it *torn* i
 all equal. A shared-memory flag, set by the child around the `pwrite`, tells how many kills landed
 inside the syscall (80% to 99% in all runs). The source is at the end of this file.
 
-The runs: the development VM (Linux 7.2, OrbStack on a MacBook; ext2, ext4, xfs on loop-mounted
+The runs: the development VM (Linux 7.2, OrbStack on macOS; ext2, ext4, xfs on loop-mounted
 images, btrfs and tmpfs), GitHub-hosted runners (Ubuntu 22.04 with Linux 6.8, Ubuntu 24.04/26.04
 with Linux 7.0), older distributions booted in QEMU with KVM (Ubuntu 18.04, 20.04, 22.04 and Debian
 12 with their own kernels), and exact upstream kernels from the Ubuntu mainline archive booted the
@@ -65,12 +65,13 @@ Distribution kernels (also 3000 kills each):
 
 The Ubuntu 6.8 kernel does not tear xfs, while upstream 6.8 does (787 of 3000): the distribution
 backports changes, so the distribution matters as much as the version number. btrfs and ext2 were
-tried on 7.2 only, and neither tore an 8 KB write (0 of 4000 and 0 of 3000).
+tried on 7.2 only, and neither tore an 8 KB write (0 in 3000 to 4000 kills).
 
 ## Larger buffered writes
 
-Writes of 32 KB tore on every file system on every kernel up to 6.8 (for example xfs on 5.15: 1898
-of 3000). Writes of 4 MB and more were torn on ext4 and xfs on **every kernel tried, including the
+Writes of 32 KB (measured on the distribution kernels only) tore on tmpfs, ext4 and xfs on 4.15 to
+6.1 (for example xfs on 5.15: 1898 of 3000), and on tmpfs and ext4 on the Ubuntu 6.8 kernel; on the
+Ubuntu 7.0 and the 7.2 kernels they were not torn on ext4 and xfs. Writes of 4 MB and more were torn on ext4 and xfs on **every kernel tried, including the
 newest**: at 4 MB, ext4 tore 112 to 309 of 400 kills and xfs 72 to 301 of 400. On 7.2 the tear was
 always at a multiple of 2 MB (4 MB: about a quarter of the kills; 16 MB: about two thirds); the
 positions were not recorded on the other kernels. So the newer kernels did not make buffered writes
