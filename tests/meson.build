@@ -331,7 +331,8 @@ wire_buffer_oom_lib = static_library('wire_buffer_oom',
   buffer_sources,
   executor_sources,
   include_directories: inc,
-  c_args: ['-Dmalloc=oom_malloc', '-Dcalloc=oom_calloc', '-Drealloc=oom_realloc'],
+  c_args: ['-Dmalloc=oom_malloc', '-Dcalloc=oom_calloc', '-Drealloc=oom_realloc',
+           '-Daligned_alloc=oom_aligned_alloc'],
 )
 
 test_wire_buffer_oom = executable('test_wire_buffer_oom',

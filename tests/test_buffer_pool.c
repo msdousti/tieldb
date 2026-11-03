@@ -19,6 +19,7 @@
 #include <cmocka.h>
 
 #include "buffer/buffer_pool.h"
+#include "direct_io.h"
 #include "ds/clock_policy.h"
 #include "test_random.h"
 #include "io_fault.h"
@@ -29,6 +30,8 @@ static constexpr size_t FILES = 2;
 static constexpr size_t PAGES_PER_FILE = 4;
 
 static char directory[] = "/tmp/tieldb_buffer_pool_XXXXXX";
+static bool use_direct;
+static bool use_direct;
 static page_file_t *files[FILES];
 static buffer_pool_t *pool;
 static size_t file_numbers[FILES];
@@ -61,7 +64,8 @@ static void create_file(size_t file)
     char path[128];
 
     file_path(path, sizeof(path), file);
-    files[file] = page_file_create(path);
+    files[file] =
+        page_file_create(path, use_direct ? PAGE_FILE_FLAG_DIRECT : PAGE_FILE_NO_EXTRA_FLAGS);
     assert_true(files[file] != nullptr);
     fill_file(file);
     assert_int_equal(buffer_pool_add_file(pool, files[file], &file_numbers[file]), 0);
@@ -698,7 +702,15 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_threads_can_share_the_pool, setup, teardown),
 };
 
+// Every test runs twice: with buffered I/O and, where the file system allows it, with direct I/O
 int main(void)
 {
-    return cmocka_run_group_tests(tests, nullptr, nullptr);
+    use_direct = false;
+    int failed = cmocka_run_group_tests(tests, nullptr, nullptr);
+    if (!direct_io_is_available()) {
+        print_message("the file system refuses O_DIRECT: the direct I/O run is skipped\n");
+        return failed;
+    }
+    use_direct = true;
+    return failed + cmocka_run_group_tests(tests, nullptr, nullptr);
 }

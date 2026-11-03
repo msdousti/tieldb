@@ -380,6 +380,7 @@ Before submitting/committing code:
 - [ ] No magic numbers in `src/`: constants are named
 - [ ] No raw `malloc`/`free` in application code (use arenas)
 - [ ] All error returns checked
+- [ ] Sizes and offsets that the module does not bound itself use `ckd_add`/`ckd_mul`/`ckd_sub` (allocation sizes, lengths from files or the wire, rounding up, unsigned subtraction, narrowing casts); see "Checked arithmetic" in `.claude/c-guidelines.md`
 - [ ] No comments unless explaining *why*
 - [ ] Module internals are `static`
 - [ ] Stateful module types are opaque (`foo_create`/`foo_destroy`); vtables only where implementations are swappable

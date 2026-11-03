@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
+#define _GNU_SOURCE // O_DIRECT
 
 #include "storage/page_file.h"
 
@@ -8,6 +9,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include "common/flags.h"
 #include "io/io.h"
 
 static constexpr mode_t FILE_MODE = 0644;
@@ -30,14 +32,34 @@ static page_file_t *open_with_flags(const char *path, int flags)
     return file;
 }
 
-page_file_t *page_file_open(const char *path)
+static constexpr unsigned KNOWN_FLAGS = PAGE_FILE_FLAG_DIRECT | PAGE_FILE_FLAG_CREATE;
+
+// The open(2) flags for the extra flags, or -1 with EINVAL for a bit that is not known
+static int system_flags(unsigned extra_flags)
 {
-    return open_with_flags(path, O_RDWR);
+    if (!flags_are_clear(extra_flags, ~KNOWN_FLAGS)) {
+        errno = EINVAL;
+        return -1;
+    }
+    int direct = flags_are_set(extra_flags, PAGE_FILE_FLAG_DIRECT) ? O_DIRECT : 0;
+    int create = flags_are_set(extra_flags, PAGE_FILE_FLAG_CREATE) ? O_CREAT : 0;
+    return direct | create;
 }
 
-page_file_t *page_file_create(const char *path)
+static page_file_t *open_with(const char *path, int flags, unsigned extra_flags)
 {
-    return open_with_flags(path, O_RDWR | O_CREAT | O_EXCL);
+    int extra = system_flags(extra_flags);
+    return extra < 0 ? nullptr : open_with_flags(path, flags | extra);
+}
+
+page_file_t *page_file_open(const char *path, unsigned extra_flags)
+{
+    return open_with(path, O_RDWR, extra_flags);
+}
+
+page_file_t *page_file_create(const char *path, unsigned extra_flags)
+{
+    return open_with(path, O_RDWR | O_CREAT | O_EXCL, extra_flags);
 }
 
 int page_file_close(page_file_t *file)

@@ -18,6 +18,7 @@
 
 #include <cmocka.h>
 
+#include "direct_io.h"
 #include "io/io.h"
 #include "io_fault.h"
 #include "storage/page_file.h"
@@ -27,6 +28,7 @@ static constexpr size_t SLOT_COUNT_OFFSET = 16;
 static const char PATH_TEMPLATE[] = "/tmp/tieldb_page_file_XXXXXX";
 static char path[sizeof(PATH_TEMPLATE)];
 static page_file_t *file;
+static bool use_direct;
 
 static int setup([[maybe_unused]] void **state)
 {
@@ -37,7 +39,7 @@ static int setup([[maybe_unused]] void **state)
     }
     close(fd);
     io_init(true);
-    file = page_file_open(path);
+    file = page_file_open(path, use_direct ? PAGE_FILE_FLAG_DIRECT : PAGE_FILE_NO_EXTRA_FLAGS);
     return file == nullptr ? -1 : 0;
 }
 
@@ -107,7 +109,7 @@ static void reopen_file(void)
 {
     assert_int_equal(page_file_sync(file), 0);
     assert_int_equal(page_file_close(file), 0);
-    file = page_file_open(path);
+    file = page_file_open(path, PAGE_FILE_NO_EXTRA_FLAGS);
     if (file == nullptr) {
         fail();
     }
@@ -171,9 +173,26 @@ test_a_page_with_a_good_checksum_but_a_bad_structure_is_corrupt([[maybe_unused]]
 static void test_open_does_not_create_a_missing_file([[maybe_unused]] void **state)
 {
     errno = 0;
-    assert_null(page_file_open("/tmp/tieldb_no_such_directory/pages"));
+    assert_null(page_file_open("/tmp/tieldb_no_such_directory/pages", PAGE_FILE_NO_EXTRA_FLAGS));
     assert_int_equal(errno, ENOENT);
     assert_int_equal(access("/tmp/tieldb_no_such_directory", F_OK), -1);
+}
+
+static void test_open_with_the_create_flag_makes_a_missing_file_and_keeps_an_existing_one(
+    [[maybe_unused]] void **state)
+{
+    page_t page = page_holding("kept");
+
+    assert_int_equal(unlink(path), 0);
+    page_file_t *created = page_file_open(path, PAGE_FILE_FLAG_CREATE);
+    assert_true(created != nullptr);
+    assert_int_equal(page_file_write(created, 0, &page), 0);
+    assert_int_equal(page_file_close(created), 0);
+    page_file_t *reopened = page_file_open(path, PAGE_FILE_FLAG_CREATE);
+    assert_true(reopened != nullptr);
+    assert_int_equal(page_file_close(reopened), 0);
+    reopen_file();
+    assert_page_holds(0, "kept");
 }
 
 static void test_create_makes_a_new_file([[maybe_unused]] void **state)
@@ -181,7 +200,7 @@ static void test_create_makes_a_new_file([[maybe_unused]] void **state)
     page_t page = page_holding("new");
 
     assert_int_equal(unlink(path), 0);
-    page_file_t *created = page_file_create(path);
+    page_file_t *created = page_file_create(path, PAGE_FILE_NO_EXTRA_FLAGS);
     if (created == nullptr) {
         fail();
     }
@@ -195,7 +214,7 @@ static void test_create_refuses_an_existing_file([[maybe_unused]] void **state)
 
     assert_int_equal(page_file_write(file, 0, &page), 0);
     errno = 0;
-    assert_null(page_file_create(path));
+    assert_null(page_file_create(path, PAGE_FILE_NO_EXTRA_FLAGS));
     assert_int_equal(errno, EEXIST);
     assert_page_holds(0, "kept");
 }
@@ -344,6 +363,52 @@ static void test_allocating_reports_a_stat_error([[maybe_unused]] void **state)
     assert_int_equal(errno, EIO);
 }
 
+static void test_an_unknown_flag_is_refused([[maybe_unused]] void **state)
+{
+    const unsigned unknown = 1U << 7;
+
+    errno = 0;
+    assert_null(page_file_open(path, PAGE_FILE_FLAG_DIRECT | unknown));
+    assert_int_equal(errno, EINVAL);
+    assert_int_equal(unlink(path), 0);
+    errno = 0;
+    assert_null(page_file_create(path, unknown));
+    assert_int_equal(errno, EINVAL);
+    assert_int_equal(access(path, F_OK), -1);
+}
+
+static void test_a_refused_direct_open_is_reported([[maybe_unused]] void **state)
+{
+    io_init(false);
+    io_inject_fault(IO_FAULT_DIRECT_REFUSED, 1);
+    errno = 0;
+    assert_null(page_file_open(path, PAGE_FILE_FLAG_DIRECT));
+    assert_int_equal(errno, EINVAL);
+    io_inject_fault(IO_FAULT_DIRECT_REFUSED, 1);
+    assert_int_equal(unlink(path), 0);
+    errno = 0;
+    assert_null(page_file_create(path, PAGE_FILE_FLAG_DIRECT));
+    assert_int_equal(errno, EINVAL);
+}
+
+static void
+test_opening_or_creating_directly_keeps_the_errors_of_the_plain_calls([[maybe_unused]] void **state)
+{
+    if (!direct_io_is_available()) {
+        skip();
+    }
+    errno = 0;
+    assert_null(page_file_create(path, PAGE_FILE_FLAG_DIRECT));
+    assert_int_equal(errno, EEXIST);
+    assert_int_equal(unlink(path), 0);
+    errno = 0;
+    assert_null(page_file_open(path, PAGE_FILE_FLAG_DIRECT));
+    assert_int_equal(errno, ENOENT);
+    page_file_t *created = page_file_create(path, PAGE_FILE_FLAG_DIRECT);
+    assert_true(created != nullptr);
+    assert_int_equal(page_file_close(created), 0);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_a_written_page_reads_back_with_its_checksum, setup,
                                     teardown),
@@ -368,6 +433,13 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_a_torn_allocation_leaves_a_file_that_cannot_be_counted,
                                     setup, teardown),
     cmocka_unit_test_setup_teardown(test_allocating_reports_a_stat_error, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_an_unknown_flag_is_refused, setup, teardown),
+    cmocka_unit_test_setup_teardown(test_a_refused_direct_open_is_reported, setup, teardown),
+    cmocka_unit_test_setup_teardown(
+        test_opening_or_creating_directly_keeps_the_errors_of_the_plain_calls, setup, teardown),
+    cmocka_unit_test_setup_teardown(
+        test_open_with_the_create_flag_makes_a_missing_file_and_keeps_an_existing_one, setup,
+        teardown),
     cmocka_unit_test_setup_teardown(test_create_makes_a_new_file, setup, teardown),
     cmocka_unit_test_setup_teardown(test_create_refuses_an_existing_file, setup, teardown),
     cmocka_unit_test_setup_teardown(test_write_and_sync_and_read_report_io_errors, setup, teardown),
@@ -375,7 +447,15 @@ static const struct CMUnitTest tests[] = {
                                     teardown),
 };
 
+// Every test runs twice: with buffered I/O and, where the file system allows it, with direct I/O
 int main(void)
 {
-    return cmocka_run_group_tests(tests, nullptr, nullptr);
+    use_direct = false;
+    int failed = cmocka_run_group_tests(tests, nullptr, nullptr);
+    if (!direct_io_is_available()) {
+        print_message("the file system refuses O_DIRECT: the direct I/O run is skipped\n");
+        return failed;
+    }
+    use_direct = true;
+    return failed + cmocka_run_group_tests(tests, nullptr, nullptr);
 }

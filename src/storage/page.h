@@ -36,11 +36,15 @@
 
 #pragma once
 
-#include <stdalign.h>
 #include <stddef.h>
 #include <stdint.h>
 
 constexpr size_t PAGE_SIZE = 8192;
+
+// The alignment of a page in memory: direct I/O (O_DIRECT) needs buffers aligned to the logical
+// block size of the device, up to 4096 bytes. It is part of the type, so that a page can always be
+// a buffer
+constexpr size_t PAGE_ALIGNMENT = 4096;
 
 typedef enum {
     PAGE_TYPE_FREE = 0,
@@ -56,8 +60,18 @@ typedef enum {
 } slot_state_t;
 
 typedef struct {
-    alignas(uint64_t) unsigned char bytes[PAGE_SIZE];
+    alignas(PAGE_ALIGNMENT) unsigned char bytes[PAGE_SIZE];
 } page_t;
+
+static_assert(sizeof(page_t) == PAGE_SIZE);
+
+/**
+ * Memory for count pages, not initialized, aligned as page_t requires (malloc does not align that
+ * much); free() releases it. Not zeroing keeps a large array lazy: the operating system gives the
+ * pages only when they are used. A page_t in heap memory must come from here or sit in a struct
+ * that is allocated with the alignment of page_t. ENOMEM when memory runs out.
+ */
+[[nodiscard]] page_t *page_array_create(size_t count);
 
 /** Turns the page into an empty page of the given type. */
 void page_init(page_t *page, page_type_t type);

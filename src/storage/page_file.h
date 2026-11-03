@@ -16,6 +16,16 @@
  * its checksum or fails page_validate, and from page_file_count_pages for a file that ends in the
  * middle of a page; EIO from page_file_write for a short write. page_file_read
  * leaves the page unspecified when it fails.
+ *
+ * Direct I/O: a file opened with PAGE_FILE_FLAG_DIRECT bypasses the page cache of the operating
+ * system (O_DIRECT), so that a page that the buffer pool caches is not cached a second time. It is
+ * off unless asked for. Pages are aligned as direct I/O needs (see PAGE_ALIGNMENT in page.h), so
+ * any page_t can be read and written. If the file system refuses O_DIRECT (tmpfs did, for a long
+ * time), the open fails with EINVAL: the caller asked for direct I/O, so there is no silent
+ * fallback to buffered I/O, and whether buffered I/O is an acceptable substitute is the caller's
+ * decision. A refused page_file_create_direct may leave a new, empty file behind (the kernel
+ * creates it before it checks O_DIRECT). Writes are still not durable until page_file_sync, with
+ * or without direct I/O.
  */
 
 #pragma once
@@ -26,11 +36,24 @@
 
 typedef struct page_file page_file_t;
 
-/** Opens an existing file for reading and writing; a file that does not exist is ENOENT. */
-[[nodiscard]] page_file_t *page_file_open(const char *path);
+/**
+ * The extra_flags of page_file_open and page_file_create are optional behavior, combined with |, on
+ * top of what the function always does (read and write; create without replacing). A bit that is
+ * not listed here is EINVAL.
+ */
+constexpr unsigned PAGE_FILE_NO_EXTRA_FLAGS = 0;
+constexpr unsigned PAGE_FILE_FLAG_DIRECT = 1U << 0; // direct I/O; EINVAL if the file system refuses
+constexpr unsigned PAGE_FILE_FLAG_CREATE = 1U << 1; // page_file_open creates a missing file
+
+/**
+ * Opens a file for reading and writing; a file that does not exist is ENOENT, unless
+ * PAGE_FILE_FLAG_CREATE is given: then it is created, in the same step (there is no moment in
+ * which another process can create it first, as there is between a failed open and a create).
+ */
+[[nodiscard]] page_file_t *page_file_open(const char *path, unsigned extra_flags);
 
 /** Creates a new file; a file that already exists is EEXIST, and is not touched. */
-[[nodiscard]] page_file_t *page_file_create(const char *path);
+[[nodiscard]] page_file_t *page_file_create(const char *path, unsigned extra_flags);
 
 /** Closes the file and frees the handle, also when closing fails. */
 [[nodiscard]] int page_file_close(page_file_t *file);
