@@ -215,9 +215,9 @@ Two milestones, so that the first visible result comes early:
   - [x] Zero outstanding pins asserted at teardown (`buffer_pool_destroy` fails with `EBUSY` if a page is still pinned)
   - [ ] Optional direct I/O (`O_DIRECT`, off by default), so that a page is not cached twice
     - [x] `page_t` is 4096-aligned (`alignas`), so any page can be an I/O buffer; heap memory comes from `page_array_create`, and UBSan catches a misaligned `page_t`
-    - [x] `page_file_open_direct` and `page_file_create_direct`: they fall back to buffered I/O when the file system refuses `O_DIRECT` (`page_file_is_direct` says which one is in use); `fsync` is still needed for durability
-    - [x] The page file and buffer pool tests run twice, with buffered and with direct I/O, and a fault (`IO_FAULT_DIRECT_REFUSED`) tests the fallback
-    - [ ] A server option (for example `--direct-io`) that makes the heap engine open its files this way, when the heap engine exists
+    - [x] `page_file_open_direct` and `page_file_create_direct`: they open with `O_DIRECT` and fail loudly with `EINVAL` if the file system refuses it, with no silent fallback to buffered I/O (the caller asked for direct I/O, and whether buffered I/O is an acceptable substitute is the caller's decision); `fsync` is still needed for durability
+    - [x] The page file and buffer pool tests run twice, with buffered and with direct I/O (the direct run is skipped, with a message, where the file system refuses `O_DIRECT`), and a fault (`IO_FAULT_DIRECT_REFUSED`) tests that a refusal is reported
+    - [ ] A server option (for example `--direct-io`) that makes the heap engine open its files this way, when the heap engine exists; the server fails at startup with a clear message if the file system refuses
 - [ ] Free space map (bitmap or simple list)
 - [ ] Heap engine
   - [ ] Its engine-specific metadata (which file holds the pages of a table) is stored in the catalog as an opaque blob

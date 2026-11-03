@@ -15,7 +15,6 @@ static constexpr mode_t FILE_MODE = 0644;
 
 struct page_file {
     int fd;
-    bool is_direct;
 };
 
 static page_file_t *open_with_flags(const char *path, int flags)
@@ -24,7 +23,6 @@ static page_file_t *open_with_flags(const char *path, int flags)
     if (file == nullptr) {
         return nullptr;
     }
-    file->is_direct = (flags & O_DIRECT) != 0;
     file->fd = io->open(path, flags, FILE_MODE);
     if (file->fd < 0) {
         free(file);
@@ -43,28 +41,14 @@ page_file_t *page_file_create(const char *path)
     return open_with_flags(path, O_RDWR | O_CREAT | O_EXCL);
 }
 
-static page_file_t *open_direct(const char *path, int flags)
-{
-    page_file_t *file = open_with_flags(path, flags | O_DIRECT);
-    if (file == nullptr && errno == EINVAL) {
-        return open_with_flags(path, flags);
-    }
-    return file;
-}
-
 page_file_t *page_file_open_direct(const char *path)
 {
-    return open_direct(path, O_RDWR);
+    return open_with_flags(path, O_RDWR | O_DIRECT);
 }
 
 page_file_t *page_file_create_direct(const char *path)
 {
-    return open_direct(path, O_RDWR | O_CREAT | O_EXCL);
-}
-
-bool page_file_is_direct(const page_file_t *file)
-{
-    return file->is_direct;
+    return open_with_flags(path, O_RDWR | O_CREAT | O_EXCL | O_DIRECT);
 }
 
 int page_file_close(page_file_t *file)

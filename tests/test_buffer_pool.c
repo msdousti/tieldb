@@ -19,6 +19,7 @@
 #include <cmocka.h>
 
 #include "buffer/buffer_pool.h"
+#include "direct_io.h"
 #include "ds/clock_policy.h"
 #include "test_random.h"
 #include "io_fault.h"
@@ -700,11 +701,15 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_threads_can_share_the_pool, setup, teardown),
 };
 
-// Every test runs twice: with buffered I/O and with direct I/O
+// Every test runs twice: with buffered I/O and, where the file system allows it, with direct I/O
 int main(void)
 {
     use_direct = false;
     int failed = cmocka_run_group_tests(tests, nullptr, nullptr);
+    if (!direct_io_is_available()) {
+        print_message("the file system refuses O_DIRECT: the direct I/O run is skipped\n");
+        return failed;
+    }
     use_direct = true;
     return failed + cmocka_run_group_tests(tests, nullptr, nullptr);
 }

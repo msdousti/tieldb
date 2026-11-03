@@ -18,6 +18,7 @@
 
 #include <cmocka.h>
 
+#include "direct_io.h"
 #include "io/io.h"
 #include "io_fault.h"
 #include "storage/page_file.h"
@@ -345,32 +346,26 @@ static void test_allocating_reports_a_stat_error([[maybe_unused]] void **state)
     assert_int_equal(errno, EIO);
 }
 
-static void test_direct_io_is_used_when_asked_for_and_allowed([[maybe_unused]] void **state)
+static void test_a_refused_direct_open_is_reported([[maybe_unused]] void **state)
 {
-    if (use_direct && !page_file_is_direct(file)) {
-        print_message("the file system refuses O_DIRECT, so this run is buffered\n");
-        return;
-    }
-    assert_true(page_file_is_direct(file) == use_direct);
-}
-
-static void test_a_refused_direct_open_falls_back_to_buffered_io([[maybe_unused]] void **state)
-{
-    page_t page = page_holding("fallback");
-
     io_init(false);
     io_inject_fault(IO_FAULT_DIRECT_REFUSED, 1);
-    page_file_t *buffered = page_file_open_direct(path);
-    assert_true(buffered != nullptr);
-    assert_false(page_file_is_direct(buffered));
-    assert_int_equal(page_file_write(buffered, 0, &page), 0);
-    assert_int_equal(page_file_close(buffered), 0);
-    assert_page_holds(0, "fallback");
+    errno = 0;
+    assert_null(page_file_open_direct(path));
+    assert_int_equal(errno, EINVAL);
+    io_inject_fault(IO_FAULT_DIRECT_REFUSED, 1);
+    assert_int_equal(unlink(path), 0);
+    errno = 0;
+    assert_null(page_file_create_direct(path));
+    assert_int_equal(errno, EINVAL);
 }
 
 static void
 test_opening_or_creating_directly_keeps_the_errors_of_the_plain_calls([[maybe_unused]] void **state)
 {
+    if (!direct_io_is_available()) {
+        skip();
+    }
     errno = 0;
     assert_null(page_file_create_direct(path));
     assert_int_equal(errno, EEXIST);
@@ -407,10 +402,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_a_torn_allocation_leaves_a_file_that_cannot_be_counted,
                                     setup, teardown),
     cmocka_unit_test_setup_teardown(test_allocating_reports_a_stat_error, setup, teardown),
-    cmocka_unit_test_setup_teardown(test_direct_io_is_used_when_asked_for_and_allowed, setup,
-                                    teardown),
-    cmocka_unit_test_setup_teardown(test_a_refused_direct_open_falls_back_to_buffered_io, setup,
-                                    teardown),
+    cmocka_unit_test_setup_teardown(test_a_refused_direct_open_is_reported, setup, teardown),
     cmocka_unit_test_setup_teardown(
         test_opening_or_creating_directly_keeps_the_errors_of_the_plain_calls, setup, teardown),
     cmocka_unit_test_setup_teardown(test_create_makes_a_new_file, setup, teardown),
@@ -420,11 +412,15 @@ static const struct CMUnitTest tests[] = {
                                     teardown),
 };
 
-// Every test runs twice: with buffered I/O and with direct I/O
+// Every test runs twice: with buffered I/O and, where the file system allows it, with direct I/O
 int main(void)
 {
     use_direct = false;
     int failed = cmocka_run_group_tests(tests, nullptr, nullptr);
+    if (!direct_io_is_available()) {
+        print_message("the file system refuses O_DIRECT: the direct I/O run is skipped\n");
+        return failed;
+    }
     use_direct = true;
     return failed + cmocka_run_group_tests(tests, nullptr, nullptr);
 }
