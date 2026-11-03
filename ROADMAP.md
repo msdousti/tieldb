@@ -218,6 +218,11 @@ Two milestones, so that the first visible result comes early:
     - [x] `page_file_open` and `page_file_create` take `extra_flags` (`PAGE_FILE_FLAG_DIRECT`, `PAGE_FILE_FLAG_CREATE` to create a missing file in the same step as the open, or `PAGE_FILE_NO_EXTRA_FLAGS`; an unknown bit is `EINVAL`): with the direct flag they open with `O_DIRECT` and fail loudly with `EINVAL` if the file system refuses it, with no silent fallback to buffered I/O (the caller asked for direct I/O, and whether buffered I/O is an acceptable substitute is the caller's decision); `fsync` is still needed for durability
     - [x] The page file and buffer pool tests run twice, with buffered and with direct I/O (the direct run is skipped, with a message, where the file system refuses `O_DIRECT`), and a fault (`IO_FAULT_DIRECT_REFUSED`) tests that a refusal is reported
     - [ ] A server option (for example `--direct-io`) that makes the heap engine open its files this way, when the heap engine exists; the server fails at startup with a clear message if the file system refuses
+- [ ] Atomic replacement of the milestone A files, until the heap engine and the system tables replace them. `one_page_file_save` writes the catalog file and the `<table>.tbl` files in place, so a crash or a power loss in the middle of a checkpoint can tear a file (the checksum detects it as `EBADMSG`, but nothing repairs it); a torn catalog file makes the whole database unreadable at startup, even when the table files are fine
+  - [ ] `one_page_file_save` writes a temporary file in the same directory, syncs it and renames it over the old file (a rename within one file system is atomic); the directory sync that `data_dir_checkpoint` already does at its end makes the rename durable. A temporary file left by an earlier crash is replaced by the next save, and startup ignores or removes it
+  - [ ] The order in `data_dir_checkpoint` stays tables first and catalog last; check that a crash between two renames is safe (a new table file next to the old catalog: the catalog does not know the new table, so its file is simply not used)
+  - [ ] `io_ops_t` (and the fault layer in `tests/io_fault`) gets `rename`, and `unlink` if the cleanup needs it. Tests inject a failure at every step (write, sync, before the rename, the rename itself, the directory sync): afterwards the file must be the old one or the new one, never a mixture, and the data directory must load
+  - [ ] This is not a design for the heap files: they have many pages updated in place, which a rename cannot make atomic; that is the torn page protection task of Phase 5
 - [ ] Free space map (bitmap or simple list)
 - [ ] Heap engine
   - [ ] Its engine-specific metadata (which file holds the pages of a table) is stored in the catalog as an opaque blob
@@ -478,6 +483,7 @@ SELECT * FROM users WHERE id >= 10 AND id < 100;
   - Atomic writes from the hardware or the file system (NVMe atomic write units, Linux atomic direct writes with `RWF_ATOMIC`): if the device guarantees 8 KB, no protection is needed. Not portable, so at most an optimization that skips the protection when the guarantee is detected
   - Smaller pages (4 KB) shrink the problem but do not remove it (a sector is 512 B on some disks) and change the on-disk format, so this is not a candidate by itself
   - Only detect (what exists): acceptable only as a documented limitation, with a restore from a backup
+  - Whole-file rewrites (the milestone A catalog and table files) need none of these: they are replaced atomically with a temporary file and a rename, see "Atomic replacement of the milestone A files" in Phase 2
   - Test for whichever is chosen: a crash in the middle of a checkpoint flush with `IO_FAULT_TORN_WRITE` at every split point of a page (the first sector, half, all but the last sector), then recovery; every page must be restored and no committed row lost
 - [ ] (Later) ARIES-style undo
   - [ ] Undo records (CLRs)
