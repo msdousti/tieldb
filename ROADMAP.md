@@ -138,6 +138,7 @@ Two milestones, so that the first visible result comes early:
 - Everything on disk is versioned: the data directory has a version file and the catalog has a format version, so a later format is refused or upgraded and never misread.
 - Pages are checked when they are read: a CRC-32C checksum and a validity check of the header and slots.
 - Durability before the WAL (Phase 5): dirty pages are flushed on clean shutdown and on an explicit checkpoint. After `kill -9` only data flushed before the kill is guaranteed.
+- Known limitation of milestone A, left unfixed on purpose: `one_page_file_save` writes the catalog file and the `<table>.tbl` files in place, so a power loss or a kernel crash (a process kill cannot do it) in the middle of a checkpoint can tear one of them. The checksum detects it (`EBADMSG`) but nothing repairs it, and a torn catalog file makes the whole data directory unreadable at startup. The files are replaced within this milestone (tables by the heap engine, the catalog by system tables) and the data is test data, so the fix would be work on code that is deleted soon. If they live longer than expected, the fix is a temporary file, a sync and a rename over the old file (see the control file task in Phase 5)
 - Locking: the per-table mutex stays; the buffer pool has its own internal lock. Page latches and MVCC wait for Phase 6.
 - Milestone A keeps the catalog in a page file of its own, in the same row format. Milestone B moves it into real system tables (pg_class-like) with a bootstrap on first run.
 - New modules: `src/types`, `src/storage` (page, page file, row codec, engines, catalog, and in B heap file, heap tuple and free space map) and `src/buffer`.
@@ -467,6 +468,7 @@ SELECT * FROM users WHERE id >= 10 AND id < 100;
 - [ ] Checkpointing
   - [ ] Fuzzy checkpoint (write dirty pages, record checkpoint LSN)
   - [ ] Checkpoint record in WAL
+  - [ ] A small control file that tells recovery where to start (the last checkpoint), if the design does not find the checkpoint by scanning the log (Postgres's `pg_control`), replaced atomically: write a temporary file in the same directory, sync it, rename it over the old file (a rename within one file system is atomic), sync the directory. This needs `rename` (and `unlink`, if the cleanup of a leftover temporary file needs it) in `io_ops_t` and in the fault layer of `tests/io_fault`, and tests that inject a failure at every step (write, sync, before the rename, the rename itself, the directory sync): afterwards the file must be the old one or the new one, never a mixture. Build it as a general helper; if the milestone A files still exist when it does, `one_page_file_save` can use it
 - [ ] fsync discipline
   - [ ] Treat fsync failure as PANIC (see c-guidelines.md)
   - [ ] Fault injection test for fsync failure
@@ -478,6 +480,7 @@ SELECT * FROM users WHERE id >= 10 AND id < 100;
   - Atomic writes from the hardware or the file system (NVMe atomic write units, Linux atomic direct writes with `RWF_ATOMIC`): if the device guarantees 8 KB, no protection is needed. Not portable, so at most an optimization that skips the protection when the guarantee is detected
   - Smaller pages (4 KB) shrink the problem but do not remove it (a sector is 512 B on some disks) and change the on-disk format, so this is not a candidate by itself
   - Only detect (what exists): acceptable only as a documented limitation, with a restore from a backup
+  - Whole-file rewrites of small files (the milestone A files, the control file) need none of these: a temporary file plus a rename replaces them atomically, see the control file task under Checkpointing. It does not work for the heap files, which have many pages updated in place
   - Test for whichever is chosen: a crash in the middle of a checkpoint flush with `IO_FAULT_TORN_WRITE` at every split point of a page (the first sector, half, all but the last sector), then recovery; every page must be restored and no committed row lost
 - [ ] (Later) ARIES-style undo
   - [ ] Undo records (CLRs)
