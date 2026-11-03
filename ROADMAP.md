@@ -138,7 +138,7 @@ Two milestones, so that the first visible result comes early:
 - Everything on disk is versioned: the data directory has a version file and the catalog has a format version, so a later format is refused or upgraded and never misread.
 - Pages are checked when they are read: a CRC-32C checksum and a validity check of the header and slots.
 - Durability before the WAL (Phase 5): dirty pages are flushed on clean shutdown and on an explicit checkpoint. After `kill -9` only data flushed before the kill is guaranteed.
-- Known limitation of milestone A, left unfixed on purpose: `one_page_file_save` writes the catalog file and the `<table>.tbl` files in place, so a power loss or a kernel crash (a process kill cannot do it) in the middle of a checkpoint can tear one of them. The checksum detects it (`EBADMSG`) but nothing repairs it, and a torn catalog file makes the whole data directory unreadable at startup. The files are replaced within this milestone (tables by the heap engine, the catalog by system tables) and the data is test data, so the fix would be work on code that is deleted soon. If they live longer than expected, the fix is a temporary file, a sync and a rename over the old file (see the control file task in Phase 5)
+- Known limitation of milestone A, left unfixed on purpose: `one_page_file_save` writes the catalog file and the `<table>.tbl` files in place, so a power loss, a kernel crash or, on some file systems, even a process kill (`kill -9`) in the middle of a checkpoint can tear one of them: a buffered write is copied into the page cache one 4 KB page at a time, and a fatal signal can stop it between two pages. A test on tmpfs (a child writing an 8 KB page in a loop, killed at a random moment) found the page torn at byte 4096 in about a third of the kills; 4000 kills each on btrfs, ext2, ext4 and xfs found none, which does not prove that it cannot happen there. The checksum detects it (`EBADMSG`) but nothing repairs it, and a torn catalog file makes the whole data directory unreadable at startup. The files are replaced within this milestone (tables by the heap engine, the catalog by system tables) and the data is test data, so the fix would be work on code that is deleted soon. If they live longer than expected, the fix is a temporary file, a sync and a rename over the old file (see the control file task in Phase 5)
 - Locking: the per-table mutex stays; the buffer pool has its own internal lock. Page latches and MVCC wait for Phase 6.
 - Milestone A keeps the catalog in a page file of its own, in the same row format. Milestone B moves it into real system tables (pg_class-like) with a bootstrap on first run.
 - New modules: `src/types`, `src/storage` (page, page file, row codec, engines, catalog, and in B heap file, heap tuple and free space map) and `src/buffer`.
@@ -243,7 +243,7 @@ Two milestones, so that the first visible result comes early:
   - [ ] Buffer pool (milestone B)
 - [x] Fault injection moved out of `src/io/io.c` into a test-support library (`tests/io_fault.{h,c}`): the server ships only the real operations, and the fault code no longer counts toward the coverage of `src/`; the cost is that a spawned `tieldb` can no longer be given faults
 - [x] Unit tests for buffer pool (pin/unpin, flushing, eviction against a scripted policy, and a random-use test against a model of the pages)
-- [ ] Crash test: write data, flush, kill -9, restart, verify the flushed data survives
+- [ ] Crash test: write data, flush, kill -9, restart, verify the flushed data survives. Run it in a directory on a disk file system, not in `/tmp` when that is tmpfs, where a `kill -9` tears 8 KB writes at the 4096 boundary (see the limitation of milestone A above)
 - [x] Fuzz test for page deserialization (milestone B)
 
 ### Deliverables
@@ -472,7 +472,7 @@ SELECT * FROM users WHERE id >= 10 AND id < 100;
 - [ ] fsync discipline
   - [ ] Treat fsync failure as PANIC (see c-guidelines.md)
   - [ ] Fault injection test for fsync failure
-- [ ] Torn page protection (a page is 8 KB, but the disk and the OS promise atomic writes only for a sector of 512 B or 4 KB, so a power loss in the middle of a page write can leave a page half new and half old). Today the CRC-32C checksum detects such a page (`EBADMSG`), but nothing repairs it, and a checkpoint writes pages in place, so this is the main way for a crash to lose data after the WAL exists. Decide the design when the WAL and the checkpoint are designed; the candidates are:
+- [ ] Torn page protection (a page is 8 KB, but the disk and the OS promise atomic writes only for a sector of 512 B or 4 KB, so a power loss in the middle of a page write can leave a page half new and half old; on some file systems a `kill -9` during an 8 KB write can do it too, as measured on tmpfs). Today the CRC-32C checksum detects such a page (`EBADMSG`), but nothing repairs it, and a checkpoint writes pages in place, so this is the main way for a crash to lose data after the WAL exists. Decide the design when the WAL and the checkpoint are designed; the candidates are:
   - Full-page images in the WAL (Postgres, `full_page_writes`): normal records are small deltas ("insert this row at slot 7 of page 12"), which can only be replayed on a page that is in a consistent earlier state, and a torn page is not. So the first change to a page after each checkpoint logs the whole page as a base; recovery restores that image and then replays the later small records on top of it. Fits the redo-only WAL; costs a burst of WAL volume after every checkpoint (compression helps), and needs the checkpoint's redo position to tell whether a change is the first one
   - Physical logging: every record carries the whole page after the change, so replay overwrites the page completely and a torn page is harmless. The simplest recovery and no extra mechanism, but about 8 KB of log per small change, so it is only attractive as a first version or for rarely changed pages (the catalog)
   - A doublewrite buffer (InnoDB): write each batch of dirty pages to a separate area and sync it, then write them in place; at startup, a page that fails its checksum is restored from the copy. Independent of the WAL record format, so it works with any log, but every page is written twice (the first time sequentially)
@@ -488,7 +488,7 @@ SELECT * FROM users WHERE id >= 10 AND id < 100;
   - [ ] Steal/no-force buffer policy
 
 ### Tests
-- [ ] **Crash test with fork() + kill -9**
+- [ ] **Crash test with fork() + kill -9** (in a directory on a disk file system: on tmpfs a kill alone tears 8 KB page writes, which makes the test fail for a reason that is not the code under test; or inject the torn write on purpose with `IO_FAULT_TORN_WRITE`)
   - [ ] Insert data in child process
   - [ ] Kill child at random point
   - [ ] Parent recovers, checks invariants
