@@ -1,6 +1,7 @@
 #include "storage/page.h"
 
 #include <errno.h>
+#include <stdckdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -278,7 +279,13 @@ int page_validate(const page_t *page)
     return 0;
 }
 
+// aligned_alloc does not check count * sizeof(page_t) the way calloc does
 page_t *page_array_create(size_t count)
 {
-    return aligned_alloc(alignof(page_t), count * sizeof(page_t));
+    size_t bytes = 0;
+    if (ckd_mul(&bytes, count, sizeof(page_t))) {
+        errno = ENOMEM;
+        return nullptr;
+    }
+    return aligned_alloc(alignof(page_t), bytes);
 }

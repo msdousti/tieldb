@@ -143,7 +143,7 @@ Makefiles, no CMake.
 - Set the pointer to `NULL` after `free`. A `#define FREE(p) do { free(p); (p) = NULL; } while (0)` helps.
 - Always check the return value of `malloc`/`calloc`/`realloc`.
   - `p = realloc(p, n)` leaks on failure; assign to a temporary first.
-  - Use `calloc` or `reallocarray` for array allocations to avoid overflow in `count * size`.
+  - Use `calloc` or `reallocarray` for array allocations to avoid overflow in `count * size`; with `malloc`, `aligned_alloc` and the like, check the product yourself (see "Checked arithmetic" below).
 - Prefer `p = malloc(n * sizeof *p)` to `sizeof(type)`. It stays correct when the type changes.
 - Don't cast the result of `malloc` in C.
 - Use `goto cleanup;` for single-exit resource release in functions with multiple resources, or GNU `__attribute__((cleanup(fn)))` if GNU C is acceptable.
@@ -151,6 +151,20 @@ Makefiles, no CMake.
 - Never use uninitialized memory. Use `memset`/`calloc` or an initializer.
 - Beware of undefined behavior: signed overflow, out-of-bounds access, null dereference, strict aliasing violations, use-after-free, bad shifts, unsequenced modifications. Use `memcpy` for type-punning rather than pointer casts, and unsigned arithmetic for wraparound. This matters most for byte-level page and tuple code.
 - **Make leaks structural:** at teardown, assert that every arena, pool/pin count, and open file handle is back to zero. A buffer-pool pin leak is the DBMS version of a memory leak, and ASan will not see it.
+
+### Checked arithmetic
+Unsigned arithmetic wraps silently and signed overflow is undefined, so a bad size or offset turns into a short allocation or a read past a buffer. Where the rules below say so, use C23 `<stdckdint.h>` (`ckd_add`, `ckd_sub`, `ckd_mul`: they return true when the result does not fit). On overflow, fail like any other error: `-1` or `nullptr` with `errno` (`ENOMEM` for an allocation size, `EOVERFLOW` otherwise), documented in the header, and write a test for the overflow branch.
+
+**Needs a check**
+- **Allocation sizes:** `count * size`, `header + length`, and any sum or product that feeds `malloc`, `realloc`, `aligned_alloc`, `posix_memalign` or the length of a buffer. `calloc` and `reallocarray` check the product themselves, the others do not. Switching from `calloc` to `aligned_alloc` silently drops that check (this happened in `page_array_create`).
+- **Offsets and lengths that come from outside the module** (a file, a page header, the wire, an option): `offset + length`, `page_number * PAGE_SIZE`, slot offsets. Write bounds checks in the form that cannot overflow: `offset <= size && length <= size - offset`, not `offset + length <= size`.
+- **Subtraction of unsigned values:** `a - b` only after `b <= a`. Beware of loops that count down on a `size_t` (`i >= 0` is always true).
+- **Rounding up** (`(n + m - 1) / m * m`, `(n + m - 1) & ~(m - 1)`): the addition can overflow.
+- **Narrowing conversions** (`size_t` to `uint16_t`, `int`, `off_t`): check the range before the cast. A slot offset or a tuple length stored in 16 bits is the typical case. `-Wconversion` finds the implicit ones.
+- **Shifts:** the shift count must be smaller than the width of the type.
+- **Counters that must not wrap** (32-bit page numbers, reference counts): check when incrementing. 64-bit LSNs and transaction IDs cannot wrap in practice; say so where they are defined.
+
+**Does not need a check, if the reason is stated** (in a comment or an assertion next to the code): values bounded by a constant of the same module (a column count is at most `TABLE_MAX_COLUMNS`, so the size of the null bitmap derived from it cannot overflow), loop indexes below the length of what they walk, compile-time constants (`constexpr`, `static_assert`), and values that were checked a few lines earlier. Copying an unchecked pattern next to a checked one is how the bug spreads: when a size comes from somewhere new, ask where it is bounded.
 
 ## 6. Interface and Module Design
 
@@ -280,6 +294,7 @@ Start with the I/O interface with fault injection, then a first cmocka test for 
 - [ ] Every allocation has one owner and a matching free; pointers nulled after free
 - [ ] Arena allocator in place; teardown asserts zero outstanding arenas, pins, file handles
 - [ ] All return values that can fail are checked
+- [ ] Sizes and offsets that the module does not bound itself are computed with `ckd_*` (allocation sizes, offsets and lengths from files or the wire, rounding up, unsigned subtraction, narrowing casts)
 - [ ] Public API prefixed, documented, opaque where possible
 - [ ] Internals `static`; headers self-contained with guards
 - [ ] No unbounded string functions; every buffer carries a length

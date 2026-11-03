@@ -7,6 +7,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <cmocka.h>
@@ -369,6 +370,19 @@ static void run_against_model(uint64_t seed)
     model_compare(&model);
 }
 
+static void
+test_an_array_of_pages_is_aligned_and_too_many_pages_are_refused([[maybe_unused]] void **state)
+{
+    page_t *pages = page_array_create(3);
+
+    assert_true(pages != nullptr);
+    assert_int_equal((uintptr_t) pages % PAGE_ALIGNMENT, 0);
+    free(pages);
+    errno = 0;
+    assert_true(page_array_create((SIZE_MAX / sizeof(page_t)) + 1) == nullptr);
+    assert_int_equal(errno, ENOMEM);
+}
+
 static void test_page_agrees_with_a_model_under_random_operations([[maybe_unused]] void **state)
 {
     const uint64_t seeds[] = {1, 42, 0xdeadbeef, 20261019};
@@ -388,6 +402,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup(test_page_flags_are_kept_for_the_engine, new_page),
     cmocka_unit_test_setup(test_the_largest_tuple_fills_the_page, new_page),
     cmocka_unit_test_setup(test_scattered_free_space_is_gathered_when_needed, new_page),
+    cmocka_unit_test(test_an_array_of_pages_is_aligned_and_too_many_pages_are_refused),
     cmocka_unit_test(test_page_agrees_with_a_model_under_random_operations),
 };
 
