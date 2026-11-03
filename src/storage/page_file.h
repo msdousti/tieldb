@@ -17,7 +17,7 @@
  * middle of a page; EIO from page_file_write for a short write. page_file_read
  * leaves the page unspecified when it fails.
  *
- * Direct I/O: a file opened with the _direct functions bypasses the page cache of the operating
+ * Direct I/O: a file opened with PAGE_FILE_FLAG_DIRECT bypasses the page cache of the operating
  * system (O_DIRECT), so that a page that the buffer pool caches is not cached a second time. It is
  * off unless asked for. Pages are aligned as direct I/O needs (see PAGE_ALIGNMENT in page.h), so
  * any page_t can be read and written. If the file system refuses O_DIRECT (tmpfs did, for a long
@@ -36,17 +36,19 @@
 
 typedef struct page_file page_file_t;
 
+/**
+ * The extra_flags of page_file_open and page_file_create are optional behavior, combined with |, on
+ * top of what the function always does (read and write; create without replacing). A bit that is
+ * not listed here is EINVAL.
+ */
+constexpr unsigned PAGE_FILE_NO_EXTRA_FLAGS = 0;
+constexpr unsigned PAGE_FILE_FLAG_DIRECT = 1U << 0; // direct I/O; EINVAL if the file system refuses
+
 /** Opens an existing file for reading and writing; a file that does not exist is ENOENT. */
-[[nodiscard]] page_file_t *page_file_open(const char *path);
+[[nodiscard]] page_file_t *page_file_open(const char *path, unsigned extra_flags);
 
 /** Creates a new file; a file that already exists is EEXIST, and is not touched. */
-[[nodiscard]] page_file_t *page_file_create(const char *path);
-
-/** Like page_file_open, with direct I/O; EINVAL if the file system refuses it. */
-[[nodiscard]] page_file_t *page_file_open_direct(const char *path);
-
-/** Like page_file_create, with direct I/O; EINVAL if the file system refuses it. */
-[[nodiscard]] page_file_t *page_file_create_direct(const char *path);
+[[nodiscard]] page_file_t *page_file_create(const char *path, unsigned extra_flags);
 
 /** Closes the file and frees the handle, also when closing fails. */
 [[nodiscard]] int page_file_close(page_file_t *file);

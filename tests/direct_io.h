@@ -10,7 +10,8 @@
 #include "storage/page_file.h"
 
 // Some file systems refuse O_DIRECT (tmpfs did, for a long time); the tests that need it are
-// skipped there, because page_file_open_direct fails loudly instead of giving a buffered file
+// skipped there, because page_file_open with PAGE_FILE_FLAG_DIRECT fails loudly instead of giving a
+// buffered file
 static inline bool direct_io_is_available(void)
 {
     char path[] = "/tmp/tieldb_direct_probe_XXXXXX";
@@ -20,7 +21,7 @@ static inline bool direct_io_is_available(void)
         return false;
     }
     close(fd);
-    page_file_t *file = page_file_open_direct(path);
+    page_file_t *file = page_file_open(path, PAGE_FILE_FLAG_DIRECT);
     bool is_available = file != nullptr;
     if (is_available) {
         (void) page_file_close(file);

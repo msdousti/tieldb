@@ -684,7 +684,7 @@ test_page_file_open_fails_when_the_handle_cannot_be_allocated([[maybe_unused]] v
     will_return(oom_malloc, false);
 
     errno = 0;
-    assert_null(page_file_open("/tmp/tieldb_page_file_oom"));
+    assert_null(page_file_open("/tmp/tieldb_page_file_oom", PAGE_FILE_NO_EXTRA_FLAGS));
     assert_int_equal(errno, ENOMEM);
 }
 

@@ -64,7 +64,8 @@ static void create_file(size_t file)
     char path[128];
 
     file_path(path, sizeof(path), file);
-    files[file] = use_direct ? page_file_create_direct(path) : page_file_create(path);
+    files[file] =
+        page_file_create(path, use_direct ? PAGE_FILE_FLAG_DIRECT : PAGE_FILE_NO_EXTRA_FLAGS);
     assert_true(files[file] != nullptr);
     fill_file(file);
     assert_int_equal(buffer_pool_add_file(pool, files[file], &file_numbers[file]), 0);

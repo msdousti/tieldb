@@ -14,8 +14,9 @@ static int finish(page_file_t *file, int status)
 
 static page_file_t *open_or_create(const char *path)
 {
-    page_file_t *file = page_file_open(path);
-    return file == nullptr && errno == ENOENT ? page_file_create(path) : file;
+    page_file_t *file = page_file_open(path, PAGE_FILE_NO_EXTRA_FLAGS);
+    return file == nullptr && errno == ENOENT ? page_file_create(path, PAGE_FILE_NO_EXTRA_FLAGS)
+                                              : file;
 }
 
 int one_page_file_save(const char *path, const page_t *page)
@@ -30,7 +31,7 @@ int one_page_file_save(const char *path, const page_t *page)
 
 int one_page_file_load(const char *path, page_t *page)
 {
-    page_file_t *file = page_file_open(path);
+    page_file_t *file = page_file_open(path, PAGE_FILE_NO_EXTRA_FLAGS);
     if (file == nullptr) {
         return -1;
     }
