@@ -394,6 +394,7 @@ HAVING COUNT(*) > 5;
   - [ ] Point lookup
   - [ ] Range scan (iterator interface)
   - [ ] Delete with merges (optional, can defer)
+  - [ ] Reuse of released pages (a freelist or a bitmap, shared by the heap and the indexes; the free space map does not do this, see `docs/FREE_SPACE_MAP.md`)
 - [ ] Index metadata
   - [ ] Catalog entry (pg_index-like)
   - [ ] Index-to-table mapping
