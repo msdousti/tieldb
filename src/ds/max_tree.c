@@ -2,7 +2,6 @@
 
 #include <errno.h>
 #include <stdbit.h>
-#include <stdckdint.h>
 #include <string.h>
 
 static size_t left_child(size_t node_index)
@@ -15,10 +14,15 @@ static size_t parent_of(size_t node_index)
     return (node_index - 1) / 2;
 }
 
+static uint8_t value_at(const max_tree_t *tree, size_t node_index)
+{
+    return node_index < tree->first_leaf + tree->leaf_count ? tree->nodes[node_index] : 0;
+}
+
 static uint8_t larger_child(const max_tree_t *tree, size_t node_index)
 {
-    uint8_t left_value = tree->nodes[left_child(node_index)];
-    uint8_t right_value = tree->nodes[left_child(node_index) + 1];
+    uint8_t left_value = value_at(tree, left_child(node_index));
+    uint8_t right_value = value_at(tree, left_child(node_index) + 1);
 
     return left_value > right_value ? left_value : right_value;
 }
@@ -44,15 +48,12 @@ int max_tree_size(size_t leaf_count, size_t *bytes)
     if (padded_leaf_count(leaf_count, &padded) != 0) {
         return -1;
     }
-    if (ckd_mul(bytes, padded, 2)) {
-        errno = EOVERFLOW;
-        return -1;
-    }
-    *bytes -= 1;
+    // The inner nodes (padded - 1) and the real leaves: at most 2^64 - 1, so the sum cannot wrap
+    *bytes = (padded - 1) + leaf_count;
     return 0;
 }
 
-int max_tree_init(max_tree_t *tree, void *memory, size_t memory_size, size_t leaf_count)
+static int bind_memory(max_tree_t *tree, void *memory, size_t memory_size, size_t leaf_count)
 {
     size_t bytes = 0;
 
@@ -63,10 +64,29 @@ int max_tree_init(max_tree_t *tree, void *memory, size_t memory_size, size_t lea
         errno = EINVAL;
         return -1;
     }
-    memset(memory, 0, bytes);
     tree->nodes = memory;
     tree->leaf_count = leaf_count;
     tree->first_leaf = stdc_bit_ceil(leaf_count) - 1;
+    return 0;
+}
+
+int max_tree_init(max_tree_t *tree, void *memory, size_t memory_size, size_t leaf_count)
+{
+    if (bind_memory(tree, memory, memory_size, leaf_count) != 0) {
+        return -1;
+    }
+    memset(memory, 0, tree->first_leaf + leaf_count);
+    return 0;
+}
+
+int max_tree_attach(max_tree_t *tree, void *memory, size_t memory_size, size_t leaf_count)
+{
+    if (bind_memory(tree, memory, memory_size, leaf_count) != 0) {
+        return -1;
+    }
+    for (size_t node_index = tree->first_leaf; node_index > 0; node_index--) {
+        tree->nodes[node_index - 1] = larger_child(tree, node_index - 1);
+    }
     return 0;
 }
 
@@ -123,7 +143,7 @@ int max_tree_find(const max_tree_t *tree, uint8_t at_least, size_t *leaf)
     size_t node_index = 0;
     while (node_index < tree->first_leaf) {
         size_t left_index = left_child(node_index);
-        node_index = tree->nodes[left_index] >= at_least ? left_index : left_index + 1;
+        node_index = value_at(tree, left_index) >= at_least ? left_index : left_index + 1;
     }
     *leaf = node_index - tree->first_leaf;
     return 0;
