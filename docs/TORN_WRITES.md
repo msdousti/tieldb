@@ -27,31 +27,37 @@ Three kinds of statements are mixed here, and each is marked:
    8 KB block was torn at byte 4096 in 24% to 37% of the kills on every kernel tried. *(measured)*
 2. Whether an 8 KB block survives depends on the kernel version and the file system. Upstream
    releases: on **xfs** it tears up to Linux 6.8 and not from **6.9**; on **ext4** it tears up to
-   6.15 and not from **6.16**. *(measured)* The ext4 release matches the pull request that enabled
-   large folios for regular files in 6.16. *(documented)* The commit that changed xfs was not
-   identified.
-3. Distribution kernels differ from upstream: the Ubuntu 6.8 kernel did not tear xfs, while upstream
+   6.15 and not from **6.16**. *(measured)* The ext4 release is the one in which large folios were
+   enabled for regular files, according to the pull request. The xfs release is the one that contains
+   the mm commit `8897277acfef`, "mm: support order-1 folios in the page cache", which removed a rule
+   that turned a request for an 8 KB folio into a 4 KB one. *(documented, read in the source)* The two
+   XFS merge commits for 6.8 and 6.9 are not the cause.
+3. Which write sizes survive follows the folio sizes the kernel can use. On xfs 6.6 to 6.8, writes of
+   16, 32 and 64 KB were never torn, while 8, 12 and 24 KB were; from 6.9, 8 KB is safe too, and 12
+   and 24 KB (not powers of two) are still torn; before 6.6 every size is torn. On ext4 every size was
+   torn up to 6.10. *(measured; this is a prediction of the source reading, and it held)*
+4. Distribution kernels differ from upstream: the Ubuntu 6.8 kernel did not tear xfs, while upstream
    6.8 does, so the distribution matters as much as the version number. *(measured)*
-4. Larger buffered writes tear on every kernel tried, including 6.18: a 4 MB write was torn in 18% to
-   77% of the kills on ext4 and xfs; on Linux 7.2 always at a multiple of 2 MB. *(measured)* So the
-   newer kernels did not make buffered writes atomic against a kill; they made the copy steps larger
-   *(an inference)*.
-5. With `O_DIRECT` and aligned buffers nothing was torn on ext4, xfs, ext2 and btrfs, at 8 KB, 32 KB,
+5. Larger buffered writes tear on every kernel tried, including 6.18: a 4 MB write was torn in 18% to
+   77% of the kills on ext4 and xfs; on Linux 7.2 always at a multiple of 2 MB. *(measured)* The
+   write loop copies at most `PAGE_SIZE << MAX_PAGECACHE_ORDER` bytes per step, which is 2 MB on
+   x86-64 with transparent huge pages. *(documented)*
+6. With `O_DIRECT` and aligned buffers nothing was torn on ext4, xfs, ext2 and btrfs, at 8 KB, 32 KB,
    4 MB and 16 MB (Linux 7.2). tmpfs accepts `O_DIRECT` and still tore 31% of the 8 KB writes.
    *(measured)* A direct write has no copy loop, which would explain it *(an inference)*.
-6. The test robot measured the ext4 change at +37.7% `fsmark` files per second, and its profile shows
-   the buffered write loop doing less work per byte. *(documented)* That fits the explanation, but a
-   CPU profile of a different workload is not evidence about signals.
-7. Large folios are not used everywhere: ext4's patch excludes `data=journal`, fscrypt and fsverity.
+7. The test robot measured the ext4 change at +37.7% `fsmark` files per second, and its profile shows
+   the buffered write loop doing less work per byte. *(documented)* That is a CPU profile of a
+   different workload, not evidence about signals.
+8. Large folios are not used everywhere: ext4's patch excludes `data=journal`, fscrypt and fsverity.
    *(documented, from the patch text in a search result)* Tears at 8 KB may persist there.
-8. None of this is about a power loss. A kill leaves the kernel running; a power loss loses the page
+9. None of this is about a power loss. A kill leaves the kernel running; a power loss loses the page
    cache and the drive's cache, and what is torn depends on writeback, the device and the file
    system. No kernel makes the Phase 5 torn page protection unnecessary.
-9. A power loss can be emulated in three ways: block-level tools (dm-log-writes, CrashMonkey,
-   dm-flakey), a model of the file system at system call level (ALICE), or a recording layer in our own
-   `io->` interface. The last one is the only one that can tear a single `pwrite` at sector
-   boundaries and that does not depend on the kernel, the file system or the machine; it is proposed
-   for Phase 5 (below).
+10. A power loss can be emulated in three ways: block-level tools (dm-log-writes, CrashMonkey,
+    dm-flakey), a model of the file system at system call level (ALICE), or a recording layer in our
+    own `io->` interface. The last one is the only one that can tear a single `pwrite` at sector
+    boundaries and that does not depend on the kernel, the file system or the machine; it is proposed
+    for Phase 5 (below).
 
 ## Method
 
@@ -65,8 +71,8 @@ The runs: the development VM (Linux 7.2, OrbStack on macOS; ext2, ext4, xfs on l
 images, btrfs and tmpfs), GitHub-hosted runners (Ubuntu 22.04 with Linux 6.8, Ubuntu 24.04/26.04
 with Linux 7.0), older distributions booted in QEMU with KVM (Ubuntu 18.04, 20.04, 22.04 and Debian
 12 with their own kernels), and exact upstream kernels from the Ubuntu mainline archive booted the
-same way (Linux 6.1 to 6.18). The workflows were throwaway branches that were deleted after the
-runs.
+same way (Linux 6.1 to 6.18), and a second round on Linux 6.1, 6.4 to 6.10 with write sizes from 8
+KB to 64 KB. The workflows were throwaway branches that were deleted after the runs.
 
 ## Buffered 8 KB writes, by upstream kernel release
 
@@ -94,9 +100,9 @@ Torn blocks out of 3000 kills. tmpfs was also run every time and was torn in 24%
 | 6.17 | 0 | 0 |
 | 6.18 | 0 | 0 |
 
-So an 8 KB page was no longer torn on xfs from **6.9** and on ext4 from **6.16**. I have not
-identified the commit for xfs (that would need a build and bisect between 6.8 and 6.9); for ext4 the
-release is the one in which the large folio series was merged (see "What the kernel sources say").
+So an 8 KB page was no longer torn on xfs from **6.9** and on ext4 from **6.16**. The xfs release
+is the one with the mm commit `8897277acfef`, and the ext4 release the one with large folios for
+regular files (see "What the kernel sources say").
 
 Distribution kernels (also 3000 kills each):
 
@@ -113,6 +119,45 @@ Distribution kernels (also 3000 kills each):
 The Ubuntu 6.8 kernel does not tear xfs, while upstream 6.8 does (787 of 3000): the distribution
 backports changes. btrfs and ext2 were tried on 7.2 only, and neither tore an 8 KB write (0 in 3000
 to 4000 kills).
+
+## Other write sizes, around the order-1 change
+
+Torn blocks out of 3000 kills, by write size, on the kernels around the xfs change (a second round
+of the same method, ext4 and xfs on loop-mounted images). *(measured)*
+
+| Kernel | fs | 8 KB | 12 KB | 16 KB | 24 KB | 32 KB | 64 KB |
+|---|---|---|---|---|---|---|---|
+| 6.1 | ext4 | 949 | 1406 | 1626 | 1907 | 2069 | 2293 |
+| 6.1 | xfs | 672 | 1121 | 1316 | 1728 | 1836 | 2151 |
+| 6.4 | ext4 | 916 | 1345 | 1562 | 1875 | 2043 | 2296 |
+| 6.4 | xfs | 692 | 1119 | 1338 | 1689 | 1840 | 2159 |
+| 6.5 | ext4 | 967 | 1397 | 1664 | 1888 | 2089 | 2401 |
+| 6.5 | xfs | 727 | 1112 | 1325 | 1722 | 1855 | 2238 |
+| 6.6 | ext4 | 893 | 1360 | 1430 | 1689 | 1843 | 2115 |
+| 6.6 | xfs | 760 | 1066 | **0** | 1389 | **0** | **0** |
+| 6.7 | ext4 | 1009 | 1380 | 1654 | 1901 | 2203 | 2431 |
+| 6.7 | xfs | 799 | 1101 | 0 | 1300 | 0 | 0 |
+| 6.8 | ext4 | 898 | 1408 | 1613 | 1807 | 1937 | 2196 |
+| 6.8 | xfs | 720 | 1156 | 0 | 1309 | 0 | 0 |
+| 6.9 | ext4 | 856 | 1321 | 1488 | 1871 | 2072 | 2333 |
+| 6.9 | xfs | **0** | 884 | 0 | 914 | 0 | 0 |
+| 6.10 | ext4 | 858 | 1247 | 1529 | 1893 | 2055 | 2331 |
+| 6.10 | xfs | 0 | 876 | 0 | 870 | 0 | 0 |
+
+How it reads, with the source reading in the next sections:
+
+- **xfs 6.1 to 6.5:** every size is torn. The write path does not ask for large folios (`fgf_set_order`
+  is not in the iomap write path before 6.6), so it uses 4 KB folios and any write of more than 4 KB
+  needs several steps.
+- **xfs 6.6 to 6.8:** the write path asks for a folio as large as the write, but order 1 (8 KB) is
+  turned into order 0. So 16, 32 and 64 KB (orders 2, 3 and 4) fit in one folio and are never torn,
+  while 8 KB is torn.
+- **xfs 6.9 and 6.10:** order 1 works, so 8 KB is safe. **12 KB and 24 KB are still torn**: the
+  requested order is `ilog2(size) - 12`, the largest power of two not above the length, so a write
+  that is not a power of two needs at least two folios (12 KB is 8 KB plus 4 KB, 24 KB is 16 KB plus
+  8 KB) and a signal can arrive between them.
+- **ext4 up to 6.10:** every size is torn, since ext4 does not enable large folios for regular files
+  before 6.16. The ext4 rows after 6.10 were not run for these sizes.
 
 ## Larger buffered writes
 
@@ -166,6 +211,44 @@ of the copy steps, and there are none.
   list message says that everybody must be ready for short writes
   ([LKML](https://lkml.iu.edu/hypermail/linux/kernel/1701.3/01027.html)). A process that is being
   killed never sees the short count, so the block stays half written.
+- **The xfs and iomap write path**, read in the source at the release tags (v6.1 to v6.9, and v6.15
+  for ext4) through GitHub's mirror of the Linux tree, because `git.kernel.org` and `lore.kernel.org`
+  refuse this machine:
+  - `iomap_write_iter` copies a write in steps of at most `chunk = PAGE_SIZE << MAX_PAGECACHE_ORDER`,
+    cut further to the size of the folio found or created for the step. `MAX_PAGECACHE_ORDER` is
+    `HPAGE_PMD_ORDER` with transparent huge pages (order 9, so 2 MB with 4 KB pages) and 8 without
+    ([`fs/iomap/buffered-io.c`](https://github.com/torvalds/linux/blob/v6.9/fs/iomap/buffered-io.c),
+    [`include/linux/pagemap.h`](https://github.com/torvalds/linux/blob/v6.9/include/linux/pagemap.h)).
+    This matches the 2 MB boundary seen on 7.2 (the mainline kernels are built with transparent
+    huge pages, as far as I know; I did not check their configuration).
+  - `iomap_write_begin`, called once per step, starts with `if (fatal_signal_pending(current)) return
+    -EINTR;` and, for a mapping without large folio support, cuts the step to one page
+    (`len = min_t(size_t, len, PAGE_SIZE - offset_in_page(pos))`). A step that returns `-EINTR` ends
+    the write with the bytes copied so far. `generic_perform_write`, which ext4 uses, has the same
+    structure in v6.15: a step of at most `mapping_max_folio_size(mapping)`, cut to the folio, with
+    the signal check inside the loop
+    ([`mm/filemap.c`](https://github.com/torvalds/linux/blob/v6.15/mm/filemap.c)).
+  - The write asks for a folio as large as itself: `fgf_set_order(size)` is `ilog2(size) -
+    PAGE_SHIFT` (zero for a size of one page or less), so the largest power of two not above the
+    length. Its comment says that an existing folio is returned whatever its size, and that a new
+    one "may be of a different size than requested due to alignment constraints, memory pressure, or
+    the presence of other folios at nearby indices". `iomap_get_folio` uses it from v6.6 (it does not in
+    v6.5).
+  - XFS enables large folios for its inodes (`mapping_set_large_folios` in `fs/xfs/xfs_icache.c`) in
+    every release checked: v6.1, v6.5, v6.6, v6.8 and v6.9.
+  - `__filemap_get_folio` in v6.6 to v6.8 contains `if (order == 1) order = 0;`, so a request for an 8 KB
+    folio became a 4 KB one. v6.9 does not. The commit that removed it is
+    [`8897277acfef`](https://github.com/torvalds/linux/commit/8897277acfef7f70fdecc054073bea2542fc7a1b),
+    "mm: support order-1 folios in the page cache" (Matthew Wilcox and Zi Yan, committed 5 March 2024; in
+    v6.9, not in v6.8): "Folios of order 1 have no space to store the deferred list. This is not a
+    problem for the page cache as file-backed folios are never placed on the deferred list. All we
+    need to do is prevent the core MM from touching the deferred list for order 1 folios and remove
+    the code which prevented us from allocating order 1 folios."
+  - The XFS pull requests for 6.8 ([`12958e9c4c8e`](https://github.com/torvalds/linux/commit/12958e9c4c8e93ef694c10960c78453edf21526e),
+    `xfs-6.8-merge-3`) and 6.9 ([`babbcc02327a`](https://github.com/torvalds/linux/commit/babbcc02327a14a352a7899dc603eaa064559c75),
+    `xfs-6.9-merge-8`) are not the cause: the parts of their messages that are shown describe online
+    repair, cleanups and fixes, with nothing about folios. The 6.9 iomap pull (`vfs-6.9.iomap`)
+    changes the writeback path (mapping several blocks at once), not the buffered write path.
 - **Which files get large folios.** The patch ([v2, 8/8](https://patchew.org/linux/20250512063319.3539411-1-yi.zhang@huaweicloud.com/20250512063319.3539411-9-yi.zhang@huaweicloud.com))
   enables them for regular files except with `data=journal`, fscrypt and fsverity. I know this from a
   search result quoting it and did not open the patch.
@@ -175,20 +258,34 @@ of the copy steps, and there are none.
 commit "ext4: limit the maximum folio order" (the place to look for why ext4's largest folio is what
 it is), and the XFS atomic writes that Phoronix lists for 6.16.
 
-*Not documented anywhere I looked*: the xfs release (6.9) and its commit, why the tears on 7.2 are at
-multiples of 2 MB, and the difference between the Ubuntu and upstream 6.8 kernels.
+*Not documented anywhere I looked*: the difference between the Ubuntu and the upstream 6.8 kernels, the
+exact folio sizes that the experiments used (they were not observed), and whether ext4's maximum folio
+order (the July 2025 commit) changes the 2 MB step for ext4.
 
-## Why: an explanation *(an inference)*
+## Why: the mechanism *(documented in the source; the link to the measurements is an inference that passed a test)*
 
-A buffered `write` copies the data into the page cache in pieces, one folio at a time. A *folio* is
-a group of 1 to 512 contiguous pages (up to 2 MB) that the kernel's memory manager treats as one
-unit; before large folios the unit was a 4 KB page. Between two pieces the kernel checks whether a
-fatal signal is pending, and if so it stops and returns a short count (the sources above). An 8 KB
-write is therefore safe from a kill only if it fits in one piece, which is the case once the file
-system uses folios of 8 KB or more for it. That fits all the data: tmpfs always copies one page at a
-time and tears at byte 4096; ext4 stops tearing 8 KB at the release that enabled large folios;
-xfs does so earlier; and for writes above 2 MB the tear is at a multiple of 2 MB, the largest folio
-size. The measurements do not prove it: for instance, the exact folio sizes used were not observed.
+A buffered `write` copies the data into the page cache in steps; a step never crosses the end of a
+folio or of the 2 MB chunk, and every step after the first begins with a check for a fatal signal
+that ends the write with a short count (the sources above). A *folio* is a group of 1 to 512
+contiguous pages (up to 2 MB) that the memory manager treats as one unit. A write whose bytes lie in
+more than one folio can therefore be cut by a kill after any step, and a process that is being killed
+never sees the short count. Everything in the tables follows from which folios the write path can
+use:
+
+- ext4 before 6.16 has no large folio support: one page per step, so any write of more than 4 KB can
+  be cut. tmpfs behaved the same way in every run (I did not read its source).
+- xfs before 6.6 supports large folios but its write path does not ask for them: 4 KB folios.
+- xfs 6.6 to 6.8 asks for `ilog2(length)`-sized folios, but order 1 is turned into order 0: 8 KB is
+  cut, while 16, 32 and 64 KB fit in one folio.
+- From 6.9 (xfs) and 6.16 (ext4) an 8 KB write fits in one folio. A length that is not a power of two
+  needs at least two folios and can still be cut (12 KB, 24 KB), and so can a write above 2 MB.
+
+That these parts are the *reason* for the tears in the experiments is an inference, but it was tested:
+after reading the 6.8 and 6.9 code, writes of 16, 32 and 64 KB were expected to survive on xfs 6.6 to
+6.8 while 8 KB does not, and they did (0 of 3000, against 720 to 799 for 8 KB). 12 KB and 24 KB were
+added to the run to probe lengths that are not powers of two; they were torn on every xfs kernel
+(870 to 1728 of 3000), as the `ilog2` rule says they should be. What was not observed is the actual
+folio sizes, so a different cause of the same pattern is not excluded.
 
 ## Why this is about `SIGKILL` only; a power loss is a different story
 
@@ -294,6 +391,11 @@ model test of the builder itself (the states it must produce for a small recordi
 - **Deployment.** On kernels before ext4's 6.16 and xfs's 6.9 (and in `data=journal`, fscrypt and
   fsverity setups), a plain process crash such as an out-of-memory kill can turn an 8 KB page write
   into a torn page. The checksum detects it, but nothing repairs it before the WAL exists.
+- **Sizes and alignment.** Only a write that is one power-of-two length, aligned to that length, can
+  fit in one folio. Pages of 8 KB written at multiples of 8 KB do (from xfs 6.9 and ext4 6.16);
+  records of other lengths do not: 12 KB and 24 KB writes were torn in 29% to 31% of the kills on
+  xfs 6.9 and 6.10. Anything written with a buffered `pwrite` that is not a page, for example WAL
+  records, must carry its own checksum and be treated as possibly cut by a kill on every kernel.
 - **Large writes.** Any design that writes big blocks with one buffered `pwrite` (WAL segments in
   large batches, SSTable blocks of an LSM engine) can be cut in the middle by a kill on every kernel
   tried; write in smaller units or checksum them.
@@ -311,8 +413,11 @@ model test of the builder itself (the states it must produce for a small recordi
 - Only 8 KB, 32 KB, 4 MB and 16 MB were measured, and only offset 0 of a file that already had
   contents.
 - The development VM has 512-byte logical sectors; devices with 4096-byte sectors were not tested.
-- The kernel sources were read through mailing list archives, a web page and search results; I did
-  not read the kernel tree, and parts of this document (marked) are from memory.
+- The kernel sources were read through mailing list archives, a web page, search results and, for
+  the xfs and iomap write path, the source files at the release tags through GitHub's mirror; I did not
+  build or trace a kernel, and parts of this document (marked) are from memory.
+- The sizes experiment covers Linux 6.1 and 6.4 to 6.10 on ext4 and xfs only; ext4 after 6.10 and
+  other sizes after 6.16 were not run.
 
 ## The test program (buffered version)
 
