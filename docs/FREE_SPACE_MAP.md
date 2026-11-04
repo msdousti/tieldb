@@ -1,10 +1,13 @@
-# Free space maps: how database systems find room for a row, and what TielDB does
+# Where new data goes: free space maps, page reuse and compaction, and what TielDB does
 
-A heap file is an unordered pile of pages, so an `INSERT` has to find a page with enough room for
-the new row. Scanning the file for it is far too slow, so every system that stores rows in a heap
-keeps a summary of the free space. This document compares what several systems do, says which of
-the designs apply to which TielDB storage engine, and records the design chosen for the heap
-engine (`ROADMAP.md`, Phase 2, milestone B).
+Every storage engine has to decide where a new piece of data goes, and what that costs differs a
+lot between engines. A heap file is an unordered pile of pages, so an `INSERT` has to find a page
+with enough room for the new row, and the systems that use heaps keep a summary of the free space
+for it (a free space map). A B+tree picks the page by the row's key and only needs whole pages to
+be handed out and taken back. An LSM store has no pages to place data in, and gets space back by
+deleting files. This document compares what several systems do, says which of the designs applies
+to which TielDB storage engine, records the design chosen for the heap engine (`ROADMAP.md`,
+Phase 2, milestone B), and lists what the other engines need and what is still undecided.
 
 ## How to read this document
 
@@ -17,7 +20,7 @@ The comparison was made from the documents linked at the end. Each statement is 
 
 Rows in the table are marked with these words. Nothing here was measured.
 
-## Two problems that are easy to mix up
+## Three problems that are easy to mix up
 
 1. **Page allocation**: which pages of the file belong to nobody (freshly extended, or released
    when a table is dropped or a page is emptied) and can be handed to any structure that needs a
@@ -25,8 +28,11 @@ Rows in the table are marked with these words. Nothing here was measured.
 2. **Free space inside pages**: which pages that already hold rows have room for a row of N bytes.
    The unit is bytes, and the answer may be approximate, because a wrong guess costs one extra
    page visit (the inserter looks at the real page and moves on).
+3. **Space in files, not pages**: engines that never update in place (LSM stores, DuckDB's
+   checkpointed row groups) get space back by rewriting data and deleting the old file or block.
+   There is no page to place data in, so there is nothing to search for.
 
-A heap needs both. A structure that decides the position of a row by its key, such as a B+tree
+A heap needs the first two. A structure that decides the position of a row by its key, such as a B+tree
 (a clustered index), needs only the first: the row goes to the leaf that the key selects, and if
 that leaf is full the leaf is split and one new page is allocated. SQL Server says exactly this:
 free space is tracked only for heap and LOB pages, because "the point at which to insert a new
@@ -93,7 +99,9 @@ different things. Two layers follow:
   pages is a later task and gets its own decision (an in-file freelist like SQLite, or a bitmap).
 - **LSM does not use pages**, so neither piece applies. Its equivalent is compaction.
 
-## Decision: a PostgreSQL-style map for the heap engine
+## Decisions by engine
+
+### Heap engine: a PostgreSQL-style free space map
 
 The heap engine gets a free space map in a separate file next to the heap file: one byte per heap
 page holding the free space in units of 1/256 of the page size, organized as a tree of max-nodes,
@@ -127,9 +135,44 @@ Alternatives considered:
 - **No map, append only:** simple and what the one-page engine effectively does, but a table
   would grow without bound under deletes and updates.
 
+### Clustered and secondary indexes: reuse of released pages (not decided)
+
+A B+tree page is released when deletes empty it or a merge frees it. The page file can only
+extend today (`page_file_allocate_page`), so reuse needs one more structure. The systems above
+show three answers, and the decision belongs to the task in Phase 2 of `ROADMAP.md`:
+
+| Option | Seen in | Strength | Cost |
+|---|---|---|---|
+| Freelist of free pages | SQLite (trunk pages listing leaf pages) | Allocating and releasing are O(1); no search | A released page goes to the front, so there is no locality, and the file cannot shrink from the end |
+| Bitmap of pages | SQL Server GAM, Oracle bitmap blocks | Allocate the lowest free page: locality, and the file can be truncated | A search; special pages at fixed intervals in the file |
+| Extents (runs of pages) | InnoDB (64 pages), SQL Server (8 pages) | A tree's pages are physically sequential, which helps range scans | Partly used extents waste space |
+
+Two points that hold whatever is chosen:
+
+- **Unlike the free space map, this structure must be exact.** A wrong hint costs one extra page
+  visit, but a page that is both on the free list and in use is corruption, and one that is lost
+  from the list is a leak. So changes to it have to be logged once the WAL exists (Phase 5). *(an
+  inference from the difference between the two problems, not from a source)*
+- **The heap needs it too**, once delete and vacuum can empty a page, so it is shared and is not a
+  B+tree detail.
+
+### LSM engine: removal of obsolete files
+
+An LSM engine returns space by deleting files, so neither a free space map nor page reuse applies.
+What it needs is a rule for when a file may go. A compaction writes new SSTables and makes the
+inputs obsolete, but a reader (an iterator or a snapshot) may still have them open, so deletion
+waits until the last reader is done. A crash between the new manifest and the deletions leaves
+orphan files, which are found at startup by comparing the directory with the manifest. *(general
+knowledge; the roadmap has a sub-item under Compaction)*
+
+### One-page engine
+
+It rewrites its whole file at a checkpoint and needs none of this. It is replaced by the heap
+engine.
+
 ## Open points for the implementation PRs
 
-These are not decided here:
+These are not decided here. For the heap engine and its free space map:
 
 - The page size is a parameter, so the category width is `page_size / 256`; the map must state
   which size it was built for, or be rebuilt when the sizes differ.
@@ -142,6 +185,16 @@ These are not decided here:
   means at startup.
 - Whether the first slice is a flat array of bytes scanned linearly, with the tree added next.
   The scan is correct and the tree is an optimization; that is a question of PR size.
+
+For reuse of released pages (shared by the heap and the indexes):
+
+- Which of the three options, and whether the structure lives in the page file (so every engine
+  gets it) or in each engine.
+- Where the head of a freelist or the bitmap is stored, so that it survives a restart, and how
+  it is made safe against a crash before the WAL exists (Phase 5).
+- Whether a released page gets its own page type in the page header.
+
+For the LSM engine: how readers register the files they use, and the layout of the manifest.
 
 ## Sources
 
