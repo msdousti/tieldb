@@ -1,8 +1,10 @@
 # TielDB Development State
 
-**Last updated:** 2026-10-19
-**Phase 1 is complete; Phase 2 (persistence) is under way.** The type registry is done and values
-are stored in their own format. Next: the slotted page (see "What comes next").
+**Last updated:** 2026-11-04
+**Phase 1 is complete; Phase 2 (persistence) is under way.** Milestone A is done (data survives a
+restart); milestone B has the page file with direct I/O, the heap tuple header, and the buffer pool
+(replacement policy, dirty pages, eviction, a lock). Next: the free space map, then the heap engine
+(see "What comes next").
 
 This file is the hand-over for a new session. Read it first, then `CLAUDE.md` (the rules) and
 `ROADMAP.md` (the plan). `ROADMAP.md` is the source of truth for what is done.
@@ -74,9 +76,21 @@ themselves and expect a short triage (real / skipped, with reasons) before any f
   reach it. If a path is impractical to cover, **stop and ask**; lowering the threshold or adding
   an exclusion needs the user's explicit approval each time. Mock allocation failures with the test
   library (the `-D` renames in `tests/meson.build`), never by touching production code.
-- **Opinion questions** ("WDYT?", "should we...") get a direct answer with a recommendation, not
-  code. "Just answer" means no changes. Do not start the next PR before being told to when the
-  user said so.
+- **A question gets an answer only.** However suggestive it sounds ("why not X?", "can't we Y?",
+  "maybe in util.h?", "show me first"), do not edit, commit, push or touch a PR until the user gives
+  an explicit instruction ("do it", "add it to #N", "drop X"). Give a recommendation when asked for an
+  opinion, and offer the change in one line afterwards. If a reply mixes a correction with a hedge,
+  restate the plan and ask. Read-only checks and scratch experiments are fine while answering. Do not
+  start the next PR before being told to.
+- **Estimates run low:** inflate PR sizes and PR counts by about 50%, and measure early.
+- **Design rules from review** (details in `.claude/c-guidelines.md`): a module that uses an
+  interface takes it from its caller and never creates a concrete implementation (section 6); sizes and
+  offsets that the module does not bound itself are computed with `ckd_add`/`ckd_mul`/`ckd_sub`
+  (section 5, "Checked arithmetic"); name things for what they are (`extra_flags`, `file_number`).
+- **Throwaway experiments** (a kernel or CI experiment) run from a scratch branch whose workflow
+  is triggered by a push; delete the branch afterwards and never merge it.
+- **Body files for PRs:** use one file per PR (`body_<name>.md`); an old shared `body.md` once
+  overwrote the wrong description.
 - Stacked PRs: when a branch builds on an unmerged PR, push the branch and open its PR after the
   base merges, using `git rebase --onto origin/main <old-base> <branch>` (a plain rebase replays
   the squashed commits and conflicts).
@@ -90,6 +104,13 @@ themselves and expect a short triage (real / skipped, with reasons) before any f
 - Tools: `clang-format-22`, `clang-tidy-22`, `llvm-cov-22` (through gcovr), Valgrind, `psql` 18.
   CI has Meson 1.3.2 (older than local 1.10): keep `meson.build` compatible (pass `psql.full_path()`,
   not the program object, to `test()`).
+- CI runs on `ubuntu-26.04` (glibc 2.43); the LLVM apt repository is `resolute`. It is a hosted
+  runner, so `/dev/kvm` can be enabled for QEMU experiments (public repository).
+- `git.kernel.org`, `lore.kernel.org` and `phoronix.com` answer HTTP 403 to this machine. Read kernel
+  sources with `gh api repos/torvalds/linux/contents/<path>?ref=<tag>` or `gh api
+  repos/torvalds/linux/commits/<sha>`, and use WebSearch for mailing list threads.
+- `/tmp` is tmpfs here. The user keeps loop-mounted `/mnt/ext4`, `/mnt/xfs` and `/mnt/ext2` for file
+  system experiments; do not remove them.
 - Environment variables fill in what a command line leaves out: if `PGDATABASE`, `PGUSER` etc. are
   set in the shell, a manual `psql` uses them.
 
@@ -104,6 +125,8 @@ meson setup build-tsan --native-file clang.ini -Db_sanitize=thread  # TSan; same
 scripts/coverage.sh                # build-cov; fails below 100% lines/branches
                                    # on main, CI also publishes the README coverage badges (scripts/coverage-badges.sh)
 scripts/valgrind.sh                # build-valgrind; occasional use
+meson setup build-fuzz --native-file clang.ini -Dfuzz=true -Db_sanitize=address   # libFuzzer targets in tests/fuzz
+ninja -C build-fuzz && build-fuzz/tests/fuzz/fuzz_page tests/fuzz/corpus/page -max_total_time=60
 clang-format-22 -i src/*/*.[ch] tests/*.c
 clang-tidy-22 -p build-asan $(find src tests -name '*.c')
 ```
@@ -123,8 +146,16 @@ src/
                      (loaded at startup, saved on SIGTERM/SIGINT) or --in-memory,
                      stops cleanly on SIGTERM/SIGINT through a sigwait thread, prints "listening on port N"
   options.{h,c}      command-line parsing
-  io/                injectable I/O (io->read/write/...) for fault injection
-  ds/hash_map.{h,c}  reusable chained hash map; entries embed hash_node_t; no locking inside
+  common/            byte_span.h (pointer + length), flags.h (flags_are_set / flags_are_clear);
+                     types.h is an unused leftover
+  io/                the I/O table (io->read/write/pread/pwrite/fsync/fdatasync/open/close/flock/fstat) and the
+                     real operations; the fault injection lives in tests/io_fault, not here
+  ds/                hash_map (chained, entries embed hash_node_t, no locking inside);
+                     replacement_policy.h (a general vtable: record access, set evictable, pick
+                     victim, over numbered slots) and clock_policy (its first implementation)
+  buffer/            buffer_pool: frames over page files, page_id_t (file number + page number),
+                     pin/unpin, mark_changed, flush_all, eviction through a replacement policy that
+                     the caller passes to buffer_pool_create, one internal lock
   net/
     wire_buffer      big-endian writer (INT32_MAX cap, patch/truncate) and bounds-checked reader
     protocol         backend message encoders (R, S, Z, C, E, T, D, I)
@@ -146,17 +177,27 @@ src/
     one_page_engine    the first engine: all rows of a table in one 8 KB page, in memory
     engine_registry    engines by name (`engine_find`, `engine_default`); tables, the catalog file and the data directory dispatch through it
     row_codec          null bitmap and values of a row as bytes, independent of the engine
-    page               8 KB slotted page, slot states, CRC-32C checksum, page_validate
-    page_file          read/write pages of a file through io->, checksum checked on read
+    page               8 KB slotted page, slot states, CRC-32C checksum, page_validate; page_t is
+                       4096-aligned (direct I/O), heap memory for pages from page_array_create
+    page_file          read/write/count/allocate pages of a file through io->, checksum checked on
+                       read; extra_flags: PAGE_FILE_FLAG_DIRECT (O_DIRECT, EINVAL if refused),
+                       PAGE_FILE_FLAG_CREATE (create in the same step as the open)
+    heap_tuple         the tuple header of the future heap engine (flags, optional xmin/xmax) and
+                       heap_tid_t; nothing uses it yet
     one_page_file   save/load a file that holds exactly one page (one-page engine, catalog file)
     catalog_file    the table list as rows of one page file: a version row, then a row per table and per column; load checks it and calls a visitor per table
     data_dir        the data directory: TIELDB_VERSION file, `catalog`, one `<table>.tbl` per table,
                     `tieldb.lock`; init, lock, load and checkpoint (syncs the directory)
     crc32c             the page checksum
 tests/               one test_*.c per module (cmocka), test_wire_buffer_oom.c (allocation
-                     failures via renamed malloc/calloc/realloc), test_tieldb.c (spawns the
-                     binary), psql_session.sh + .expected (real psql, suite "client"),
-                     table_assert.h (assert_cell_text for tests that read tables)
+                     failures via renamed malloc/calloc/realloc/aligned_alloc), test_tieldb.c
+                     (spawns the binary), psql_session.sh + .expected (real psql, suite "client"),
+                     table_assert.h (assert_cell_text for tests that read tables),
+                     io_fault.{h,c} (the fault injection: io_init(false), io_inject_fault),
+                     direct_io.h (is O_DIRECT available here), fuzz/ (libFuzzer targets and
+                     seed corpus), test_random.h (seeded generator for model tests)
+docs/                TORN_WRITES.md: measurements and sources on what a kill and a power loss do
+                     to a buffered write, by kernel version; FORMATTING.md; dev-setup.md
 .claude/             design docs for the rules (style, clean code, C guidelines, design choices)
 ```
 
@@ -182,23 +223,42 @@ in the header and tested, `-Werror` with `-Wconversion`, strict `-std=c2x` (some
 need `#define _POSIX_C_SOURCE 200809L`, as in `catalog.c`). Trust the client: no validation or tests
 whose only purpose is to survive malformed or hostile client input. Branch coverage with Clang
 counts conditions: a loop condition with `&&` needs a test for each operand being false.
+`assert_non_null` and `assert_ptr_*` count heavily against the function-size limit: write
+`assert_true(x != nullptr)`. `alignas`, `alignof` and `bool` are keywords in C23 (no `stdalign.h` or
+`stdbool.h`). Page and I/O tests that need an allocation failure mock it in
+`test_wire_buffer_oom.c`; `aligned_alloc` has its own mock (`oom_aligned_alloc`).
 
 ## What comes next
 
 1. **Phase 2, in the order of the ROADMAP.md plan** (decisions are written there: the catalog in
    a catalog file first and system tables in milestone B, flush on shutdown and checkpoint since
-   there is no WAL yet, per-table mutex plus a buffer pool lock, rows must fit one page, overflow
-   storage is Phase 8+). **Milestone A (a table is one page, data survives a restart) is done**: row
-   codec, page file, engine interface and registry, one-page engine, catalog file, data directory,
-   `--data-dir`/`--in-memory`, save on SIGTERM/SIGINT, `CHECKPOINT`, a lock so that one server uses a
-   data directory, and directory fsync. **Milestone B, lift the one-page
-   limit** (fuzzing build, page fuzz target and heap tuple header are done; fuzz with `-Dfuzz=true`): heap file, buffer pool, free
-   space map, heap engine, catalog in system tables, crash test. Phase 3 also lists memory
-   contexts, BOOLEAN, NULL and DEFAULT.
+   there is no WAL yet, per-table mutex plus the buffer pool's own lock, rows must fit one page
+   until the heap engine, overflow storage is Phase 8+). **Milestone A is done** (row codec, page
+   file, engine interface and registry, one-page engine, catalog file, data directory, `--data-dir` /
+   `--in-memory`, save on SIGTERM/SIGINT, `CHECKPOINT`, a lock so that one server uses a data
+   directory, directory fsync). **Milestone B so far:** fuzzing build and page fuzz target, heap tuple
+   header, page file with page count, allocation and direct I/O, fault injection moved to the tests,
+   replacement policy interface and clock, buffer pool (pin/unpin, dirty pages, eviction, lock),
+   page alignment and checked arithmetic. **Next, in order:** the free space map; the heap engine
+   core (insert through the free space map, cursors, TIDs, registered next to the one-page engine);
+   the engine's metadata in the catalog as an opaque blob, so that the data directory creates heap
+   tables, flushes the pool on shutdown and refuses or upgrades old one-page directories (this is
+   the first step that psql shows: a table larger than 8 KB survives a restart); the catalog in
+   system tables; the crash test. The `--direct-io` server option comes with the heap engine, and the
+   server must fail at startup if the file system refuses `O_DIRECT`. Phase 3 also lists memory
+   contexts, BOOLEAN, NULL and DEFAULT. A small cleanup: `src/common/types.h` is unused.
+   **Torn writes:** read `docs/TORN_WRITES.md` before writing or reviewing a crash test. A `kill -9`
+   can tear a buffered write (8 KB on tmpfs, on xfs before Linux 6.9, on ext4 before 6.16; any write
+   whose length is not a power of two, or above 2 MB, on every kernel tried), so the Phase 2 crash test
+   kills the child only after its flush and sync have finished, and the Phase 5 tests expect torn
+   pages. A power loss is a separate problem (torn page protection, Phase 5).
 2. Phase 3 (already in the roadmap): the real SQL parser and syntax tree first, then expressions,
    `WHERE`, projection, `DELETE`/`UPDATE`/`TRUNCATE`/`INSERT ... SELECT`, `generate_series`,
    `ALTER TABLE ... MODIFY/ADD COLUMN ... AFTER|FIRST`, ORDER BY, aggregates, joins.
-3. Later: user-defined types on top of the registry (`CREATE TYPE ... AS ENUM` first), B+trees, WAL,
+3. Later (Phase 5 and 6 decisions are already in the roadmap: deltas in the WAL with a checksum per
+   record, a resource manager ID in every record, torn page protection chosen when the WAL is
+   designed, a control file replaced atomically, a recording I/O layer that builds crash states):
+   user-defined types on top of the registry (`CREATE TYPE ... AS ENUM` first), B+trees, WAL,
    MVCC. Before planning Phase 5 (WAL) and Phase 6 (transactions), read the ROADMAP section "A
    Second Heap Engine: In-Place Updates with Undo Logs" (Phase 8+): it lists decisions (a resource
    manager ID in every WAL record, engine hooks, snapshot arguments) that are cheap now and
@@ -221,6 +281,18 @@ counts conditions: a loop condition with `&&` needs a test for each operand bein
   report names the two threads and the lines.
 - Do not use `pkill -f` with a pattern that also appears in your own command line (it kills the
   shell running it), and look for leftover `tieldb` processes after killing a test run.
+- `git fetch` or `git push` fails with `git@github.com: Permission denied (publickey)`: the SSH agent
+  that OrbStack forwards from macOS (`SSH_AUTH_SOCK=/opt/orbstack-guest/run/host-ssh-agent.sock`)
+  holds no keys (`ssh-add -l` says "The agent has no identities"), for example after a Mac restart or
+  sleep. `gh` keeps working because it uses a token over HTTPS. Add the key on the Mac (`ssh-add`, or
+  unlock the keychain); do not change the remote URL without asking the user.
+- clang-tidy rejects a commit for function size or nesting in tests too: split the helper, as in
+  the existing tests. A hook failure means no commit was made, so check `git log` before pushing.
+- The page file and buffer pool tests run twice, buffered and with `O_DIRECT`; the direct run is
+  skipped (with a message) where the file system refuses `O_DIRECT`. tmpfs and btrfs accept it
+  without enforcing alignment, ext2/ext4/xfs reject an unaligned buffer with EINVAL.
+- A `page_t` on the heap must come from `page_array_create` (or an `aligned_alloc` of its alignment);
+  UBSan reports a misaligned one.
 - Valgrind reports "possibly lost" blocks from glibc's cache of exited detached threads: not a leak
   (`scripts/valgrind.sh` only fails on definite and indirect leaks).
 - RLIMIT_NPROC test (`test_server`) is skipped when run as root.
