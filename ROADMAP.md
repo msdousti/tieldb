@@ -220,6 +220,7 @@ Two milestones, so that the first visible result comes early:
     - [x] The page file and buffer pool tests run twice, with buffered and with direct I/O (the direct run is skipped, with a message, where the file system refuses `O_DIRECT`), and a fault (`IO_FAULT_DIRECT_REFUSED`) tests that a refusal is reported
     - [ ] A server option (for example `--direct-io`) that makes the heap engine open its files this way, when the heap engine exists; the server fails at startup with a clear message if the file system refuses
 - [ ] Free space map: a hint kept by the heap engine in a separate file, one byte per page in a max-tree, repaired from the heap (comparison with other systems and the reasons in `docs/FREE_SPACE_MAP.md`)
+- [ ] Reuse of released pages: a freelist or a bitmap, shared by the heap, the B+tree indexes (clustered and secondary) and any other page-based structure; the free space map does not do this (see `docs/FREE_SPACE_MAP.md`). Needed when the first structure frees whole pages (emptied heap pages, B+tree merges)
 - [ ] Heap engine
   - [ ] Its engine-specific metadata (which file holds the pages of a table) is stored in the catalog as an opaque blob
   - [ ] Implements the storage engine interface and replaces the one-page engine: INSERT finds a page with space, adds a tuple and marks the page dirty; SELECT pins pages, iterates tuples and unpins
@@ -394,7 +395,6 @@ HAVING COUNT(*) > 5;
   - [ ] Point lookup
   - [ ] Range scan (iterator interface)
   - [ ] Delete with merges (optional, can defer)
-  - [ ] Reuse of released pages (a freelist or a bitmap, shared by the heap and the indexes; the free space map does not do this, see `docs/FREE_SPACE_MAP.md`)
 - [ ] Index metadata
   - [ ] Catalog entry (pg_index-like)
   - [ ] Index-to-table mapping
@@ -747,6 +747,7 @@ The frames of the pool are ordinary heap memory (`page_array_create`), so the ke
 - [ ] MemTable (in-memory write buffer)
 - [ ] SSTables (sorted string tables on disk)
 - [ ] Compaction (levels, merging)
+  - [ ] Obsolete SSTables are deleted once no reader uses them, which is how an LSM engine returns space (it has no pages to release)
 - [ ] Bloom filters for fast negative lookups
 - [ ] Coexists with heap storage via storage engine API
 
