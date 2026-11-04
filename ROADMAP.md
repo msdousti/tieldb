@@ -219,7 +219,7 @@ Two milestones, so that the first visible result comes early:
     - [x] `page_file_open` and `page_file_create` take `extra_flags` (`PAGE_FILE_FLAG_DIRECT`, `PAGE_FILE_FLAG_CREATE` to create a missing file in the same step as the open, or `PAGE_FILE_NO_EXTRA_FLAGS`; an unknown bit is `EINVAL`): with the direct flag they open with `O_DIRECT` and fail loudly with `EINVAL` if the file system refuses it, with no silent fallback to buffered I/O (the caller asked for direct I/O, and whether buffered I/O is an acceptable substitute is the caller's decision); `fsync` is still needed for durability
     - [x] The page file and buffer pool tests run twice, with buffered and with direct I/O (the direct run is skipped, with a message, where the file system refuses `O_DIRECT`), and a fault (`IO_FAULT_DIRECT_REFUSED`) tests that a refusal is reported
     - [ ] A server option (for example `--direct-io`) that makes the heap engine open its files this way, when the heap engine exists; the server fails at startup with a clear message if the file system refuses
-- [ ] Free space map (bitmap or simple list)
+- [ ] Free space map: a hint kept by the heap engine in a separate file, one byte per page in a max-tree, repaired from the heap (comparison with other systems and the reasons in `docs/FREE_SPACE_MAP.md`)
 - [ ] Heap engine
   - [ ] Its engine-specific metadata (which file holds the pages of a table) is stored in the catalog as an opaque blob
   - [ ] Implements the storage engine interface and replaces the one-page engine: INSERT finds a page with space, adds a tuple and marks the page dirty; SELECT pins pages, iterates tuples and unpins
