@@ -5,22 +5,22 @@
 #include <stdckdint.h>
 #include <string.h>
 
-static size_t left_child(size_t node)
+static size_t left_child(size_t node_index)
 {
-    return (2 * node) + 1;
+    return (2 * node_index) + 1;
 }
 
-static size_t parent_of(size_t node)
+static size_t parent_of(size_t node_index)
 {
-    return (node - 1) / 2;
+    return (node_index - 1) / 2;
 }
 
-static uint8_t larger_child(const max_tree_t *tree, size_t node)
+static uint8_t larger_child(const max_tree_t *tree, size_t node_index)
 {
-    uint8_t left = tree->nodes[left_child(node)];
-    uint8_t right = tree->nodes[left_child(node) + 1];
+    uint8_t left_value = tree->nodes[left_child(node_index)];
+    uint8_t right_value = tree->nodes[left_child(node_index) + 1];
 
-    return left > right ? left : right;
+    return left_value > right_value ? left_value : right_value;
 }
 
 static int padded_leaf_count(size_t leaf_count, size_t *padded)
@@ -70,21 +70,21 @@ int max_tree_init(max_tree_t *tree, void *memory, size_t memory_size, size_t lea
     return 0;
 }
 
-static bool refresh_node(max_tree_t *tree, size_t node)
+static bool refresh_inner(max_tree_t *tree, size_t node_index)
 {
-    uint8_t maximum = larger_child(tree, node);
+    uint8_t maximum = larger_child(tree, node_index);
 
-    if (tree->nodes[node] == maximum) {
+    if (tree->nodes[node_index] == maximum) {
         return false;
     }
-    tree->nodes[node] = maximum;
+    tree->nodes[node_index] = maximum;
     return true;
 }
 
-static void recompute_parents(max_tree_t *tree, size_t node)
+static void recompute_parents(max_tree_t *tree, size_t node_index)
 {
-    while (node > 0 && refresh_node(tree, parent_of(node))) {
-        node = parent_of(node);
+    while (node_index > 0 && refresh_inner(tree, parent_of(node_index))) {
+        node_index = parent_of(node_index);
     }
 }
 
@@ -120,11 +120,11 @@ int max_tree_find(const max_tree_t *tree, uint8_t at_least, size_t *leaf)
         errno = ENOENT;
         return -1;
     }
-    size_t node = 0;
-    while (node < tree->first_leaf) {
-        size_t left = left_child(node);
-        node = tree->nodes[left] >= at_least ? left : left + 1;
+    size_t node_index = 0;
+    while (node_index < tree->first_leaf) {
+        size_t left_index = left_child(node_index);
+        node_index = tree->nodes[left_index] >= at_least ? left_index : left_index + 1;
     }
-    *leaf = node - tree->first_leaf;
+    *leaf = node_index - tree->first_leaf;
     return 0;
 }

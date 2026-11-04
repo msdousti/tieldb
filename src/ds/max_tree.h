@@ -7,9 +7,9 @@
  * The search finds the leftmost leaf whose value is at least a given number, by walking down from
  * the root, so it costs the height of the tree whatever the number of leaves.
  *
- * The tree is stored as an array, the node at index i having its children at 2i+1 and 2i+2. A
- * leaf count that is not a power of two is padded with leaves that hold 0 and are never set, so
- * a search for 0 or more still returns a real leaf.
+ * The tree is stored as an array, the node stored at index i having its children at indices 2i+1
+ * and 2i+2. A leaf count that is not a power of two is padded with leaves that hold 0 and are never
+ * set, so a search for 0 or more still returns a real leaf.
  *
  * The module allocates nothing: max_tree_init is given the bytes, which can be the body of a
  * page. A max_tree_t is only a view of them, so it needs no destroy function, and copies of it
@@ -27,9 +27,9 @@
  * A handle to a tree, not the tree: the nodes are the bytes it points to, one byte per node, with
  * no pointers between them, because a pointer stored in a page means nothing after the page is
  * read back, and a link would be larger than the value. The children and the parent of a node are
- * computed from its index. Only the nodes belong in a page; the other two fields follow from the
- * leaf count. max_tree_init makes an empty tree; a function that makes a handle for bytes that
- * already hold a tree (a page read back) does not exist yet.
+ * computed from its index in the array. Only the nodes belong in a page; the other two fields
+ * follow from the leaf count. max_tree_init makes an empty tree; a function that makes a handle for
+ * bytes that already hold a tree (a page read back) does not exist yet.
  *
  * nodes: the caller's bytes; the root is nodes[0] and the leaves are the last of them.
  * leaf_count: the number of real leaves.
