@@ -23,6 +23,19 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/**
+ * A handle to a tree, not the tree: the nodes are the bytes it points to, one byte per node, with
+ * no pointers between them, because a pointer stored in a page means nothing after the page is
+ * read back, and a link would be larger than the value. The children and the parent of a node are
+ * computed from its index. Only the nodes belong in a page; the other two fields follow from the
+ * leaf count. max_tree_init makes an empty tree; a function that makes a handle for bytes that
+ * already hold a tree (a page read back) does not exist yet.
+ *
+ * nodes: the caller's bytes; the root is nodes[0] and the leaves are the last of them.
+ * leaf_count: the number of real leaves.
+ * first_leaf: the index in nodes of leaf 0 (the padded leaf count minus 1), kept so that no call
+ * has to compute it again.
+ */
 typedef struct {
     uint8_t *nodes;
     size_t leaf_count;
