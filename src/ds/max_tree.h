@@ -35,6 +35,11 @@
  * leaf_count: the number of real leaves.
  * first_leaf: the index in nodes of leaf 0 (the padded leaf count minus 1), kept so that no call
  * has to compute it again.
+ *
+ * The type is public on purpose, an exception to "stateful types are opaque": it holds no
+ * resources, so there is nothing to create or destroy, and a caller can keep it on the stack or
+ * inside another struct. The fields are private; use only the functions. leaf_count and first_leaf
+ * are set by max_tree_init and never change afterwards.
  */
 typedef struct {
     uint8_t *nodes;

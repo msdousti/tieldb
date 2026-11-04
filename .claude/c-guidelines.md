@@ -171,7 +171,7 @@ Unsigned arithmetic wraps silently and signed overflow is undefined, so a bad si
 ### Headers and encapsulation
 - One header per module (`foo.h`) declaring the public API, with an implementation file `foo.c`. Keep internals `static` in the `.c` file.
 - Use opaque types for encapsulation: `typedef struct foo foo;` in the header and the struct definition in the `.c` file. Callers can only hold `foo *`.
-- Every stateful module type is opaque, including readers, cursors, and iterators: callers get a `foo_create` / `foo_destroy` pair, never the struct layout. Plain data structs (`tuple_id_t`), options structs, and vtables are public. Any other exception needs the user's approval and an entry in `design-choices.md`.
+- Every stateful module type is opaque, including readers, cursors, and iterators: callers get a `foo_create` / `foo_destroy` pair, never the struct layout. Plain data structs (`tuple_id_t`), options structs, and vtables are public, and so is a view over memory the caller owns that holds no resources and needs no destroy (`max_tree_t`; see `design-choices.md`). Any other exception needs the user's approval and an entry in `design-choices.md`.
 - Prefix every public symbol with the module name (`foo_open`, `foo_close`), since C has no namespaces.
 - Extern globals should be rare. Pass state through a context struct instead.
 

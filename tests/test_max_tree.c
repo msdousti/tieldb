@@ -207,9 +207,10 @@ static size_t model_find(const uint8_t *model, size_t leaf_count, uint8_t at_lea
     return leaf < leaf_count ? leaf : SIZE_MAX;
 }
 
-static void check_find(const max_tree_t *tree, const uint8_t *model, uint8_t at_least)
+static void check_find(const max_tree_t *tree, const uint8_t *model, size_t leaf_count,
+                       uint8_t at_least)
 {
-    size_t expected = model_find(model, tree->leaf_count, at_least);
+    size_t expected = model_find(model, leaf_count, at_least);
     size_t found = SIZE_MAX;
 
     errno = 0;
@@ -235,7 +236,7 @@ static void check_against_the_model(uint64_t seed, size_t leaf_count)
         assert_int_equal(max_tree_root(&fixture.tree), model_maximum(model, leaf_count));
         assert_int_equal(max_tree_get(&fixture.tree, leaf, &read_back), 0);
         assert_int_equal(read_back, value);
-        check_find(&fixture.tree, model, (uint8_t) next_random(&random));
+        check_find(&fixture.tree, model, leaf_count, (uint8_t) next_random(&random));
     }
 }
 
