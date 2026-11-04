@@ -42,7 +42,7 @@ row is always determined by the index key values".
 
 | System | Tracks | Granularity | Where it lives | Used for | Status |
 |---|---|---|---|---|---|
-| **PostgreSQL** | Free bytes per page | 1 byte per page: free space in units of 1/256 of a page (32 bytes for 8 KB), rounded down | A separate fork file `<filenode>_fsm`. The bytes are the leaves of a binary max-tree stored in each page of that file (every inner node holds the maximum of its two children); above those pages sit two more levels of the same trees, so the height is fixed at 3 | Heaps and also indexes (only hash indexes have none) | Documented |
+| **PostgreSQL** | Free bytes per page | 1 byte per page: free space in units of 1/256 of a page (32 bytes for 8 KB), rounded down | A separate fork file `<filenode>_fsm`. The bytes are the leaves of a binary max-tree stored in each page of that file (every inner node holds the maximum of its two children); above those pages sit two more levels of FSM pages (3 levels of pages in all; each page's own tree is much taller) | Heaps and also indexes (only hash indexes have none) | Documented |
 | **SQL Server** | Fullness band per page, plus whether the page is allocated | 1 byte per page: empty, 1-50%, 51-80%, 81-95%, 96-100% full. One PFS page covers 8,088 pages. Extents (8 pages) are tracked apart in GAM/SGAM bitmaps (1 bit per extent) and per object in IAM pages | Special pages (PFS, GAM, SGAM, IAM) inside the data file, at fixed intervals | Heap and LOB pages only; B-tree pages need no free space tracking | Documented |
 | **InnoDB** (MySQL, MariaDB) | Free pages and extents, not bytes | Extent of 64 pages; the extent descriptor holds 2 bits per page (a free bit and a clean bit; the clean bit appears unused). Each segment keeps FREE, NOT_FULL and FULL extent lists | Extent descriptor pages and inode pages inside the tablespace file | Allocation for the clustered index and secondary indexes; rows are placed by key | Secondary |
 | **Oracle** | Fullness state per block (automatic segment space management, ASSM) | A few states per block: unformatted, full, and ranges of free space (0-25%, 25-50%, 50-75%, 75-100%) in a 3-level hierarchy of bitmap blocks. The exact state codes were not verified. The older manual method uses freelists with `PCTFREE`/`PCTUSED` | Bitmap blocks inside the segment | Heap tables | Documented (concept), Secondary (states) |
@@ -60,9 +60,54 @@ parents set too high, and corrupted upper nodes are rebuilt on the spot. Pages a
 failing the read. Relation extension is not logged either, so after replay a slot can point past
 the end of the file; it is detected by comparing with the file size and marked full. A search
 starts at the root and descends to a child with enough room, takes one shared lock at a time, and
-uses a per-page "next slot" hint so that concurrent inserters spread over different pages while
-still filling pages in order. `VACUUM` records the real free space of each page it scans and then
-propagates the values up the tree.
+uses a "next slot" hint kept in each FSM page so that concurrent inserters spread over different
+pages while still filling pages in order.
+
+The structure, with 4 leaves per FSM page instead of about 4,000 (the numbers are the free space
+in units of 1/256 of a page):
+
+```
+heap page:        p0    p1    p2    p3    p4    p5    p6    p7
+free space byte:  10     0    45     3     0     0     7   120
+
+Bottom level: one binary max-tree in each FSM page, stored as a byte array
+(the node at index i has children 2i+1 and 2i+2)
+
+FSM page A (p0..p3)                    FSM page B (p4..p7)
+           [45]                                   [120]
+          /    \                                 /     \
+      [10]      [45]                          [0]         [120]
+      /  \      /  \                          / \          /  \
+   [10]  [0]  [45]  [3]                    [0] [0]       [7]  [120]
+
+Level above: the leaves are the roots of the pages below
+
+FSM page, level 2                      A third level of the same kind sits on top
+                [120]                  (3 levels of FSM pages, the root at block 0).
+               /     \                 The height of 3 counts these levels of pages,
+          [120]       [0]              not the levels of one binary tree.
+          /   \       /  \
+       [45]  [120]  [0]   [0]
+     (root of A) (root of B)
+```
+
+A search for a page with category 50 or more reads the top root (120, so a page exists), follows a
+child with enough room at each step (the 120 that stands for B, then the 120 in B, then p7), and
+stops at a leaf. If the root were below 50, nothing fits and the heap is extended. An update sets
+a leaf and recomputes its parents up to the root, changing only the nodes on one path.
+
+When the map is written (from `hio.c`, which chooses the target page of an insert, and from the
+README):
+
+- **`VACUUM`** records the real free space of each page it scans and propagates the values up the
+  tree. It is the documented writer.
+- **An inserter that finds the page it was given too full** calls `RecordAndGetPageWithFreeSpace`:
+  it records that page's real free space and asks for another candidate.
+- **A file extension** enters the extra pages that the inserter does not use itself.
+- **Not after a successful insert**: when the page has room, the code just remembers it as the
+  target and returns. The entry then stays too high until the next inserter finds the page full or
+  `VACUUM` runs, which is harmless because the map is a hint. (Other callers that may record space,
+  such as page pruning, were not checked.)
 
 **SQL Server** and **Db2** keep the map inside the data file, in special pages at fixed
 intervals, which makes the file's page numbers non-uniform (page 1, 8088, 16176 are PFS pages in
@@ -176,8 +221,10 @@ These are not decided here. For the heap engine and its free space map:
 
 - The page size is a parameter, so the category width is `page_size / 256`; the map must state
   which size it was built for, or be rebuilt when the sizes differ.
-- Who refreshes the map before `VACUUM` exists (Phase 6 or later)? Candidates: the inserter that
-  finds a page full, the delete path, and a scan when the map is missing or fails its checksum.
+- Who refreshes the map before `VACUUM` exists (Phase 6 or later)? PostgreSQL's inserter corrects
+  an entry only when it finds the page full, and on extension; space freed by deletes reaches the
+  map through `VACUUM`. Without vacuum, a delete that frees a lot of space would not be seen, so
+  candidates are the delete path, and a scan when the map is missing or fails its checksum.
 - Locking: PostgreSQL holds one lock at a time and tolerates stale answers. The buffer pool has
   one lock today; whether the map needs its own is for the concurrency phases.
 - How the map file is opened by the engine (through the buffer pool as a second file, which the
@@ -200,6 +247,9 @@ For the LSM engine: how readers register the files they use, and the layout of t
 
 - PostgreSQL documentation, [Free Space Map](https://www.postgresql.org/docs/current/storage-fsm.html)
   (documented: separate fork, tree of pages, max-tree per page, which relations have one).
+- PostgreSQL source, [`src/backend/access/heap/hio.c`](https://github.com/postgres/postgres/blob/master/src/backend/access/heap/hio.c)
+  (documented: when an insert consults and updates the map: lookup, record when a page is found
+  full, record on extension, no update after a successful insert).
 - PostgreSQL source, [`src/backend/storage/freespace/README`](https://github.com/postgres/postgres/blob/master/src/backend/storage/freespace/README)
   (documented: 1/256 categories, fixed height 3, the search, the logging and recovery notes, the
   role of `VACUUM`).
