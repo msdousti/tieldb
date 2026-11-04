@@ -247,6 +247,15 @@ test_clock_policy = executable('test_clock_policy',
 
 test('clock_policy', test_clock_policy)
 
+# Test: binary max-tree
+test_max_tree = executable('test_max_tree',
+  'test_max_tree.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('max_tree', test_max_tree)
+
 # Test: heap tuple header
 test_heap_tuple = executable('test_heap_tuple',
   'test_heap_tuple.c',

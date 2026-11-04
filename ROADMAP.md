@@ -220,6 +220,8 @@ Two milestones, so that the first visible result comes early:
     - [x] The page file and buffer pool tests run twice, with buffered and with direct I/O (the direct run is skipped, with a message, where the file system refuses `O_DIRECT`), and a fault (`IO_FAULT_DIRECT_REFUSED`) tests that a refusal is reported
     - [ ] A server option (for example `--direct-io`) that makes the heap engine open its files this way, when the heap engine exists; the server fails at startup with a clear message if the file system refuses
 - [ ] Free space map: a hint kept by the heap engine in a separate file, one byte per page in a max-tree, repaired from the heap (comparison with other systems and the reasons in `docs/FREE_SPACE_MAP.md`)
+  - [x] A binary max-tree over byte values in caller-owned memory (`src/ds/max_tree`): set a leaf and recompute the parents, find the leftmost leaf of at least a given value
+  - [ ] The map itself: a file with one byte per heap page, the tree inside each page and three levels of pages, repaired from the heap
 - [ ] Reuse of released pages: a freelist or a bitmap, shared by the heap, the B+tree indexes (clustered and secondary) and any other page-based structure; the free space map does not do this (see `docs/FREE_SPACE_MAP.md`). Needed when the first structure frees whole pages (emptied heap pages, B+tree merges)
 - [ ] Heap engine
   - [ ] Its engine-specific metadata (which file holds the pages of a table) is stored in the catalog as an opaque blob
