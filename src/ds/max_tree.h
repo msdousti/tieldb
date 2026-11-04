@@ -49,7 +49,9 @@ typedef struct {
 [[nodiscard]] int max_tree_size(size_t leaf_count, size_t *bytes);
 
 /**
- * Makes tree a view of memory, with leaf_count leaves that all hold 0.
+ * Makes tree a view of memory, with leaf_count leaves that all hold 0. Overwrites the first
+ * max_tree_size(leaf_count) bytes of memory with zeros, so anything the memory held is lost; the
+ * bytes after those are not touched.
  * EINVAL: no leaves, a null memory pointer, or memory_size smaller than max_tree_size says.
  * EOVERFLOW: as for max_tree_size.
  */

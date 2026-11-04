@@ -86,6 +86,24 @@ static void test_init_checks_its_arguments(void **state)
     assert_int_equal(max_tree_init(&tree, fixture.memory, 7, 4), 0);
 }
 
+static void assert_bytes_equal(const uint8_t *memory, size_t first, size_t end, uint8_t expected)
+{
+    for (size_t i = first; i < end; i++) {
+        assert_int_equal(memory[i], expected);
+    }
+}
+
+static void test_init_zeroes_the_tree_and_leaves_the_rest_alone(void **state)
+{
+    fixture_t fixture;
+
+    (void) state;
+    memset(fixture.memory, 0xAA, sizeof(fixture.memory));
+    make_tree(&fixture, 5);
+    assert_bytes_equal(fixture.memory, 0, size_for(5), 0);
+    assert_bytes_equal(fixture.memory, size_for(5), sizeof(fixture.memory), 0xAA);
+}
+
 static void test_a_new_tree_holds_zeros(void **state)
 {
     fixture_t fixture;
@@ -236,6 +254,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_the_size_is_a_padded_binary_tree),
     cmocka_unit_test(test_the_size_rejects_no_leaves_and_overflow),
     cmocka_unit_test(test_init_checks_its_arguments),
+    cmocka_unit_test(test_init_zeroes_the_tree_and_leaves_the_rest_alone),
     cmocka_unit_test(test_a_new_tree_holds_zeros),
     cmocka_unit_test(test_a_tree_of_one_leaf_is_its_root),
     cmocka_unit_test(test_a_leaf_that_does_not_exist_is_rejected),
