@@ -104,8 +104,8 @@ themselves and expect a short triage (real / skipped, with reasons) before any f
   installed on the machine. CI uses the composite action `.github/actions/setup-clang`
   (the clang-22 of the runner image, meson, cmocka, `postgresql-client`).
 - Tools: `clang-format-22`, `clang-tidy-22`, `llvm-cov-22` (through gcovr), Valgrind, `psql` 18.
-  CI has Meson 1.3.2 (older than local 1.10): keep `meson.build` compatible (pass `psql.full_path()`,
-  not the program object, to `test()`).
+  CI and the local machine both have Meson 1.10.1 (checked in the CI log on 2026-11-05). An older
+  Meson needed `psql.full_path()` in `test()`, not the program object, and that form still works.
 - CI runs on `ubuntu-26.04` (glibc 2.43). It is a hosted runner, so `/dev/kvm` can be enabled for
   QEMU experiments (public repository).
 - CI uses the clang 22.1.2 of the runner image (Ubuntu archive). The local machine has 22.1.8 from
