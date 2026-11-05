@@ -93,9 +93,3 @@ size_t slotted_page_reclaim_dead_slots(slotted_page_t *slotted);
  * with a byte of data fits; an empty one may still fit.
  */
 [[nodiscard]] size_t slotted_page_free_space(const slotted_page_t *slotted);
-
-/**
- * Checks that the slots of a page of a slotted type are consistent, so that the functions above
- * can trust the page. Called by page_validate. EBADMSG: the page is corrupt.
- */
-[[nodiscard]] int slotted_page_validate(const page_t *page);
