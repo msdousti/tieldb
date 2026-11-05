@@ -164,7 +164,13 @@ Unsigned arithmetic wraps silently and signed overflow is undefined, so a bad si
 - **Shifts:** the shift count must be smaller than the width of the type.
 - **Counters that must not wrap** (32-bit page numbers, reference counts): check when incrementing. 64-bit LSNs and transaction IDs cannot wrap in practice; say so where they are defined.
 
-**Does not need a check, if the reason is stated** (in a comment or an assertion next to the code): values bounded by a constant of the same module (a column count is at most `TABLE_MAX_COLUMNS`, so the size of the null bitmap derived from it cannot overflow), loop indexes below the length of what they walk, compile-time constants (`constexpr`, `static_assert`), and values that were checked a few lines earlier. Copying an unchecked pattern next to a checked one is how the bug spreads: when a size comes from somewhere new, ask where it is bounded.
+**Does not need a check, if the reason is stated** (in a comment or an assertion next to the code):
+- Values bounded by a constant of the same module. A column count is at most `TABLE_MAX_COLUMNS`, so the size of the null bitmap derived from it cannot overflow.
+- Loop indexes below the length of what they walk.
+- Compile-time constants (`constexpr`, `static_assert`).
+- Values that were checked a few lines earlier.
+
+Copying an unchecked pattern next to a checked one is how the bug spreads. When a size comes from somewhere new, ask where it is bounded.
 
 ## 6. Interface and Module Design
 
@@ -179,7 +185,15 @@ Unsigned arithmetic wraps silently and signed overflow is undefined, so a bad si
 - Group data and operations: a struct plus `foo_*` functions taking the struct pointer as first argument.
 - Vtables are for places with more than one implementation or a need for injection (I/O, storage engines, callbacks). A concrete type with a single implementation, like a byte buffer, is an opaque handle plus prefixed functions, with no vtable.
 - Use a **vtable of function pointers** for swappable backends (e.g. a storage engine interface, as in Postgres's table access method API) and for callbacks. Always pair a callback with a `void *user_data` argument.
-- **Depend on the abstraction, not on an implementation.** A module that uses something with an interface (the replacement policy, the I/O table, the storage engine interface) takes the abstract type as a parameter and never names a concrete implementation: no `foo_create(n)` that quietly builds a clock policy, even as a convenience. The caller (`main`, an engine setup function, a test) chooses and passes the implementation. A shortcut for the common choice belongs in the caller's layer. Say who owns the object that is passed (who destroys it, also when creation fails) and make a null object `EINVAL`. Check the `.c` file's includes: if it includes a concrete implementation of an abstraction it consumes, move that choice to the caller. (Example: `buffer_pool_create(frame_count, policy)`; `buffer_pool.c` does not include `clock_policy.h`.)
+- **Depend on the abstraction, not on an implementation.** A module that uses something with an
+  interface (the replacement policy, the I/O table, the storage engine interface) takes the abstract
+  type as a parameter and never names a concrete implementation. There is no `foo_create(n)` that
+  quietly builds a clock policy, even as a convenience. The caller (`main`, an engine setup
+  function, a test) chooses and passes the implementation. A shortcut for the common choice belongs
+  in the caller's layer. Say who owns the object that is passed (who destroys it, also when creation
+  fails) and make a null object `EINVAL`. Check the `.c` file's includes: if it includes a concrete
+  implementation of an abstraction it consumes, move that choice to the caller. (Example:
+  `buffer_pool_create(frame_count, policy)`; `buffer_pool.c` does not include `clock_policy.h`.)
 - Use `typedef` for function-pointer types to keep declarations readable.
 - Use `struct` returns for multiple values (small structs are cheap to return), rather than a pile of out-pointers.
 
@@ -212,7 +226,11 @@ Unsigned arithmetic wraps silently and signed overflow is undefined, so a bad si
 - Protect shared data with mutexes or `_Atomic`. Avoid `volatile` as a synchronization mechanism; it does not provide it.
 - Keep thread-local state in `_Thread_local` variables or in per-thread context structs.
 - Run `build-tsan` as soon as a second thread exists.
-- A thread that uses an object must be over before the object is destroyed, and waking the owner is not the same as the thread being done: the clean shutdown once woke `server_serve` from a signal thread, and `main` destroyed the server while that thread was still inside `server_stop`. Keep such threads joinable and join them first; detach only threads that touch nothing but their own data after a counted hand-off.
+- A thread that uses an object must be over before the object is destroyed. Waking the owner is not
+  the same as the thread being done. The clean shutdown once woke `server_serve` from a signal
+  thread, and `main` destroyed the server while that thread was still inside `server_stop`. Keep
+  such threads joinable and join them first; detach only threads that touch nothing but their own
+  data after a counted hand-off.
 - A race depends on timing, so one green run proves little. Run timing-sensitive tests many times under TSan, from a fresh `build-tsan` build (`meson test -C build-tsan psql_restart --repeat 20`), before opening the PR.
 
 ## 8. Testing (TDD in C)
