@@ -391,4 +391,8 @@ Design decisions for the educational DBMS, ordered by implementation priority. E
 2. **Extensibility is key:** Use abstraction layers (storage engine API, lock manager API) so implementations can coexist.
 3. **Test at every step:** Each feature gets tests (unit, reference-model, crash, fuzz) before moving on.
 4. **Learn from the real world:** Postgres and SQLite are the reference models. Read their code when stuck.
-5. **A view over caller memory is a plain value:** a handle that holds no resources, such as `max_tree_t` (a pointer to bytes that can be the body of a page, plus two numbers derived from the leaf count), is a public struct with private-by-convention fields, not an opaque type, so that it can live on the stack or in another struct and needs no allocation or destroy. Anything that owns a resource stays opaque.
+5. **A view over caller memory is a plain value.** A handle that holds no resources is a public
+   struct with private-by-convention fields, not an opaque type. An example is `max_tree_t`: a
+   pointer to bytes that can be the body of a page, plus two numbers derived from the leaf count. It
+   can live on the stack or in another struct, and it needs no allocation or destroy. Anything that
+   owns a resource stays opaque.

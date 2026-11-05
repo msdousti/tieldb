@@ -1,10 +1,8 @@
 # TielDB Development State
-
-**Last updated:** 2026-11-04
-**Phase 1 is complete; Phase 2 (persistence) is under way.** Milestone A is done (data survives a
-restart); milestone B has the page file with direct I/O, the heap tuple header, and the buffer pool
-(replacement policy, dirty pages, eviction, a lock). Next: the free space map, then the heap engine
-(see "What comes next").
+**Last updated:** 2026-11-04 **Phase 1 is complete. Phase 2 (persistence) is under way.** Milestone
+A is done: data survives a restart. Milestone B has the page file with direct I/O, the heap tuple
+header, and the buffer pool (replacement policy, dirty pages, eviction, a lock). Next: the free
+space map, then the heap engine (see "What comes next").
 
 This file is the hand-over for a new session. Read it first, then `CLAUDE.md` (the rules) and
 `ROADMAP.md` (the plan). `ROADMAP.md` is the source of truth for what is done.
@@ -37,19 +35,21 @@ select version();   select current_user;   select current_database();
 - `INSERT INTO t VALUES (...)`: integers and `'strings'` (with `''` as the escape); values are checked
   against the column types (22P02); wrong count gives 42601.
 - `SELECT * FROM t`. Unknown table gives 42P01. Other statements get 0A000 ("unsupported").
-- The server needs `--in-memory` (everything is lost on exit) or `--data-dir PATH` (an existing
-  directory: it is loaded at startup and saved when the server is stopped with SIGTERM or SIGINT, so
-  the tables and rows survive a restart; `kill -9` loses what was inserted since the start). A table holds what fits in one 8 KB page (a few hundred small rows); a full table is error 53100, a row that could never fit 54000.
+- The server needs `--in-memory` or `--data-dir PATH`. With `--in-memory`, everything is lost on
+  exit. `--data-dir` takes an existing directory. It is loaded at startup and saved when the server
+  is stopped with SIGTERM or SIGINT, so the tables and rows survive a restart. `kill -9` loses what
+  was inserted since the start. A table holds what fits in one 8 KB page (a few hundred small rows);
+  a full table is error 53100, a row that could never fit 54000.
 - One thread per connection. Tables and the catalog are shared and locked.
 - Columns have a display order separate from the storage order (`table_set_display_order`); there
   is no SQL to change it yet (roadmap: `ALTER TABLE ... MODIFY ... AFTER`).
 
 Integers are stored as 4-byte values, so `007` is shown as `7`, like Postgres.
-
-Known deviations from Postgres: the server reports `server_version` `18.0 (TielDB 0.1.0)` so that
-psql 18 does not print a version-mismatch warning; the table named `user` works only because
-TielDB's matcher is simple (it is a reserved word in Postgres); SQL is recognized by stopgap
-matchers (`src/sql/simple_sql.c`), not a parser; no comments, no multiple statements per query.
+Known deviations from Postgres. The server reports `server_version` `18.0 (TielDB 0.1.0)` so that
+psql 18 does not print a version-mismatch warning. The table named `user` works only because
+TielDB's matcher is simple (it is a reserved word in Postgres). SQL is recognized by stopgap
+matchers (`src/sql/simple_sql.c`), not a parser. There are no comments and no multiple statements
+per query.
 
 ## How to work (the process the user wants)
 
@@ -77,16 +77,16 @@ themselves and expect a short triage (real / skipped, with reasons) before any f
   an exclusion needs the user's explicit approval each time. Mock allocation failures with the test
   library (the `-D` renames in `tests/meson.build`), never by touching production code.
 - **A question gets an answer only.** However suggestive it sounds ("why not X?", "can't we Y?",
-  "maybe in util.h?", "show me first"), do not edit, commit, push or touch a PR until the user gives
-  an explicit instruction ("do it", "add it to #N", "drop X"). Give a recommendation when asked for an
+  "maybe in util.h?", "show me first"), do not edit, commit, push or touch a PR. Wait for an
+  explicit instruction ("do it", "add it to #N", "drop X"). Give a recommendation when asked for an
   opinion, and offer the change in one line afterwards. If a reply mixes a correction with a hedge,
-  restate the plan and ask. Read-only checks and scratch experiments are fine while answering. Do not
-  start the next PR before being told to.
+  restate the plan and ask. Read-only checks and scratch experiments are fine while answering. Do
+  not start the next PR before being told to.
 - **Estimates run low:** inflate PR sizes and PR counts by about 50%, and measure early.
-- **Design rules from review** (details in `.claude/c-guidelines.md`): a module that uses an
-  interface takes it from its caller and never creates a concrete implementation (section 6); sizes and
-  offsets that the module does not bound itself are computed with `ckd_add`/`ckd_mul`/`ckd_sub`
-  (section 5, "Checked arithmetic"); name things for what they are (`extra_flags`, `file_number`).
+- **Design rules from review** (details in `.claude/c-guidelines.md`). A module that uses an
+  interface takes it from its caller and never creates a concrete implementation (section 6). Sizes
+  and offsets that the module does not bound itself are computed with `ckd_add`/`ckd_mul`/`ckd_sub`
+  (section 5, "Checked arithmetic"). Name things for what they are (`extra_flags`, `file_number`).
 - **Throwaway experiments** (a kernel or CI experiment) run from a scratch branch whose workflow
   is triggered by a push; delete the branch afterwards and never merge it.
 - **Body files for PRs:** use one file per PR (`body_<name>.md`); an old shared `body.md` once
@@ -214,62 +214,63 @@ Design points worth knowing:
   recorded writer size on failure).
 
 ## Coding rules that CI enforces (details in CLAUDE.md)
-
-C23 (`nullptr`, `constexpr`, `[[nodiscard]]`, `static_assert`, `bool`). Functions at most 20 lines,
-nesting depth 2 (cmocka `assert_*` macros count as a nesting level inside loops and `if` blocks:
-use `if (...) { fail(); }` or small helpers), at most 4 parameters, no magic numbers in `src/`
-(name them with `constexpr`), opaque types for stateful modules, errno on every failure documented
-in the header and tested, `-Werror` with `-Wconversion`, strict `-std=c2x` (some POSIX features
-need `#define _POSIX_C_SOURCE 200809L`, as in `catalog.c`). Trust the client: no validation or tests
-whose only purpose is to survive malformed or hostile client input. Branch coverage with Clang
-counts conditions: a loop condition with `&&` needs a test for each operand being false.
-`assert_non_null` and `assert_ptr_*` count heavily against the function-size limit: write
-`assert_true(x != nullptr)`. `alignas`, `alignof` and `bool` are keywords in C23 (no `stdalign.h` or
-`stdbool.h`). Page and I/O tests that need an allocation failure mock it in
-`test_wire_buffer_oom.c`; `aligned_alloc` has its own mock (`oom_aligned_alloc`).
+C23 (`nullptr`, `constexpr`, `[[nodiscard]]`, `static_assert`, `bool`). Functions are at most 20
+lines, with nesting depth 2. The cmocka `assert_*` macros count as a nesting level inside loops and
+`if` blocks: use `if (...) { fail(); }` or small helpers. A function has at most 4 parameters. There
+are no magic numbers in `src/`: name them with `constexpr`. Stateful modules have opaque types.
+Every failure sets errno, documented in the header and tested. The build uses `-Werror` with
+`-Wconversion` and a strict `-std=c2x`. Some POSIX features need `#define _POSIX_C_SOURCE 200809L`,
+as in `catalog.c`. Trust the client: no validation or tests whose only purpose is to survive
+malformed or hostile client input. Branch coverage with Clang counts conditions: a loop condition
+with `&&` needs a test for each operand being false. `assert_non_null` and `assert_ptr_*` count
+heavily against the function-size limit: write `assert_true(x != nullptr)`. `alignas`, `alignof` and
+`bool` are keywords in C23 (no `stdalign.h` or `stdbool.h`). Page and I/O tests that need an
+allocation failure mock it in `test_wire_buffer_oom.c`; `aligned_alloc` has its own mock
+(`oom_aligned_alloc`).
 
 ## What comes next
 
-1. **Phase 2, in the order of the ROADMAP.md plan** (decisions are written there: the catalog in
-   a catalog file first and system tables in milestone B, flush on shutdown and checkpoint since
-   there is no WAL yet, per-table mutex plus the buffer pool's own lock, rows must fit one page
-   until the heap engine, overflow storage is Phase 8+). **Milestone A is done** (row codec, page
-   file, engine interface and registry, one-page engine, catalog file, data directory, `--data-dir` /
-   `--in-memory`, save on SIGTERM/SIGINT, `CHECKPOINT`, a lock so that one server uses a data
-   directory, directory fsync). **Milestone B so far:** fuzzing build and page fuzz target, heap tuple
-   header, page file with page count, allocation and direct I/O, fault injection moved to the tests,
-   replacement policy interface and clock, buffer pool (pin/unpin, dirty pages, eviction, lock),
-   page alignment and checked arithmetic. **Next, in order:** the free space map; the heap engine
-   core (insert through the free space map, cursors, TIDs, registered next to the one-page engine);
-   the engine's metadata in the catalog as an opaque blob, so that the data directory creates heap
-   tables, flushes the pool on shutdown and refuses or upgrades old one-page directories (this is
-   the first step that psql shows: a table larger than 8 KB survives a restart); the catalog in
-   system tables; the crash test. The `--direct-io` server option comes with the heap engine, and the
-   server must fail at startup if the file system refuses `O_DIRECT`. Phase 3 also lists memory
-   contexts, BOOLEAN, NULL and DEFAULT. A small cleanup: `src/common/types.h` is unused.
-   **Torn writes:** read `docs/TORN_WRITES.md` before writing or reviewing a crash test. A `kill -9`
-   can tear a buffered write (8 KB on tmpfs, on xfs before Linux 6.9, on ext4 before 6.16; any write
-   whose length is not a power of two, or above 2 MB, on every kernel tried), so the Phase 2 crash test
-   kills the child only after its flush and sync have finished, and the Phase 5 tests expect torn
-   pages. A power loss is a separate problem (torn page protection, Phase 5).
+1. **Phase 2, in the order of the ROADMAP.md plan.** The decisions are written there. The catalog is
+   a catalog file first, and system tables in milestone B. Flush on shutdown and checkpoint, since
+   there is no WAL yet. Locking is a per-table mutex plus the buffer pool's own lock. Rows must fit
+   one page until the heap engine. Overflow storage is Phase 8+. **Milestone A is done** (row codec,
+   page file, engine interface and registry, one-page engine, catalog file, data directory,
+   `--data-dir` / `--in-memory`, save on SIGTERM/SIGINT, `CHECKPOINT`, a lock so that one server
+   uses a data directory, directory fsync). **Milestone B so far:** fuzzing build and page fuzz
+   target, heap tuple header, page file with page count, allocation and direct I/O, fault injection
+   moved to the tests, replacement policy interface and clock, buffer pool (pin/unpin, dirty pages,
+   eviction, lock), page alignment and checked arithmetic. **Next, in order:** the free space map;
+   the heap engine core; the engine's metadata in the catalog; the catalog in system tables; the
+   crash test. The heap engine core covers insert through the free space map, cursors and TIDs,
+   registered next to the one-page engine. The engine's metadata goes in the catalog as an opaque
+   blob. Then the data directory creates heap tables, flushes the pool on shutdown and refuses or
+   upgrades old one-page directories. This is the first step that psql shows: a table larger than 8
+   KB survives a restart. The `--direct-io` server option comes with the heap engine, and the server
+   must fail at startup if the file system refuses `O_DIRECT`. Phase 3 also lists memory contexts,
+   BOOLEAN, NULL and DEFAULT. A small cleanup: `src/common/types.h` is unused. **Torn writes:** read
+   `docs/TORN_WRITES.md` before writing or reviewing a crash test. A `kill -9` can tear a buffered
+   write. This happens for 8 KB on tmpfs, on xfs before Linux 6.9 and on ext4 before 6.16, and for
+   any write whose length is not a power of two or is above 2 MB on every kernel tried. So the Phase
+   2 crash test kills the child only after its flush and sync have finished. The Phase 5 tests
+   expect torn pages. A power loss is a separate problem (torn page protection, Phase 5).
 2. Phase 3 (already in the roadmap): the real SQL parser and syntax tree first, then expressions,
    `WHERE`, projection, `DELETE`/`UPDATE`/`TRUNCATE`/`INSERT ... SELECT`, `generate_series`,
    `ALTER TABLE ... MODIFY/ADD COLUMN ... AFTER|FIRST`, ORDER BY, aggregates, joins.
-3. Later (Phase 5 and 6 decisions are already in the roadmap: deltas in the WAL with a checksum per
-   record, a resource manager ID in every record, torn page protection chosen when the WAL is
-   designed, a control file replaced atomically, a recording I/O layer that builds crash states):
-   user-defined types on top of the registry (`CREATE TYPE ... AS ENUM` first), B+trees, WAL,
-   MVCC. Before planning Phase 5 (WAL) and Phase 6 (transactions), read the ROADMAP section "A
-   Second Heap Engine: In-Place Updates with Undo Logs" (Phase 8+): it lists decisions (a resource
-   manager ID in every WAL record, engine hooks, snapshot arguments) that are cheap now and
+3. Later: user-defined types on top of the registry (`CREATE TYPE ... AS ENUM` first), B+trees, WAL,
+   MVCC. Some Phase 5 and 6 decisions are already in the roadmap. The WAL gets deltas with a
+   checksum per record, and a resource manager ID in every record. Torn page protection is chosen
+   when the WAL is designed. A control file is replaced atomically. A recording I/O layer builds
+   crash states. Before planning Phase 5 (WAL) and Phase 6 (transactions), read the ROADMAP section
+   "A Second Heap Engine: In-Place Updates with Undo Logs" (Phase 8+). It lists decisions (a
+   resource manager ID in every WAL record, engine hooks, snapshot arguments) that are cheap now and
    expensive to add later.
 
 ## Troubleshooting
 
 - `test_wire_buffer_oom` compiles the net, storage and executor sources with `malloc` renamed to a
-  mock, so a new `malloc`/`realloc`/`calloc` call in those files needs a matching `will_return`
-  in the tests that reach it (a missing one fails the test, and leftover values make later tests
-  hang). Run it with `timeout 20` when debugging.
+  mock. A new `malloc`/`realloc`/`calloc` call in those files therefore needs a matching
+  `will_return` in the tests that reach it. A missing one fails the test, and leftover values make
+  later tests hang. Run it with `timeout 20` when debugging.
 
 - A build directory made with GCC (or without the native file) fails at configure with a message
   pointing at `clang.ini`: delete it and set it up again.
@@ -288,7 +289,7 @@ counts conditions: a loop condition with `&&` needs a test for each operand bein
   unlock the keychain); do not change the remote URL without asking the user.
 - clang-tidy rejects a commit for function size or nesting in tests too: split the helper, as in
   the existing tests. A hook failure means no commit was made, so check `git log` before pushing.
-- The page file and buffer pool tests run twice, buffered and with `O_DIRECT`; the direct run is
+- The page file and buffer pool tests run twice, buffered and with `O_DIRECT`. The direct run is
   skipped (with a message) where the file system refuses `O_DIRECT`. tmpfs and btrfs accept it
   without enforcing alignment, ext2/ext4/xfs reject an unaligned buffer with EINVAL.
 - A `page_t` on the heap must come from `page_array_create` (or an `aligned_alloc` of its alignment);
