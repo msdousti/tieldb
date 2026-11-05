@@ -247,6 +247,15 @@ test_clock_policy = executable('test_clock_policy',
 
 test('clock_policy', test_clock_policy)
 
+# Test: free space map page
+test_fsm_page = executable('test_fsm_page',
+  'test_fsm_page.c',
+  dependencies: [tieldb_dep, cmocka_dep],
+  include_directories: inc,
+)
+
+test('fsm_page', test_fsm_page)
+
 # Test: binary max-tree
 test_max_tree = executable('test_max_tree',
   'test_max_tree.c',

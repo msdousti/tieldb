@@ -71,7 +71,7 @@ static void test_slots_are_checked_only_on_slotted_pages([[maybe_unused]] void *
 
 static void test_every_slotted_type_has_its_slots_checked([[maybe_unused]] void **state)
 {
-    for (page_type_t type = PAGE_TYPE_FREE; type <= PAGE_TYPE_CATALOG; type++) {
+    for (page_type_t type = PAGE_TYPE_FREE; type <= PAGE_TYPE_FSM; type++) {
         page_t page;
 
         page_init(&page, type);
