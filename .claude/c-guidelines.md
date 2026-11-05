@@ -219,6 +219,16 @@ Copying an unchecked pattern next to a checked one is how the bug spreads. When 
 - Make the correct use easy and misuse hard: distinct types for distinct concepts (wrap an `int` in a one-field struct when mixing them up would hurt), enums for modes instead of boolean flags.
 - Keep functions short with one purpose. Avoid global mutable state.
 
+### Enforce usage rules in the code, not in a comment
+- A rule that only a comment states will be broken: "do not call X on a Y", "call A before B", "only for pages of this kind". Before writing such a comment, change the design so that the code states the rule.
+- When several kinds of thing share one representation (pages, nodes, records, buffers), give each kind its own module and its own functions. Do not put the functions of one kind in the module of the shared representation and add "must not be used on the other kinds".
+- A module for one kind takes a typed view, such as a struct that wraps the shared type. The view is made by a constructor that checks the kind once. The other functions take the view, so a wrong call fails at compile time or at creation, not in every function.
+- Let the constructor take an enum of the allowed kinds, not a general type value plus an error return. The invalid kind then cannot be written, and there is no error path that no caller can reach.
+- The shared module keeps what every kind has (the header, the type, the checksum, the validation). Each kind's module owns the rest. The private layout goes in a header that only those modules include.
+- Before adding something unlike the rest to a shared module, list what else will share it, and check that the module still fits. This is the same step as for design documents.
+- When code moves between modules, list the invariants the old code enforced without saying so. An example is an old check that also rejected a zeroed page. Keep each one in the part that all kinds share. The existing tests are the safety net, so run them after each move.
+- Two lists that must stay equal (an enum and a function that tests membership, a limit and the last enumerator) are a bug waiting to happen. Derive one from the other. Or comment both and test them against each other.
+
 ## 7. Concurrency
 
 - Use OpenMP (`#pragma omp parallel for`) for data-parallel loops with minimal code change.
@@ -241,6 +251,7 @@ C is a fine choice for TDD; it is less ceremonious than it sounds.
   - Alternatives: `utest.h`/`greatest` (single-header, zero dependencies), Check (forks each test, isolating segfaults), Unity (embedded-oriented, less pleasant here).
   - A plain `assert`-based test binary per module is acceptable for small projects.
   - The framework matters less than the techniques below. Most valuable tests are plain C programs.
+- **Independent oracles:** a test that compares a function with one that calls it, or with a copy of its logic, cannot catch a mismatch. Compare against something the code under test does not use: a model, a constant written out in the test, or the bytes of the format.
 - **Failure paths:** test allocation failure, bad input, and I/O errors, not just the happy path.
 - **Reference-model testing (most valuable):** run random operations against the real structure (B+tree, slotted page, buffer pool, MVCC visibility) and against a trivial model (sorted array or hash map). Assert the two agree after every step. A few hundred lines of C give you property-based testing. Log the RNG seed so failures are reproducible.
 - **Fault injection:** use the injectable I/O interface from section 6 to simulate torn writes, dropped fsyncs, and failure at the Nth call.
@@ -321,6 +332,7 @@ Start with the I/O interface with fault injection, then a first cmocka test for 
 - [ ] A module that consumes an interface takes it from the caller and does not include a concrete implementation
 - [ ] Every failure path sets `errno`, documented in the header and asserted in tests
 - [ ] At most 4 parameters per function (clang-tidy enforces it); use an options struct beyond that
+- [ ] No usage rule that only a comment states: the types or the constructor enforce it (see "Enforce usage rules in the code")
 
 **Tests**
 - [ ] All I/O behind an injectable interface
