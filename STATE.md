@@ -1,9 +1,10 @@
 # TielDB Development State
 
-**Last updated:** 2026-11-04 **Phase 1 is complete. Phase 2 (persistence) is under way.** Milestone
+**Last updated:** 2026-11-05 **Phase 1 is complete. Phase 2 (persistence) is under way.** Milestone
 A is done: data survives a restart. Milestone B has the page file with direct I/O, the heap tuple
-header, and the buffer pool (replacement policy, dirty pages, eviction, a lock). Next: the free
-space map, then the heap engine (see "What comes next").
+header, the buffer pool (replacement policy, dirty pages, eviction, a lock), and the first part of
+the free space map (a binary max-tree). Next: the rest of the free space map in three slices, then
+the heap engine (see "What comes next").
 
 This file is the hand-over for a new session. Read it first, then `CLAUDE.md` (the rules) and
 `ROADMAP.md` (the plan). `ROADMAP.md` is the source of truth for what is done.
@@ -93,6 +94,15 @@ themselves and expect a short triage (real / skipped, with reasons) before any f
   is triggered by a push; delete the branch afterwards and never merge it.
 - **Body files for PRs:** use one file per PR (`body_<name>.md`); an old shared `body.md` once
   overwrote the wrong description.
+- **Context window and compaction.** The user ends a merge message with the context percentage
+  ("merged, 38%"). If it is missing and needed, ask. From about 55 to 60%, at a clean point (a PR
+  merged, a clean tree, nothing half decided), offer to compact. When the user agrees, open a
+  `STATE.md` update PR. After it merges, write the full state to `/tmp/compact.md` and show it. The
+  user then types `/compact Keep only: at the start of the next window, read /tmp/compact.md and
+  STATE.md before doing anything. Drop everything else.`
+- **Check before committing:** run `git branch --show-current` (a `git checkout -b` onto an
+  existing name fails without showing it, and a commit once landed on `main`). After a script
+  edits Markdown, run `git diff -U0 | grep -c '^-$'` to see whether it ate blank lines.
 - Stacked PRs: when a branch builds on an unmerged PR, push the branch and open its PR after the
   base merges, using `git rebase --onto origin/main <old-base> <branch>` (a plain rebase replays
   the squashed commits and conflicts).
@@ -108,8 +118,15 @@ themselves and expect a short triage (real / skipped, with reasons) before any f
   Meson needed `psql.full_path()` in `test()`, not the program object, and that form still works.
 - CI runs on `ubuntu-26.04` (glibc 2.43). It is a hosted runner, so `/dev/kvm` can be enabled for
   QEMU experiments (public repository).
-- CI uses the clang 22.1.2 of the runner image (Ubuntu archive). The local machine has 22.1.8 from
-  apt.llvm.org. If a format or tidy result differs between the two, check that first.
+- CI and the local machine both use clang 22.1.2, the Ubuntu archive build. CI takes it from the
+  runner image. Locally, the 19 LLVM packages are on hold (`apt-mark hold`), so `apt upgrade` leaves
+  them alone. To change the compiler version, unhold them first. `sudo` needs no password here.
+  `/etc/apt/sources.list.d/llvm-22.list` still lists `apt.llvm.org`. Its duplicate files are in
+  `~/apt-sources-backup-2026-11-05`.
+- A prebuilt CI image (clang 22.1.8) was measured in a throwaway run and not adopted. It was 968 MB
+  unpacked and 216 MB compressed, and a job took 10 to 14 s to start in it. The runner's own clang
+  installs in 4 to 10 s. `--no-install-recommends` drops `libclang-rt-22-dev`, which the sanitizers
+  need, so list it.
 - `git.kernel.org`, `lore.kernel.org` and `phoronix.com` answer HTTP 403 to this machine. Read kernel
   sources with `gh api repos/torvalds/linux/contents/<path>?ref=<tag>` or `gh api
   repos/torvalds/linux/commits/<sha>`, and use WebSearch for mailing list threads.
@@ -156,7 +173,10 @@ src/
                      real operations; the fault injection lives in tests/io_fault, not here
   ds/                hash_map (chained, entries embed hash_node_t, no locking inside);
                      replacement_policy.h (a general vtable: record access, set evictable, pick
-                     victim, over numbered slots) and clock_policy (its first implementation)
+                     victim, over numbered slots) and clock_policy (its first implementation);
+                     max_tree (a binary max-tree over bytes in caller-owned memory, padded leaves
+                     not stored, max_tree_attach rebuilds the inner nodes of a page read back;
+                     the free space map keeps one in each FSM page)
   buffer/            buffer_pool: frames over page files, page_id_t (file number + page number),
                      pin/unpin, mark_changed, flush_all, eviction through a replacement policy that
                      the caller passes to buffer_pool_create, one internal lock
@@ -201,7 +221,9 @@ tests/               one test_*.c per module (cmocka), test_wire_buffer_oom.c (a
                      direct_io.h (is O_DIRECT available here), fuzz/ (libFuzzer targets and
                      seed corpus), test_random.h (seeded generator for model tests)
 docs/                TORN_WRITES.md: measurements and sources on what a kill and a power loss do
-                     to a buffered write, by kernel version; FORMATTING.md; dev-setup.md
+                     to a buffered write, by kernel version; FREE_SPACE_MAP.md: how several
+                     systems find room for a row, and the design chosen for each TielDB engine;
+                     FORMATTING.md; dev-setup.md
 .claude/             design docs for the rules (style, clean code, C guidelines, design choices)
 ```
 
@@ -231,7 +253,11 @@ with `&&` needs a test for each operand being false. `assert_non_null` and `asse
 heavily against the function-size limit: write `assert_true(x != nullptr)`. `alignas`, `alignof` and
 `bool` are keywords in C23 (no `stdalign.h` or `stdbool.h`). Page and I/O tests that need an
 allocation failure mock it in `test_wire_buffer_oom.c`; `aligned_alloc` has its own mock
-(`oom_aligned_alloc`).
+(`oom_aligned_alloc`). Comments, docs and PR text use short sentences: one idea each, about 25
+words at most. A statement mixes at most three kinds of operation (cast, ternary, shift or bitwise,
+arithmetic, comparison, `&&` or `||`), and a ternary condition with `&&` or `||` is in parentheses.
+Before drafting a design document or roadmap item, list the engines (heap, clustered index,
+secondary indexes, LSM, one-page) and say what applies to each.
 
 ## What comes next
 
@@ -244,7 +270,8 @@ allocation failure mock it in `test_wire_buffer_oom.c`; `aligned_alloc` has its 
    uses a data directory, directory fsync). **Milestone B so far:** fuzzing build and page fuzz
    target, heap tuple header, page file with page count, allocation and direct I/O, fault injection
    moved to the tests, replacement policy interface and clock, buffer pool (pin/unpin, dirty pages,
-   eviction, lock), page alignment and checked arithmetic. **Next, in order:** the free space map;
+   eviction, lock), page alignment and checked arithmetic, and the binary max-tree
+   (`src/ds/max_tree`, with `max_tree_attach`). **Next, in order:** the free space map;
    the heap engine core; the engine's metadata in the catalog; the catalog in system tables; the
    crash test. The heap engine core covers insert through the free space map, cursors and TIDs,
    registered next to the one-page engine. The engine's metadata goes in the catalog as an opaque
@@ -258,6 +285,22 @@ allocation failure mock it in `test_wire_buffer_oom.c`; `aligned_alloc` has its 
    any write whose length is not a power of two or is above 2 MB on every kernel tried. So the Phase
    2 crash test kills the child only after its flush and sync have finished. The Phase 5 tests
    expect torn pages. A power loss is a separate problem (torn page protection, Phase 5).
+
+   **The free space map, slice by slice.** Read `docs/FREE_SPACE_MAP.md` first. The map belongs to
+   the heap engine only. It is a hint that may be wrong and is rebuilt from the heap: one byte per
+   heap page (free bytes divided by 32, rounded down to record and up to search), kept in a separate
+   file as a max-tree inside each page, through the buffer pool as a second file number. Two levels
+   of pages, root at page 0 and leaf pages from 1, so a table can have about 4,070 squared pages
+   (128 GiB at 8 KB). A third level would need sparse page files.
+   - Slice 2: `PAGE_TYPE_FSM` and `page_body` in `page.{h,c}`, so a page holds the tree bytes after
+     its header (a torn page fails its checksum and is rebuilt).
+   - Slice 3: the map with one level: the category conversion, then `record` and `find` over the
+     buffer pool, for up to about 4,000 heap pages. Write the addressing generically in the number
+     of levels.
+   - Slice 4: the second level, a format version and level count in the root page, growth of the
+     file, and the rebuild when the file is missing or damaged.
+   - Separate task in the roadmap: reuse of released pages (a freelist or a bitmap), shared by the
+     heap and the indexes. The map does not do it.
 2. Phase 3 (already in the roadmap): the real SQL parser and syntax tree first, then expressions,
    `WHERE`, projection, `DELETE`/`UPDATE`/`TRUNCATE`/`INSERT ... SELECT`, `generate_series`,
    `ALTER TABLE ... MODIFY/ADD COLUMN ... AFTER|FIRST`, ORDER BY, aggregates, joins.
