@@ -16,7 +16,19 @@ static size_t bitmap_size(size_t count)
 
 static bool is_null_bit_set(const unsigned char *bitmap, size_t column)
 {
-    return ((bitmap[column / CHAR_BIT] >> (column % CHAR_BIT)) & 1U) != 0;
+    unsigned char byte = bitmap[column / CHAR_BIT];
+    size_t position = column % CHAR_BIT;
+
+    return ((byte >> position) & 1U) != 0;
+}
+
+static void record_null_bit(unsigned char *bitmap, size_t column, const row_value_t *value)
+{
+    size_t position = column % CHAR_BIT;
+
+    if (value->data == nullptr) {
+        bitmap[column / CHAR_BIT] |= (unsigned char) (1U << position);
+    }
 }
 
 static bool is_variable_length(const type_info_t *type)
@@ -82,8 +94,7 @@ static void put_null_bitmap(row_writer_t *writer, const row_layout_t *layout,
 {
     memset(writer->bytes, 0, bitmap_size(layout->count));
     for (size_t column = 0; column < layout->count; column++) {
-        writer->bytes[column / CHAR_BIT] |=
-            (unsigned char) ((values[column].data == nullptr ? 1U : 0U) << (column % CHAR_BIT));
+        record_null_bit(writer->bytes, column, &values[column]);
     }
     writer->position = bitmap_size(layout->count);
 }

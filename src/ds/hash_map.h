@@ -32,7 +32,10 @@ typedef struct hash_node {
 /** The address of the entry that contains a node; nullptr for a null node. */
 static inline void *hash_node_entry(const hash_node_t *node, size_t offset)
 {
-    return node == nullptr ? nullptr : (void *) ((const char *) node - offset);
+    if (node == nullptr) {
+        return nullptr;
+    }
+    return (void *) ((const char *) node - offset);
 }
 
 /**

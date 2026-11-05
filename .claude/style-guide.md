@@ -387,6 +387,62 @@ int foo(page_t *page)
 }
 ```
 
+### Simple Statements
+A statement mixes at most three kinds of operation: a cast, a ternary, a shift or bitwise operator, arithmetic, a comparison, and `&&` or `||`. With four or more, name a part of it.
+
+Too dense (five kinds: cast, ternary, shift, arithmetic, comparison):
+```c
+writer->bytes[column / CHAR_BIT] |=
+    (unsigned char) ((values[column].data == nullptr ? 1U : 0U) << (column % CHAR_BIT));
+```
+
+Better (a helper with an `if` for the special case):
+```c
+static void record_null_bit(unsigned char *bitmap, size_t column, const row_value_t *value)
+{
+    size_t position = column % CHAR_BIT;
+
+    if (value->data == nullptr) {
+        bitmap[column / CHAR_BIT] |= (unsigned char) (1U << position);
+    }
+}
+```
+
+Hard to read (a cast around a ternary that repeats the field):
+```c
+header.slot_count = (uint16_t) (slot == header.slot_count ? slot + 1 : header.slot_count);
+```
+
+Better:
+```c
+if (slot == header.slot_count) {
+    header.slot_count++;
+}
+```
+
+Three kinds are fine, but name the pieces when the line still needs two readings. A ternary with arithmetic in its condition becomes a helper and an `if`:
+```c
+// Before
+return node_index < tree->first_leaf + tree->leaf_count ? tree->nodes[node_index] : 0;
+
+// After
+if (node_index >= stored_node_count(tree)) {
+    return 0;
+}
+return tree->nodes[node_index];
+```
+
+Put parentheses around the condition of a ternary when it contains `&&` or `||`:
+```c
+// Reads as kind == X && (version == Y ? 0 : malformed())
+return kind == RECORD_VERSION && version == CURRENT_VERSION ? 0 : malformed();
+
+// Clear
+return (kind == RECORD_VERSION && version == CURRENT_VERSION) ? 0 : malformed();
+```
+
+The compiler already rejects mixed `&&` and `||` without parentheses (`-Wparentheses`), and `clang-tidy` checks mixed arithmetic (`readability-math-missing-parentheses`).
+
 ### Loop Continue
 Use `continue` to flatten nested loops:
 ```c
@@ -462,6 +518,7 @@ All warnings are errors. Fix them, don't suppress them.
 
 ## Quick Checklist
 
+- [ ] At most three kinds of operation per statement; a ternary condition with `&&` or `||` is in parentheses
 - [ ] All names are `snake_case` (functions, variables, types with `_t`)
 - [ ] Constants and macros are `UPPER_SNAKE_CASE`
 - [ ] Functions prefixed with module name: `module_verb_object`

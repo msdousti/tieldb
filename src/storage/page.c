@@ -180,7 +180,9 @@ int page_insert(page_t *page, const void *tuple, size_t length)
     }
     write_tuple(page, &header, tuple, length);
     store_slot(page, slot, (slot_t){SLOT_NORMAL, header.upper, (uint16_t) length});
-    header.slot_count = (uint16_t) (slot == header.slot_count ? slot + 1 : header.slot_count);
+    if (slot == header.slot_count) {
+        header.slot_count++;
+    }
     store_header(page, &header);
     return (int) slot;
 }
