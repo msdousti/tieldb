@@ -227,7 +227,7 @@ Copying an unchecked pattern next to a checked one is how the bug spreads. When 
 - The shared module keeps what every kind has (the header, the type, the checksum, the validation). Each kind's module owns the rest. The private layout goes in a header that only those modules include.
 - Before adding something unlike the rest to a shared module, list what else will share it, and check that the module still fits. This is the same step as for design documents.
 - When code moves between modules, list the invariants the old code enforced without saying so. An example is an old check that also rejected a zeroed page. Keep each one in the part that all kinds share. The existing tests are the safety net, so run them after each move.
-- Two lists that must stay equal (an enum and a function that tests membership, a limit and the last enumerator) are a bug waiting to happen. Derive one from the other. Or comment both and test them against each other.
+- Two lists that must stay equal are a bug waiting to happen. An example is an enum and the function that tests membership. Another is a limit and the last enumerator. Derive one from the other. Or comment both and test them against each other.
 
 ## 7. Concurrency
 
