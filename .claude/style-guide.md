@@ -326,6 +326,28 @@ Keep related functions together. Place helpers near their callers.
 page_t *buffer_pool_pin_page(buffer_pool_t *pool, page_id_t page_id);
 ```
 
+**Write short sentences.** A comment is read by someone who is stuck, so make it easy to read:
+- One idea per sentence, about 25 words at most.
+- A semicolon, a long parenthesis, or a second "and" or "so" means the sentence should be split.
+- State the point first, then the reason or the exception.
+- The same holds for headers, docs and PR descriptions.
+
+Too long (one sentence of 60 words, three ideas):
+
+```c
+/* The leaf bytes are taken as they are (any byte is a valid leaf value) and every inner node is
+ * recomputed from them, so memory in any state, torn or damaged, becomes a valid tree and the
+ * result cannot be wrong; only the leaves, which this function cannot check, may be. */
+```
+
+Better (three sentences):
+
+```c
+/* The leaves are kept as they are, and every inner node is recomputed from them, so damaged
+ * memory still gives a valid tree. Only the leaves can be wrong. This function cannot check
+ * them. */
+```
+
 **Don't:**
 - Restate the code: `i++; // increment i`
 - Leave commented-out code (delete it; git remembers)
@@ -450,6 +472,6 @@ All warnings are errors. Fix them, don't suppress them.
 - [ ] Pointer asterisk with name: `type *name`
 - [ ] `#pragma once` in all headers
 - [ ] Includes: system, then blank line, then project (alphabetical in each)
-- [ ] Comments explain *why*, not *what*
+- [ ] Comments explain *why*, not *what*, in short sentences (one idea each, about 25 words at most)
 - [ ] Early returns, avoid deep nesting
 - [ ] `clang-format -i` before commit

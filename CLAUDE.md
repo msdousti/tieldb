@@ -129,6 +129,7 @@ meson test -C build-asan
 - **No comments by default** - code should be self-explanatory
   - Only comment *why*, never *what*
   - Document public APIs with brief descriptions
+  - Short sentences, one idea each, about 25 words at most: a sentence that needs a semicolon, a long parenthesis or a second "and" or "so" is two sentences. This holds for comments, docs and PR descriptions
 
 #### Memory Management
 - **Every allocation has one owner** with matching free
@@ -381,7 +382,7 @@ Before submitting/committing code:
 - [ ] No raw `malloc`/`free` in application code (use arenas)
 - [ ] All error returns checked
 - [ ] Sizes and offsets that the module does not bound itself use `ckd_add`/`ckd_mul`/`ckd_sub` (allocation sizes, lengths from files or the wire, rounding up, unsigned subtraction, narrowing casts); see "Checked arithmetic" in `.claude/c-guidelines.md`
-- [ ] No comments unless explaining *why*
+- [ ] No comments unless explaining *why*; sentences short, one idea each (about 25 words at most)
 - [ ] Module internals are `static`
 - [ ] Stateful module types are opaque (`foo_create`/`foo_destroy`); vtables only where implementations are swappable
 - [ ] A module that consumes an interface (policy, I/O table, storage engine) takes it from the caller and does not include or create a concrete implementation (`.claude/c-guidelines.md` section 6)

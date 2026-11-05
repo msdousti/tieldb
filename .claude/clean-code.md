@@ -122,6 +122,8 @@ If `buffer_pin(page_id)` secretly increments a global counter that `buffer_evict
 - **Amplification:** "This pause looks silly but prevents a rare starvation case in the clock sweep."
 - **TODO/FIXME** with a ticket number or date.
 
+Write them in short sentences: one idea each, about 25 words at most. If a sentence needs a semicolon or a long parenthesis, split it (examples in `style-guide.md`).
+
 ### Bad comments
 - **Mumbling:** "// increment i" next to `i++`.
 - **Redundant:** `// Constructor` above a constructor.
@@ -206,7 +208,7 @@ Every time you touch a file, leave it a little better: rename a confusing variab
 - [ ] Functions do one thing, stay under 20 lines
 - [ ] Nesting depth rarely exceeds 2; flatten with early returns/extraction
 - [ ] Names reveal intent; no abbreviations that save 2 characters
-- [ ] Comments explain *why*, not *what*; or don't exist
+- [ ] Comments explain *why*, not *what*, in short sentences; or don't exist
 - [ ] Error returns are checked everywhere; context is logged
 - [ ] Tests are fast, independent, repeatable, self-validating, and written first
 - [ ] Every file touched is left cleaner than you found it
