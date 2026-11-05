@@ -38,6 +38,7 @@ typedef enum {
     PAGE_TYPE_FREE = 0,
     PAGE_TYPE_HEAP = 1,
     PAGE_TYPE_CATALOG = 2,
+    PAGE_TYPE_FSM = 3,
 } page_type_t;
 
 typedef struct {

@@ -1,7 +1,7 @@
 /**
- * The header that every page starts with. Private to the page modules (page.c, slotted_page.c),
- * which interpret the bytes after it: the slot array and the tuples, or whatever the page type
- * stores there. Nothing else includes this file.
+ * The header that every page starts with. Private to the page modules (page.c, slotted_page.c,
+ * fsm_page.c), which interpret the bytes after it: the slot array and the tuples, or whatever the
+ * page type stores there. Nothing else includes this file.
  */
 
 #pragma once

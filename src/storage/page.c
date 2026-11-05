@@ -10,7 +10,7 @@
 #include "storage/slotted_page_check.h"
 
 // Keep this the value after the last page_type_t, or page_validate rejects the new type
-static constexpr unsigned PAGE_TYPE_LIMIT = PAGE_TYPE_CATALOG + 1;
+static constexpr unsigned PAGE_TYPE_LIMIT = PAGE_TYPE_FSM + 1;
 
 void page_init(page_t *page, page_type_t type)
 {
