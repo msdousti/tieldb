@@ -396,3 +396,7 @@ Design decisions for the educational DBMS, ordered by implementation priority. E
    pointer to bytes that can be the body of a page, plus two numbers derived from the leaf count. It
    can live on the stack or in another struct, and it needs no allocation or destroy. Anything that
    owns a resource stays opaque.
+6. **Make misuse impossible, not documented.** If the design needs a comment such as "do not use this
+   on that", change the design. Give each kind of thing its own module and a typed view, checked
+   once when the view is made. Before adding something unlike the rest to a shared module, list
+   what else will share it. The rules are in `c-guidelines.md` section 6.
