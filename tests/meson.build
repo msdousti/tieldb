@@ -104,13 +104,13 @@ test_type_registry = executable('test_type_registry',
 test('type_registry', test_type_registry)
 
 # Test: slotted page
-test_page = executable('test_page',
-  'test_page.c',
+test_slotted_page = executable('test_slotted_page',
+  'test_slotted_page.c',
   dependencies: [tieldb_dep, cmocka_dep],
   include_directories: inc,
 )
 
-test('page', test_page)
+test('slotted_page', test_slotted_page)
 
 # Test: one-page storage engine
 test_one_page_engine = executable('test_one_page_engine',

@@ -17,6 +17,7 @@
 #include <cmocka.h>
 
 #include "io/io.h"
+#include "slotted_helpers.h"
 #include "io_fault.h"
 #include "storage/one_page_file.h"
 
@@ -46,7 +47,7 @@ static page_t page_holding(const char *text)
 {
     page_t page;
     page_init(&page, PAGE_TYPE_HEAP);
-    assert_int_equal(page_insert(&page, text, strlen(text)), 0);
+    assert_int_equal(test_slotted_insert(&page, text, strlen(text)), 0);
     return page;
 }
 
@@ -60,7 +61,7 @@ static void test_save_creates_or_replaces_a_file_and_load_reads_it([[maybe_unuse
     assert_int_equal(one_page_file_save(path, &first), 0);
     assert_int_equal(one_page_file_save(path, &second), 0);
     assert_int_equal(one_page_file_load(path, &loaded), 0);
-    assert_memory_equal(page_get(&loaded, 0, &(size_t){0}), "second", 6);
+    assert_memory_equal(test_slotted_get(&loaded, 0, &(size_t){0}), "second", 6);
 }
 
 static void test_load_reports_a_missing_or_empty_file([[maybe_unused]] void **state)

@@ -8,11 +8,12 @@
 #include <string.h>
 
 #include "storage/page.h"
+#include "storage/slotted_page.h"
 
-static void read_tuple(const page_t *page, size_t slot)
+static void read_tuple(const slotted_page_t *page, size_t slot)
 {
     size_t length = 0;
-    const unsigned char *tuple = page_get(page, slot, &length);
+    const unsigned char *tuple = slotted_page_get(page, slot, &length);
     if (tuple == nullptr || length == 0) {
         return;
     }
@@ -20,9 +21,9 @@ static void read_tuple(const page_t *page, size_t slot)
     (void) tuple[length - 1];
 }
 
-static void read_every_slot(const page_t *page)
+static void read_every_slot(const slotted_page_t *page)
 {
-    for (size_t slot = 0; slot < page_slot_count(page); slot++) {
+    for (size_t slot = 0; slot < slotted_page_slot_count(page); slot++) {
         read_tuple(page, slot);
     }
 }
@@ -40,7 +41,11 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) // NOLINT(misc-use-
     }
     (void) page_type(&page);
     (void) page_flags(&page);
-    (void) page_free_space(&page);
-    read_every_slot(&page);
+    slotted_page_t slotted;
+    if (slotted_page_open_any(&slotted, &page) != 0) {
+        return 0;
+    }
+    (void) slotted_page_free_space(&slotted);
+    read_every_slot(&slotted);
     return 0;
 }

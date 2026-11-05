@@ -156,7 +156,7 @@ itself.
 Why:
 
 1. **It is approximate by design.** A byte per page in 32-byte units is enough to choose a candidate
-   page. The inserter checks the real page (`page_free_space`). If the row does not fit, it corrects
+   page. The inserter checks the real page (`slotted_page_free_space`). If the row does not fit, it corrects
    the map and tries the next page. No exact bookkeeping is needed.
 2. **It needs no log.** Because the map is rebuilt from the heap pages (each page header states
    its free space), a lost or damaged map costs a scan and never data. This matters now: there

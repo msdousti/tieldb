@@ -5,6 +5,7 @@
 
 #include "storage/one_page_file.h"
 #include "storage/row_codec.h"
+#include "storage/slotted_page.h"
 
 typedef enum {
     RECORD_VERSION = 0,
@@ -43,7 +44,7 @@ static row_value_t number_value(const int32_t *number)
     return (row_value_t){number, number == nullptr ? 0 : sizeof(*number)};
 }
 
-static int put_record(page_t *page, const record_t *record)
+static int put_record(slotted_page_t *page, const record_t *record)
 {
     const row_value_t values[FIELD_COUNT] = {
         number_value(&record->kind), text_value(record->table), text_value(record->name),
@@ -53,7 +54,7 @@ static int put_record(page_t *page, const record_t *record)
     if (size < 0) {
         return -1;
     }
-    return page_insert(page, row, (size_t) size) < 0 ? -1 : 0;
+    return slotted_page_insert(page, row, (size_t) size) < 0 ? -1 : 0;
 }
 
 static size_t display_position_of(table_t *table, size_t physical)
@@ -65,7 +66,7 @@ static size_t display_position_of(table_t *table, size_t physical)
     return display;
 }
 
-static int put_column(page_t *page, table_t *table, size_t physical)
+static int put_column(slotted_page_t *page, table_t *table, size_t physical)
 {
     const table_column_t *column = table_column(table, physical);
     const int32_t oid = (int32_t) column->type->oid;
@@ -74,7 +75,7 @@ static int put_column(page_t *page, table_t *table, size_t physical)
     return put_record(page, &record);
 }
 
-static int put_table(page_t *page, table_t *table)
+static int put_table(slotted_page_t *page, table_t *table)
 {
     const record_t record = {RECORD_TABLE, table_name(table), table_engine_name(table), nullptr,
                              nullptr};
@@ -93,10 +94,11 @@ int catalog_file_save(const char *path, table_t *const *tables, size_t count)
     const int32_t version = CATALOG_FILE_FORMAT_VERSION;
     const record_t record = {RECORD_VERSION, nullptr, nullptr, &version, nullptr};
 
-    page_init(&page, PAGE_TYPE_CATALOG);
-    int status = put_record(&page, &record);
+    slotted_page_t slotted;
+    slotted_page_init(&slotted, &page, SLOTTED_PAGE_CATALOG);
+    int status = put_record(&slotted, &record);
     for (size_t i = 0; status == 0 && i < count; i++) {
-        status = put_table(&page, tables[i]);
+        status = put_table(&slotted, tables[i]);
     }
     return status == 0 ? one_page_file_save(path, &page) : status;
 }
@@ -227,20 +229,23 @@ static int check_version(const row_value_t *fields)
     return (kind == RECORD_VERSION && version == CATALOG_FILE_FORMAT_VERSION) ? 0 : malformed();
 }
 
-static int load_record(loader_t *loader, const page_t *page, size_t slot)
+static int load_record(loader_t *loader, const slotted_page_t *page, size_t slot)
 {
     row_value_t fields[FIELD_COUNT];
     size_t length = 0;
-    const void *row = page_get(page, slot, &length);
+    const void *row = slotted_page_get(page, slot, &length);
     if (row == nullptr || row_decode(&RECORD_LAYOUT, row, length, fields) != 0) {
         return malformed();
     }
     return slot == 0 ? check_version(fields) : handle_record(loader, fields);
 }
 
-static int check_page(const page_t *page)
+static int open_catalog_page(slotted_page_t *slotted, page_t *page)
 {
-    return (page_type(page) == PAGE_TYPE_CATALOG && page_slot_count(page) > 0) ? 0 : malformed();
+    if (slotted_page_open(slotted, page, SLOTTED_PAGE_CATALOG) != 0) {
+        return malformed();
+    }
+    return slotted_page_slot_count(slotted) > 0 ? 0 : malformed();
 }
 
 int catalog_file_load(const char *path, catalog_file_visitor_t visit, void *context)
@@ -248,9 +253,10 @@ int catalog_file_load(const char *path, catalog_file_visitor_t visit, void *cont
     page_t page;
     loader_t loader = {.visit = visit, .context = context};
     int status = one_page_file_load(path, &page);
-    status = status == 0 ? check_page(&page) : status;
-    for (size_t slot = 0; status == 0 && slot < page_slot_count(&page); slot++) {
-        status = load_record(&loader, &page, slot);
+    slotted_page_t slotted;
+    status = status == 0 ? open_catalog_page(&slotted, &page) : status;
+    for (size_t slot = 0; status == 0 && slot < slotted_page_slot_count(&slotted); slot++) {
+        status = load_record(&loader, &slotted, slot);
     }
     return status == 0 ? flush_table(&loader) : status;
 }

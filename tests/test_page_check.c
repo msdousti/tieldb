@@ -11,6 +11,7 @@
 
 #include <cmocka.h>
 
+#include "slotted_helpers.h"
 #include "storage/page.h"
 
 // Where the fields of the page header and of the first slot are, as the format defines them
@@ -31,9 +32,9 @@ static page_t page_with_tuples(void)
 {
     page_t page;
     page_init(&page, PAGE_TYPE_HEAP);
-    assert_int_equal(page_insert(&page, "alpha", 5), 0);
-    assert_int_equal(page_insert(&page, "beta", 4), 1);
-    assert_int_equal(page_delete(&page, 1), 0);
+    assert_int_equal(test_slotted_insert(&page, "alpha", 5), 0);
+    assert_int_equal(test_slotted_insert(&page, "beta", 4), 1);
+    assert_int_equal(test_slotted_delete(&page, 1), 0);
     return page;
 }
 
@@ -42,6 +43,41 @@ static void assert_corrupt(const page_t *page)
     errno = 0;
     assert_int_equal(page_validate(page), -1);
     assert_int_equal(errno, EBADMSG);
+}
+
+static void test_page_flags_are_kept_for_the_engine([[maybe_unused]] void **state)
+{
+    page_t page;
+
+    page_init(&page, PAGE_TYPE_HEAP);
+    assert_int_equal(page_flags(&page), 0);
+    page_set_flags(&page, 0xa5c3);
+    assert_int_equal(test_slotted_insert(&page, "x", 1), 0);
+    assert_int_equal(page_flags(&page), 0xa5c3);
+    assert_int_equal(page_type(&page), PAGE_TYPE_HEAP);
+}
+
+static void test_slots_are_checked_only_on_slotted_pages([[maybe_unused]] void **state)
+{
+    page_t page;
+
+    page_init(&page, PAGE_TYPE_FREE);
+    poke16(&page, SLOT_COUNT_OFFSET, 3000);
+    assert_int_equal(page_validate(&page), 0);
+    page_init(&page, PAGE_TYPE_HEAP);
+    poke16(&page, SLOT_COUNT_OFFSET, 3000);
+    assert_corrupt(&page);
+}
+
+static void test_every_slotted_type_has_its_slots_checked([[maybe_unused]] void **state)
+{
+    for (page_type_t type = PAGE_TYPE_FREE; type <= PAGE_TYPE_CATALOG; type++) {
+        page_t page;
+
+        page_init(&page, type);
+        poke16(&page, SLOT_COUNT_OFFSET, 3000);
+        assert_int_equal(page_validate(&page) == -1, slotted_page_is_type(type));
+    }
 }
 
 static void test_a_page_with_its_checksum_verifies([[maybe_unused]] void **state)
@@ -80,7 +116,8 @@ static void test_pages_made_by_the_page_functions_are_valid([[maybe_unused]] voi
     assert_int_equal(page_validate(&page), 0);
     page = page_with_tuples();
     assert_int_equal(page_validate(&page), 0);
-    assert_int_equal(page_reclaim_dead_slots(&page), 1);
+    slotted_page_t slotted = test_slotted_view(&page);
+    assert_int_equal(slotted_page_reclaim_dead_slots(&slotted), 1);
     assert_int_equal(page_validate(&page), 0);
 }
 
@@ -124,6 +161,9 @@ static void test_a_bad_slot_is_corrupt([[maybe_unused]] void **state)
 }
 
 static const struct CMUnitTest tests[] = {
+    cmocka_unit_test(test_page_flags_are_kept_for_the_engine),
+    cmocka_unit_test(test_slots_are_checked_only_on_slotted_pages),
+    cmocka_unit_test(test_every_slotted_type_has_its_slots_checked),
     cmocka_unit_test(test_a_page_with_its_checksum_verifies),
     cmocka_unit_test(test_any_changed_byte_breaks_the_checksum),
     cmocka_unit_test(test_pages_made_by_the_page_functions_are_valid),

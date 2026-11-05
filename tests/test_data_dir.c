@@ -25,6 +25,7 @@
 #include <cmocka.h>
 
 #include "io/io.h"
+#include "slotted_helpers.h"
 #include "io_fault.h"
 #include "storage/catalog.h"
 #include "storage/catalog_file.h"
@@ -325,7 +326,7 @@ static void patch_catalog_row(size_t slot, const void *bytes, size_t length)
 
     path_of(path, "catalog");
     assert_int_equal(one_page_file_load(path, &page), 0);
-    row = (unsigned char *) page_get(&page, slot, &row_length);
+    row = (unsigned char *) test_slotted_get(&page, slot, &row_length);
     memcpy(row + row_length - length, bytes, length);
     assert_int_equal(one_page_file_save(path, &page), 0);
 }

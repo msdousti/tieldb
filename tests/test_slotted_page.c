@@ -13,22 +13,24 @@
 #include <cmocka.h>
 
 #include "storage/page.h"
+#include "storage/slotted_page.h"
 #include "test_random.h"
 
 static constexpr size_t HEADER_SIZE = 24;
 static constexpr size_t SLOT_SIZE = 4;
 
 static page_t page;
+static slotted_page_t slotted;
 
 static int new_page([[maybe_unused]] void **state)
 {
-    page_init(&page, PAGE_TYPE_HEAP);
+    slotted_page_init(&slotted, &page, SLOTTED_PAGE_HEAP);
     return 0;
 }
 static void assert_tuple_is(size_t slot, const void *expected, size_t expected_length)
 {
     size_t length = 0;
-    const void *tuple = page_get(&page, slot, &length);
+    const void *tuple = slotted_page_get(&slotted, slot, &length);
     if (tuple == nullptr) {
         fail();
     }
@@ -40,31 +42,31 @@ static void assert_slot_is_missing(size_t slot)
 {
     size_t length = 0;
     errno = 0;
-    assert_null(page_get(&page, slot, &length));
+    assert_null(slotted_page_get(&slotted, slot, &length));
     assert_int_equal(errno, ENOENT);
 }
 
 static void test_new_page_is_empty([[maybe_unused]] void **state)
 {
     assert_int_equal(page_type(&page), PAGE_TYPE_HEAP);
-    assert_int_equal(page_slot_count(&page), 0);
-    assert_int_equal(page_free_space(&page), PAGE_SIZE - HEADER_SIZE - SLOT_SIZE);
+    assert_int_equal(slotted_page_slot_count(&slotted), 0);
+    assert_int_equal(slotted_page_free_space(&slotted), PAGE_SIZE - HEADER_SIZE - SLOT_SIZE);
 }
 
 static void test_inserted_tuples_are_returned_unchanged([[maybe_unused]] void **state)
 {
-    assert_int_equal(page_insert(&page, "alpha", 5), 0);
-    assert_int_equal(page_insert(&page, "be", 2), 1);
+    assert_int_equal(slotted_page_insert(&slotted, "alpha", 5), 0);
+    assert_int_equal(slotted_page_insert(&slotted, "be", 2), 1);
 
-    assert_int_equal(page_slot_count(&page), 2);
+    assert_int_equal(slotted_page_slot_count(&slotted), 2);
     assert_tuple_is(0, "alpha", 5);
     assert_tuple_is(1, "be", 2);
 }
 
 static void test_an_empty_tuple_can_be_stored([[maybe_unused]] void **state)
 {
-    assert_int_equal(page_insert(&page, "", 0), 0);
-    assert_int_equal(page_insert(&page, "x", 1), 1);
+    assert_int_equal(slotted_page_insert(&slotted, "", 0), 0);
+    assert_int_equal(slotted_page_insert(&slotted, "x", 1), 1);
 
     assert_tuple_is(0, "", 0);
     assert_tuple_is(1, "x", 1);
@@ -72,16 +74,16 @@ static void test_an_empty_tuple_can_be_stored([[maybe_unused]] void **state)
 
 static void test_missing_slots_are_reported([[maybe_unused]] void **state)
 {
-    assert_int_equal(page_insert(&page, "a", 1), 0);
-    assert_int_equal(page_delete(&page, 0), 0);
+    assert_int_equal(slotted_page_insert(&slotted, "a", 1), 0);
+    assert_int_equal(slotted_page_delete(&slotted, 0), 0);
 
     assert_slot_is_missing(0);
     assert_slot_is_missing(1);
     errno = 0;
-    assert_int_equal(page_delete(&page, 0), -1);
+    assert_int_equal(slotted_page_delete(&slotted, 0), -1);
     assert_int_equal(errno, ENOENT);
     errno = 0;
-    assert_int_equal(page_delete(&page, 7), -1);
+    assert_int_equal(slotted_page_delete(&slotted, 7), -1);
     assert_int_equal(errno, ENOENT);
 }
 
@@ -89,16 +91,16 @@ static void
 test_a_deleted_slot_number_is_reused_only_after_reclaiming([[maybe_unused]] void **state)
 {
     for (int i = 0; i < 4; i++) {
-        assert_int_equal(page_insert(&page, "tuple", 5), i);
+        assert_int_equal(slotted_page_insert(&slotted, "tuple", 5), i);
     }
-    assert_int_equal(page_delete(&page, 2), 0);
-    assert_int_equal(page_delete(&page, 1), 0);
-    assert_int_equal(page_insert(&page, "new", 3), 4);
+    assert_int_equal(slotted_page_delete(&slotted, 2), 0);
+    assert_int_equal(slotted_page_delete(&slotted, 1), 0);
+    assert_int_equal(slotted_page_insert(&slotted, "new", 3), 4);
 
-    assert_int_equal(page_reclaim_dead_slots(&page), 2);
-    assert_int_equal(page_reclaim_dead_slots(&page), 0);
-    assert_int_equal(page_insert(&page, "newer", 5), 1);
-    assert_int_equal(page_insert(&page, "last", 4), 2);
+    assert_int_equal(slotted_page_reclaim_dead_slots(&slotted), 2);
+    assert_int_equal(slotted_page_reclaim_dead_slots(&slotted), 0);
+    assert_int_equal(slotted_page_insert(&slotted, "newer", 5), 1);
+    assert_int_equal(slotted_page_insert(&slotted, "last", 4), 2);
     assert_tuple_is(1, "newer", 5);
     assert_tuple_is(3, "tuple", 5);
 }
@@ -106,38 +108,27 @@ test_a_deleted_slot_number_is_reused_only_after_reclaiming([[maybe_unused]] void
 static void test_a_deleted_tuple_frees_its_space_at_once([[maybe_unused]] void **state)
 {
     unsigned char big[PAGE_SIZE] = {};
-    size_t largest = page_free_space(&page);
+    size_t largest = slotted_page_free_space(&slotted);
 
-    assert_int_equal(page_insert(&page, big, largest), 0);
-    assert_int_equal(page_delete(&page, 0), 0);
+    assert_int_equal(slotted_page_insert(&slotted, big, largest), 0);
+    assert_int_equal(slotted_page_delete(&slotted, 0), 0);
 
-    assert_int_equal(page_free_space(&page), largest - SLOT_SIZE);
-    assert_int_equal(page_insert(&page, big, largest - SLOT_SIZE), 1);
-}
-
-static void test_page_flags_are_kept_for_the_engine([[maybe_unused]] void **state)
-{
-    assert_int_equal(page_flags(&page), 0);
-
-    page_set_flags(&page, 0xa5c3);
-    assert_int_equal(page_insert(&page, "x", 1), 0);
-
-    assert_int_equal(page_flags(&page), 0xa5c3);
-    assert_int_equal(page_type(&page), PAGE_TYPE_HEAP);
+    assert_int_equal(slotted_page_free_space(&slotted), largest - SLOT_SIZE);
+    assert_int_equal(slotted_page_insert(&slotted, big, largest - SLOT_SIZE), 1);
 }
 
 static void test_the_largest_tuple_fills_the_page([[maybe_unused]] void **state)
 {
     unsigned char big[PAGE_SIZE] = {};
-    size_t largest = page_free_space(&page);
+    size_t largest = slotted_page_free_space(&slotted);
 
     errno = 0;
-    assert_int_equal(page_insert(&page, big, largest + 1), -1);
+    assert_int_equal(slotted_page_insert(&slotted, big, largest + 1), -1);
     assert_int_equal(errno, ENOSPC);
-    assert_int_equal(page_insert(&page, big, largest), 0);
-    assert_int_equal(page_free_space(&page), 0);
+    assert_int_equal(slotted_page_insert(&slotted, big, largest), 0);
+    assert_int_equal(slotted_page_free_space(&slotted), 0);
     errno = 0;
-    assert_int_equal(page_insert(&page, "", 0), -1);
+    assert_int_equal(slotted_page_insert(&slotted, "", 0), -1);
     assert_int_equal(errno, ENOSPC);
 }
 
@@ -148,14 +139,14 @@ static void test_scattered_free_space_is_gathered_when_needed([[maybe_unused]] v
 
     for (size_t i = 0; i < 10; i++) {
         memset(tuple, (int) ('a' + i), sizeof(tuple));
-        assert_int_equal(page_insert(&page, tuple, sizeof(tuple)), (int) i);
+        assert_int_equal(slotted_page_insert(&slotted, tuple, sizeof(tuple)), (int) i);
     }
     for (size_t i = 0; i < 10; i += 2) {
-        assert_int_equal(page_delete(&page, i), 0);
+        assert_int_equal(slotted_page_delete(&slotted, i), 0);
     }
     memset(large, 'z', sizeof(large));
 
-    assert_int_equal(page_insert(&page, large, sizeof(large)), 10);
+    assert_int_equal(slotted_page_insert(&slotted, large, sizeof(large)), 10);
     assert_tuple_is(10, large, sizeof(large));
     for (size_t i = 1; i < 10; i += 2) {
         memset(tuple, (int) ('a' + i), sizeof(tuple));
@@ -220,7 +211,7 @@ static void model_insert(model_t *model, size_t length, unsigned char fill)
 
     memset(data, fill, length);
     errno = 0;
-    assert_int_equal(page_insert(&page, data, length), fits ? (int) slot : -1);
+    assert_int_equal(slotted_page_insert(&slotted, data, length), fits ? (int) slot : -1);
     if (!fits) {
         assert_int_equal(errno, ENOSPC);
         return;
@@ -236,7 +227,7 @@ static void model_delete(model_t *model, size_t slot)
     bool is_live = slot < model->count && model->slots[slot].state == MODEL_NORMAL;
 
     errno = 0;
-    assert_int_equal(page_delete(&page, slot), is_live ? 0 : -1);
+    assert_int_equal(slotted_page_delete(&slotted, slot), is_live ? 0 : -1);
     if (!is_live) {
         assert_int_equal(errno, ENOENT);
         return;
@@ -260,7 +251,7 @@ static void model_reclaim(model_t *model)
     for (size_t slot = 0; slot < model->count; slot++) {
         dead += model_reclaim_slot(&model->slots[slot]);
     }
-    assert_int_equal(page_reclaim_dead_slots(&page), dead);
+    assert_int_equal(slotted_page_reclaim_dead_slots(&slotted), dead);
 }
 
 static void model_compare_slot(const model_t *model, size_t slot)
@@ -280,19 +271,21 @@ static void model_compare_slot(const model_t *model, size_t slot)
 static void assert_free_space_is_exact(void)
 {
     unsigned char data[PAGE_SIZE] = {};
-    size_t free_space = page_free_space(&page);
-    page_t exact = page;
-    page_t too_big = page;
+    size_t free_space = slotted_page_free_space(&slotted);
+    page_t exact_page = page;
+    page_t too_big_page = page;
+    slotted_page_t exact = {&exact_page};
+    slotted_page_t too_big = {&too_big_page};
 
     if (free_space > 0) {
-        assert_true(page_insert(&exact, data, free_space) >= 0);
+        assert_true(slotted_page_insert(&exact, data, free_space) >= 0);
     }
-    assert_int_equal(page_insert(&too_big, data, free_space + 1), -1);
+    assert_int_equal(slotted_page_insert(&too_big, data, free_space + 1), -1);
 }
 
 static void model_compare(const model_t *model)
 {
-    assert_int_equal(page_slot_count(&page), model->count);
+    assert_int_equal(slotted_page_slot_count(&slotted), model->count);
     assert_int_equal(page_validate(&page), 0);
     assert_free_space_is_exact();
     for (size_t slot = 0; slot < model->count; slot++) {
@@ -311,7 +304,7 @@ static size_t pick_length(uint64_t *random, size_t step)
 {
     uint64_t phase = (step / PHASE_STEPS) % PHASES;
     uint64_t kind = next_random(random) % LENGTH_KINDS;
-    size_t free_space = page_free_space(&page);
+    size_t free_space = slotted_page_free_space(&slotted);
 
     if (is_tiny_phase(step)) {
         return next_random(random) % (MAX_TINY_TUPLE + 1);
@@ -331,7 +324,7 @@ static size_t pick_length(uint64_t *random, size_t step)
 static void begin_phase(model_t *model, size_t step)
 {
     if (step % PHASE_STEPS == 0) {
-        page_init(&page, PAGE_TYPE_HEAP);
+        slotted_page_init(&slotted, &page, SLOTTED_PAGE_HEAP);
         *model = (model_t){};
     }
 }
@@ -362,7 +355,7 @@ static void run_against_model(uint64_t seed)
     uint64_t random = seed;
 
     print_message("seed %llu\n", (unsigned long long) seed);
-    page_init(&page, PAGE_TYPE_HEAP);
+    slotted_page_init(&slotted, &page, SLOTTED_PAGE_HEAP);
     model = (model_t){};
     for (size_t step = 0; step < OPERATIONS; step++) {
         model_step(&model, &random, step);
@@ -392,14 +385,47 @@ static void test_page_agrees_with_a_model_under_random_operations([[maybe_unused
     }
 }
 
+static void test_a_page_opens_only_as_its_own_kind([[maybe_unused]] void **state)
+{
+    slotted_page_t other;
+    page_t free_page;
+
+    assert_int_equal(slotted_page_open(&other, &page, SLOTTED_PAGE_HEAP), 0);
+    assert_ptr_equal(other.page, &page);
+    errno = 0;
+    assert_int_equal(slotted_page_open(&other, &page, SLOTTED_PAGE_CATALOG), -1);
+    assert_int_equal(errno, EINVAL);
+    page_init(&free_page, PAGE_TYPE_FREE);
+    errno = 0;
+    assert_int_equal(slotted_page_open(&other, &free_page, SLOTTED_PAGE_HEAP), -1);
+    assert_int_equal(errno, EINVAL);
+    assert_true(slotted_page_is_type(PAGE_TYPE_HEAP));
+    assert_true(slotted_page_is_type(PAGE_TYPE_CATALOG));
+    assert_false(slotted_page_is_type(PAGE_TYPE_FREE));
+}
+
+static void test_open_any_takes_the_kind_from_the_page([[maybe_unused]] void **state)
+{
+    slotted_page_t other;
+    page_t free_page;
+
+    assert_int_equal(slotted_page_open_any(&other, &page), 0);
+    assert_ptr_equal(other.page, &page);
+    page_init(&free_page, PAGE_TYPE_FREE);
+    errno = 0;
+    assert_int_equal(slotted_page_open_any(&other, &free_page), -1);
+    assert_int_equal(errno, EINVAL);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup(test_new_page_is_empty, new_page),
+    cmocka_unit_test_setup(test_a_page_opens_only_as_its_own_kind, new_page),
+    cmocka_unit_test_setup(test_open_any_takes_the_kind_from_the_page, new_page),
     cmocka_unit_test_setup(test_inserted_tuples_are_returned_unchanged, new_page),
     cmocka_unit_test_setup(test_an_empty_tuple_can_be_stored, new_page),
     cmocka_unit_test_setup(test_missing_slots_are_reported, new_page),
     cmocka_unit_test_setup(test_a_deleted_slot_number_is_reused_only_after_reclaiming, new_page),
     cmocka_unit_test_setup(test_a_deleted_tuple_frees_its_space_at_once, new_page),
-    cmocka_unit_test_setup(test_page_flags_are_kept_for_the_engine, new_page),
     cmocka_unit_test_setup(test_the_largest_tuple_fills_the_page, new_page),
     cmocka_unit_test_setup(test_scattered_free_space_is_gathered_when_needed, new_page),
     cmocka_unit_test(test_an_array_of_pages_is_aligned_and_too_many_pages_are_refused),
