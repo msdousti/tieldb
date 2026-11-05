@@ -14,7 +14,7 @@ struct free_space_map {
 static constexpr size_t CATEGORY_SIZE = FREE_SPACE_MAP_CATEGORY_SIZE;
 static constexpr size_t PAGE_ZERO = 0;
 // The most free space that a page can report: all of the body, which holds nothing else
-static constexpr size_t MOST_FREE_BYTES = PAGE_SIZE - PAGE_HEADER_SIZE;
+static constexpr size_t MOST_FREE_BYTES = FSM_PAGE_BODY_SIZE;
 
 static_assert(MOST_FREE_BYTES / CATEGORY_SIZE <= UINT8_MAX);
 
@@ -83,7 +83,7 @@ static page_id_t page_zero_of(const free_space_map_t *map)
     return (page_id_t){.file_number = map->file_number, .page_number = PAGE_ZERO};
 }
 
-// Pins page 0 and makes tree a view of it. On failure nothing stays pinned
+// On failure nothing stays pinned
 static int pin_tree(const free_space_map_t *map, max_tree_t *tree)
 {
     page_t *page = nullptr;
@@ -101,7 +101,7 @@ static int pin_tree(const free_space_map_t *map, max_tree_t *tree)
     return 0;
 }
 
-// Unpins page 0 and returns the status, keeping the errno of a failure
+// The unpin must not overwrite the errno of a failure
 static int release(const free_space_map_t *map, int status)
 {
     int error = errno;

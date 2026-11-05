@@ -76,6 +76,16 @@ typedef struct {
 [[nodiscard]] int max_tree_attach(max_tree_t *tree, void *memory, size_t memory_size,
                                   size_t leaf_count);
 
+/**
+ * Makes tree a view of memory that holds a tree made by max_tree_init and max_tree_set, such as a
+ * page that was written by this module and read back with a checked read. Unlike max_tree_attach,
+ * it trusts the inner nodes and reads and writes no byte, so it costs nothing however many leaves
+ * there are. A memory with wrong inner nodes gives wrong answers: use max_tree_attach for that.
+ * Errors: as for max_tree_init.
+ */
+[[nodiscard]] int max_tree_view(max_tree_t *tree, void *memory, size_t memory_size,
+                                size_t leaf_count);
+
 /** Sets a leaf and recomputes its parents. EINVAL: the leaf does not exist. */
 [[nodiscard]] int max_tree_set(max_tree_t *tree, size_t leaf, uint8_t value);
 

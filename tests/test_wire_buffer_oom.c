@@ -692,14 +692,28 @@ test_page_file_open_fails_when_the_handle_cannot_be_allocated([[maybe_unused]] v
     assert_int_equal(errno, ENOMEM);
 }
 
+static char fsm_oom_path[64];
+
+static int fsm_oom_setup([[maybe_unused]] void **state)
+{
+    snprintf(fsm_oom_path, sizeof(fsm_oom_path), "/tmp/tieldb_free_space_map_oom_%d", getpid());
+    return 0;
+}
+
+// A failed assertion must not leave the mocks off or the file behind
+static int fsm_oom_teardown([[maybe_unused]] void **state)
+{
+    oom_pass_through = false;
+    (void) unlink(fsm_oom_path);
+    return 0;
+}
+
 static void
 test_free_space_map_create_fails_when_the_file_cannot_be_added([[maybe_unused]] void **state)
 {
-    static const char path[] = "/tmp/tieldb_free_space_map_oom";
-
     oom_pass_through = true;
     buffer_pool_t *pool = buffer_pool_create(2, clock_policy_create(2));
-    page_file_t *file = page_file_create(path, PAGE_FILE_NO_EXTRA_FLAGS);
+    page_file_t *file = page_file_create(fsm_oom_path, PAGE_FILE_NO_EXTRA_FLAGS);
     oom_pass_through = false;
     assert_true(pool != nullptr && file != nullptr);
     will_return(oom_calloc, true);
@@ -711,7 +725,6 @@ test_free_space_map_create_fails_when_the_file_cannot_be_added([[maybe_unused]] 
     oom_pass_through = true;
     assert_int_equal(buffer_pool_destroy(pool), 0);
     assert_int_equal(page_file_close(file), 0);
-    assert_int_equal(unlink(path), 0);
     oom_pass_through = false;
 }
 
@@ -980,7 +993,8 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_one_page_engine_cursor_fails_when_memory_runs_out),
     cmocka_unit_test(test_page_file_open_fails_when_the_handle_cannot_be_allocated),
     cmocka_unit_test(test_free_space_map_create_fails_when_memory_runs_out),
-    cmocka_unit_test(test_free_space_map_create_fails_when_the_file_cannot_be_added),
+    cmocka_unit_test_setup_teardown(test_free_space_map_create_fails_when_the_file_cannot_be_added,
+                                    fsm_oom_setup, fsm_oom_teardown),
     cmocka_unit_test(test_table_create_fails_when_memory_runs_out),
     cmocka_unit_test(test_catalog_create_fails_when_the_table_cannot_be_allocated),
     cmocka_unit_test(test_table_insert_fails_when_the_row_cannot_be_converted),

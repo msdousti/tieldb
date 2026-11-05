@@ -11,7 +11,8 @@
  * The map is a hint. Whoever inserts checks the real page, and records what it finds there. A
  * wrong answer costs a wasted look at a page, never a lost or wrong row, so the map needs no log.
  * Its pages are checked like any page, and a page 0 that fails the check is replaced by an empty
- * one. The map is then wrong, but only in the harmless way, and the heap can rebuild it.
+ * one, without a sync. The map is then wrong, but only in the harmless way, and the heap can
+ * rebuild it.
  *
  * The rounding keeps the map safe. A page that records F free bytes gets the category F / 32,
  * rounded down, so the map never promises more than the page has. A search for N bytes looks for
@@ -47,9 +48,9 @@ constexpr size_t FREE_SPACE_MAP_LARGEST_REQUEST = UINT8_MAX * FREE_SPACE_MAP_CAT
 
 /**
  * Opens the map in file, which is empty or holds a map. An empty file gets its page 0. A page 0
- * that is corrupt (a torn write) is replaced by an empty one. The map is added to pool.
- * EBADMSG: page 0 is a valid page of another type, or the file ends in the middle of a page.
- * ENOMEM.
+ * that is damaged (a torn write, for instance) is replaced by an empty one, without a sync: the map
+ * is only a hint. The map is added to pool. EBADMSG: page 0 is a valid page of another type, or the
+ * file ends in the middle of a page. ENOMEM.
  */
 [[nodiscard]] free_space_map_t *free_space_map_create(buffer_pool_t *pool, page_file_t *file);
 
