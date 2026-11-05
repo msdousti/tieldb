@@ -16,7 +16,6 @@
 #include "storage/slotted_page.h"
 
 static constexpr size_t HEADER_SIZE = 24;
-static constexpr size_t LEAVES = 4070;
 
 static page_t page;
 
@@ -74,21 +73,21 @@ static void test_a_max_tree_in_the_body_survives_a_round_trip([[maybe_unused]] v
     static page_t copy;
     fsm_page_t fsm;
     max_tree_t tree;
-    size_t length = 0;
     size_t found = 0;
 
     fsm_page_init(&fsm, &page);
-    assert_int_equal(max_tree_init(&tree, fsm_page_body(&fsm, &length), length, LEAVES), 0);
-    assert_int_equal(max_tree_set(&tree, 3000, 77), 0);
+    fsm_page_tree(&fsm, &tree);
+    assert_int_equal(max_tree_set(&tree, FSM_PAGE_LEAVES - 1, 77), 0);
     page_set_checksum(&page);
 
     memcpy(copy.bytes, page.bytes, PAGE_SIZE);
     assert_int_equal(page_verify_checksum(&copy), 0);
     assert_int_equal(fsm_page_open(&fsm, &copy), 0);
-    assert_int_equal(max_tree_attach(&tree, fsm_page_body(&fsm, &length), length, LEAVES), 0);
+    fsm_page_tree(&fsm, &tree);
     assert_int_equal(max_tree_root(&tree), 77);
     assert_int_equal(max_tree_find(&tree, 77, &found), 0);
-    assert_int_equal(found, 3000);
+    assert_int_equal(found, FSM_PAGE_LEAVES - 1);
+    assert_int_equal(max_tree_set(&tree, FSM_PAGE_LEAVES, 1), -1);
 }
 
 static const struct CMUnitTest tests[] = {

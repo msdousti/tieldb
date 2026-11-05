@@ -20,8 +20,6 @@ typedef struct {
     uint16_t upper; // offset of the lowest tuple, for a slotted page
 } page_header_t;
 
-static constexpr size_t PAGE_HEADER_SIZE = 24;
-
 static_assert(sizeof(page_header_t) == PAGE_HEADER_SIZE);
 
 static inline page_header_t page_header_load(const page_t *page)

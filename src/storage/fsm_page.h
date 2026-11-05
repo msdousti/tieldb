@@ -17,7 +17,14 @@
 
 #include <stddef.h>
 
+#include "ds/max_tree.h"
 #include "storage/page.h"
+
+/**
+ * The number of leaves of the max-tree in the body: one per heap page that the page can describe.
+ * With the padding that is not stored, the tree needs 8,165 of the 8,168 bytes of the body.
+ */
+constexpr size_t FSM_PAGE_LEAVES = 4070;
 
 typedef struct {
     page_t *page;
@@ -32,3 +39,11 @@ void fsm_page_init(fsm_page_t *fsm, page_t *page);
 
 /** The body of the page: the bytes after the header. Its length is put in *length. */
 [[nodiscard]] unsigned char *fsm_page_body(const fsm_page_t *fsm, size_t *length);
+
+/**
+ * Makes tree a view of the FSM_PAGE_LEAVES leaves in the body. The inner nodes are recomputed from
+ * the leaves (see max_tree_attach), so a damaged body still gives a valid tree. This cannot fail:
+ * the body is large enough for the tree, which fsm_page.c checks when it is compiled. The tree
+ * points into the page, so it is valid as long as the page is.
+ */
+void fsm_page_tree(const fsm_page_t *fsm, max_tree_t *tree);
