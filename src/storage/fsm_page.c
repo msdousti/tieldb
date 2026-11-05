@@ -40,3 +40,12 @@ void fsm_page_tree(const fsm_page_t *fsm, max_tree_t *tree)
     // The size is checked by the static_assert above, so the only error cannot happen
     (void) max_tree_view(tree, body, length, FSM_PAGE_LEAVES);
 }
+
+void fsm_page_rebuild_tree(const fsm_page_t *fsm, max_tree_t *tree)
+{
+    size_t length = 0;
+    unsigned char *body = fsm_page_body(fsm, &length);
+
+    // The size is checked by the static_assert above, so the only error cannot happen
+    (void) max_tree_attach(tree, body, length, FSM_PAGE_LEAVES);
+}

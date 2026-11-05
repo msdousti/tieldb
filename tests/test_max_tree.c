@@ -368,6 +368,26 @@ static void test_view_trusts_the_inner_nodes_and_checks_its_arguments(void **sta
     assert_int_equal(errno, EINVAL);
 }
 
+static void test_find_reports_inner_nodes_that_promise_too_much([[maybe_unused]] void **state)
+{
+    fixture_t fixture;
+    size_t leaf = 0;
+
+    assert_int_equal(max_tree_init(&fixture.tree, fixture.memory, sizeof(fixture.memory), 100), 0);
+    assert_int_equal(max_tree_set(&fixture.tree, 20, 9), 0);
+    memset(fixture.memory, 200, 127);
+    errno = 0;
+    assert_int_equal(max_tree_find(&fixture.tree, 100, &leaf), -1);
+    assert_int_equal(errno, EBADMSG);
+    assert_int_equal(max_tree_attach(&fixture.tree, fixture.memory, sizeof(fixture.memory), 100),
+                     0);
+    errno = 0;
+    assert_int_equal(max_tree_find(&fixture.tree, 100, &leaf), -1);
+    assert_int_equal(errno, ENOENT);
+    assert_int_equal(max_tree_find(&fixture.tree, 9, &leaf), 0);
+    assert_int_equal(leaf, 20);
+}
+
 static void test_random_updates_agree_with_a_plain_array(void **state)
 {
     const size_t counts[] = {1, 2, 3, 5, 7, 8, 9, 100, 255, 256, 257, MAX_LEAVES};
@@ -393,6 +413,7 @@ static const struct CMUnitTest tests[] = {
     cmocka_unit_test(test_the_exact_size_is_enough),
     cmocka_unit_test(test_attach_keeps_the_leaves_and_rebuilds_the_inner_nodes),
     cmocka_unit_test(test_attach_checks_its_arguments),
+    cmocka_unit_test(test_find_reports_inner_nodes_that_promise_too_much),
     cmocka_unit_test(test_view_keeps_the_bytes_and_answers_from_them),
     cmocka_unit_test(test_view_trusts_the_inner_nodes_and_checks_its_arguments),
     cmocka_unit_test(test_random_updates_agree_with_a_plain_array),

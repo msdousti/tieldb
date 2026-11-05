@@ -24,7 +24,15 @@
  * The map uses the buffer pool for its page: each call pins page 0 and unpins it before it
  * returns, and a changed page is written by the pool's own flush. The map adds the file to the
  * pool. The pool and the file stay with the caller, who closes the map before the pool and the
- * file. The map does no locking; the caller makes sure that two threads do not use it at once.
+ * file.
+ *
+ * Several threads may use the map. A lock is held during each call, so a leaf and its parents
+ * change together. The caller must not flush the pool while a call runs (the pool requires this for
+ * any page that is changing), and must not destroy the map while another thread uses it.
+ *
+ * If a search finds that the inner nodes of the tree promise more than the leaves hold, it rebuilds
+ * them from the leaves and searches again. Inner nodes that are too low hide a page and are not
+ * seen; the heap rebuilds the whole map in a later slice.
  *
  * Errors return -1 or nullptr and set errno, as documented for each function. They also return
  * what the buffer pool and the page file return.
@@ -70,5 +78,5 @@ void free_space_map_destroy(free_space_map_t *map);
  * to the map, into *heap_page. ENOENT: the map knows no such page (see the rounding above).
  * EBADMSG: page 0 is no longer a free space map page.
  */
-[[nodiscard]] int free_space_map_find(const free_space_map_t *map, size_t needed_bytes,
+[[nodiscard]] int free_space_map_find(free_space_map_t *map, size_t needed_bytes,
                                       size_t *heap_page);

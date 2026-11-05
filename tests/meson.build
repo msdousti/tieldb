@@ -259,7 +259,7 @@ test('fsm_page', test_fsm_page)
 # Test: free space map
 test_free_space_map = executable('test_free_space_map',
   'test_free_space_map.c',
-  dependencies: [test_support_dep, cmocka_dep],
+  dependencies: [test_support_dep, cmocka_dep, thread_dep],
   include_directories: inc,
 )
 

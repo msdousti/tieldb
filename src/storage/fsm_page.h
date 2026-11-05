@@ -51,3 +51,10 @@ void fsm_page_init(fsm_page_t *fsm, page_t *page);
  * page, so it is valid as long as the page is.
  */
 void fsm_page_tree(const fsm_page_t *fsm, max_tree_t *tree);
+
+/**
+ * Like fsm_page_tree, but recomputes the inner nodes from the leaves (see max_tree_attach), so that
+ * a body whose inner nodes were damaged gives a valid tree again. The page must then be marked
+ * changed. It costs time in proportion to the number of leaves. It cannot fail either.
+ */
+void fsm_page_rebuild_tree(const fsm_page_t *fsm, max_tree_t *tree);

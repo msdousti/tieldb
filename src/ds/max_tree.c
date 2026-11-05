@@ -159,6 +159,10 @@ int max_tree_find(const max_tree_t *tree, uint8_t at_least, size_t *leaf)
         size_t left_index = left_child(node_index);
         node_index = value_at(tree, left_index) >= at_least ? left_index : left_index + 1;
     }
+    if (value_at(tree, node_index) < at_least) {
+        errno = EBADMSG;
+        return -1;
+    }
     *leaf = node_index - tree->first_leaf;
     return 0;
 }

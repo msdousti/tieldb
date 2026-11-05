@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <pthread.h>
 #include <unistd.h>
 
 #include <cmocka.h>
@@ -322,6 +323,38 @@ static void test_a_page_zero_that_changed_type_is_reported([[maybe_unused]] void
     assert_int_equal(page_file_close(file), 0);
 }
 
+// The map is the first file added to its pool, so its file number is 0
+static constexpr size_t MAP_FILE_NUMBER = 0;
+static constexpr size_t INNER_NODES = 4095;
+static constexpr unsigned char TOO_HIGH = 200;
+
+static void make_inner_nodes_promise_too_much(void)
+{
+    page_id_t id = {.file_number = MAP_FILE_NUMBER, .page_number = 0};
+    page_t *page = nullptr;
+    fsm_page_t fsm;
+    size_t length = 0;
+
+    assert_int_equal(buffer_pool_pin(pool, id, &page), 0);
+    assert_int_equal(fsm_page_open(&fsm, page), 0);
+    memset(fsm_page_body(&fsm, &length), TOO_HIGH, INNER_NODES);
+    assert_int_equal(buffer_pool_mark_changed(pool, id), 0);
+    assert_int_equal(buffer_pool_unpin(pool, id), 0);
+}
+
+static void test_a_search_repairs_inner_nodes_that_promise_too_much([[maybe_unused]] void **state)
+{
+    record(5, 100);
+
+    make_inner_nodes_promise_too_much();
+    assert_found(64, 5);
+    make_inner_nodes_promise_too_much();
+    assert_not_found(1000);
+    restart();
+    assert_found(96, 5);
+    assert_not_found(97);
+}
+
 static constexpr size_t MODEL_PAGES = 120;
 static constexpr size_t MODEL_STEPS = 3000;
 static constexpr size_t RESTART_EVERY = 400;
@@ -335,6 +368,13 @@ static size_t model_find(const uint8_t *categories, size_t needed)
         page++;
     }
     return page < MODEL_PAGES ? page : SIZE_MAX;
+}
+
+static size_t find_page(size_t needed)
+{
+    size_t heap_page = SIZE_MAX;
+
+    return free_space_map_find(map, needed, &heap_page) == 0 ? heap_page : SIZE_MAX;
 }
 
 static void compare_with_model(const uint8_t *categories, uint64_t *random)
@@ -394,6 +434,54 @@ static void test_the_map_agrees_with_a_model_under_random_operations([[maybe_unu
     }
 }
 
+static constexpr size_t THREADS = 4;
+static constexpr size_t OPERATIONS_PER_THREAD = 1500;
+
+typedef struct {
+    size_t id;
+    uint8_t *categories;
+    int errors;
+} worker_t;
+
+static void *work(void *argument)
+{
+    worker_t *worker = argument;
+    uint64_t random = worker->id + 1;
+
+    for (size_t step = 0; step < OPERATIONS_PER_THREAD; step++) {
+        size_t owned = next_random(&random) % (MODEL_PAGES / THREADS);
+        size_t page = (owned * THREADS) + worker->id;
+        size_t free_bytes = next_random(&random) % (MOST_FREE + 1);
+        size_t needed = next_random(&random) % (FREE_SPACE_MAP_LARGEST_REQUEST + 1);
+        size_t found = 0;
+
+        worker->errors += free_space_map_record(map, page, free_bytes) == 0 ? 0 : 1;
+        worker->categories[page] = (uint8_t) (free_bytes / CATEGORY);
+        worker->errors += free_space_map_find(map, needed, &found) == 0 || errno == ENOENT ? 0 : 1;
+    }
+    return nullptr;
+}
+
+// Each thread owns the pages whose number has its remainder, so the last record of a page is known
+static void test_threads_do_not_lose_updates([[maybe_unused]] void **state)
+{
+    uint8_t categories[MODEL_PAGES] = {};
+    worker_t workers[THREADS] = {};
+    pthread_t threads[THREADS];
+
+    for (size_t i = 0; i < THREADS; i++) {
+        workers[i] = (worker_t){.id = i, .categories = categories};
+        assert_int_equal(pthread_create(&threads[i], nullptr, work, &workers[i]), 0);
+    }
+    for (size_t i = 0; i < THREADS; i++) {
+        assert_int_equal(pthread_join(threads[i], nullptr), 0);
+        assert_int_equal(workers[i].errors, 0);
+    }
+    for (size_t needed = 0; needed <= FREE_SPACE_MAP_LARGEST_REQUEST; needed += CATEGORY) {
+        assert_int_equal(model_find(categories, needed), find_page(needed));
+    }
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup_teardown(test_a_new_map_knows_no_page, setup, teardown),
     cmocka_unit_test_setup_teardown(test_a_record_rounds_down_and_a_search_rounds_up, setup,
@@ -413,6 +501,9 @@ static const struct CMUnitTest tests[] = {
                                     teardown),
     cmocka_unit_test_setup_teardown(test_a_page_zero_that_changed_type_is_reported, setup,
                                     teardown),
+    cmocka_unit_test_setup_teardown(test_a_search_repairs_inner_nodes_that_promise_too_much, setup,
+                                    teardown),
+    cmocka_unit_test_setup_teardown(test_threads_do_not_lose_updates, setup, teardown),
     cmocka_unit_test_setup_teardown(test_the_map_agrees_with_a_model_under_random_operations, setup,
                                     teardown),
 };

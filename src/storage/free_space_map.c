@@ -2,11 +2,13 @@
 
 #include <errno.h>
 #include <stdint.h>
+#include <pthread.h>
 #include <stdlib.h>
 
 #include "storage/fsm_page.h"
 
 struct free_space_map {
+    pthread_mutex_t lock;
     buffer_pool_t *pool;
     size_t file_number;
 };
@@ -65,6 +67,7 @@ free_space_map_t *free_space_map_create(buffer_pool_t *pool, page_file_t *file)
     if (map == nullptr) {
         return nullptr;
     }
+    map->lock = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
     map->pool = pool;
     if (prepare_file(file) != 0 || buffer_pool_add_file(pool, file, &map->file_number) != 0) {
         free(map);
@@ -75,6 +78,7 @@ free_space_map_t *free_space_map_create(buffer_pool_t *pool, page_file_t *file)
 
 void free_space_map_destroy(free_space_map_t *map)
 {
+    pthread_mutex_destroy(&map->lock);
     free(map);
 }
 
@@ -83,21 +87,26 @@ static page_id_t page_zero_of(const free_space_map_t *map)
     return (page_id_t){.file_number = map->file_number, .page_number = PAGE_ZERO};
 }
 
+// Page 0 of the map, pinned, with the view of its tree
+typedef struct {
+    fsm_page_t fsm;
+    max_tree_t tree;
+} pinned_tree_t;
+
 // On failure nothing stays pinned
-static int pin_tree(const free_space_map_t *map, max_tree_t *tree)
+static int pin_tree(const free_space_map_t *map, pinned_tree_t *pinned)
 {
     page_t *page = nullptr;
-    fsm_page_t fsm;
 
     if (buffer_pool_pin(map->pool, page_zero_of(map), &page) != 0) {
         return -1;
     }
-    if (fsm_page_open(&fsm, page) != 0) {
+    if (fsm_page_open(&pinned->fsm, page) != 0) {
         (void) buffer_pool_unpin(map->pool, page_zero_of(map));
         errno = EBADMSG;
         return -1;
     }
-    fsm_page_tree(&fsm, tree);
+    fsm_page_tree(&pinned->fsm, &pinned->tree);
     return 0;
 }
 
@@ -114,18 +123,18 @@ static int release(const free_space_map_t *map, int status)
     return unpin_status;
 }
 
-int free_space_map_record(free_space_map_t *map, size_t heap_page, size_t free_bytes)
+static int record_locked(const free_space_map_t *map, size_t heap_page, size_t free_bytes)
 {
-    max_tree_t tree;
+    pinned_tree_t pinned;
 
     if (free_bytes > MOST_FREE_BYTES) {
         errno = EINVAL;
         return -1;
     }
-    if (pin_tree(map, &tree) != 0) {
+    if (pin_tree(map, &pinned) != 0) {
         return -1;
     }
-    int status = max_tree_set(&tree, heap_page, (uint8_t) (free_bytes / CATEGORY_SIZE));
+    int status = max_tree_set(&pinned.tree, heap_page, (uint8_t) (free_bytes / CATEGORY_SIZE));
     if (status != 0) {
         errno = ENOSPC;
         return release(map, status);
@@ -133,22 +142,64 @@ int free_space_map_record(free_space_map_t *map, size_t heap_page, size_t free_b
     return release(map, buffer_pool_mark_changed(map->pool, page_zero_of(map)));
 }
 
-int free_space_map_find(const free_space_map_t *map, size_t needed_bytes, size_t *heap_page)
+static int repair_and_search(const free_space_map_t *map, pinned_tree_t *pinned, uint8_t category,
+                             size_t *leaf)
 {
-    max_tree_t tree;
+    fsm_page_rebuild_tree(&pinned->fsm, &pinned->tree);
+    int found = max_tree_find(&pinned->tree, category, leaf);
+    int marked = buffer_pool_mark_changed(map->pool, page_zero_of(map));
+
+    return found == 0 ? marked : found;
+}
+
+// A tree whose inner nodes promise too much is rebuilt from its leaves, and the search repeated
+static int search_tree(const free_space_map_t *map, pinned_tree_t *pinned, uint8_t category,
+                       size_t *leaf)
+{
+    int status = max_tree_find(&pinned->tree, category, leaf);
+
+    if (status == 0 || errno != EBADMSG) {
+        return status;
+    }
+    return repair_and_search(map, pinned, category, leaf);
+}
+
+static int find_locked(const free_space_map_t *map, size_t needed_bytes, size_t *heap_page)
+{
+    pinned_tree_t pinned;
     size_t leaf = 0;
 
     if (needed_bytes > FREE_SPACE_MAP_LARGEST_REQUEST) {
         errno = ENOENT;
         return -1;
     }
-    if (pin_tree(map, &tree) != 0) {
+    if (pin_tree(map, &pinned) != 0) {
         return -1;
     }
     uint8_t category = (uint8_t) ((needed_bytes + CATEGORY_SIZE - 1) / CATEGORY_SIZE);
-    int status = max_tree_find(&tree, category, &leaf);
+    int status = search_tree(map, &pinned, category, &leaf);
     if (status == 0) {
         *heap_page = leaf;
     }
     return release(map, status);
+}
+
+int free_space_map_record(free_space_map_t *map, size_t heap_page, size_t free_bytes)
+{
+    pthread_mutex_lock(&map->lock);
+    int status = record_locked(map, heap_page, free_bytes);
+    int error = errno;
+    pthread_mutex_unlock(&map->lock);
+    errno = error;
+    return status;
+}
+
+int free_space_map_find(free_space_map_t *map, size_t needed_bytes, size_t *heap_page)
+{
+    pthread_mutex_lock(&map->lock);
+    int status = find_locked(map, needed_bytes, heap_page);
+    int error = errno;
+    pthread_mutex_unlock(&map->lock);
+    errno = error;
+    return status;
 }

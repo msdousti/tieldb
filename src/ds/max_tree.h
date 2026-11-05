@@ -95,5 +95,10 @@ typedef struct {
 /** The maximum of all leaves. */
 [[nodiscard]] uint8_t max_tree_root(const max_tree_t *tree);
 
-/** Puts the leftmost leaf whose value is at least at_least into leaf. ENOENT: there is none. */
+/**
+ * Puts the leftmost leaf whose value is at least at_least into leaf. ENOENT: there is none.
+ * EBADMSG: the inner nodes promise a leaf with that value, but the leaf found has less, so they do
+ * not agree with the leaves (a tree from max_tree_view with damaged bytes). max_tree_attach
+ * repairs the tree. Inner nodes that are too low cannot be seen by this check.
+ */
 [[nodiscard]] int max_tree_find(const max_tree_t *tree, uint8_t at_least, size_t *leaf);
