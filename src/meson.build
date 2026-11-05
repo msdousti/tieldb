@@ -45,6 +45,7 @@ storage_sources = files(
   'storage/data_dir.c',
   'storage/crc32c.c',
   'storage/page.c',
+  'storage/slotted_page.c',
   'storage/engine_registry.c',
   'storage/one_page_engine.c',
   'storage/page_file.c',

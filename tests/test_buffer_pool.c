@@ -19,6 +19,7 @@
 #include <cmocka.h>
 
 #include "buffer/buffer_pool.h"
+#include "slotted_helpers.h"
 #include "direct_io.h"
 #include "ds/clock_policy.h"
 #include "test_random.h"
@@ -45,7 +46,7 @@ static void write_text(page_file_t *file, size_t page_number, const char *text)
 {
     page_t page;
     page_init(&page, PAGE_TYPE_HEAP);
-    assert_int_equal(page_insert(&page, text, strlen(text)), 0);
+    assert_int_equal(test_slotted_insert(&page, text, strlen(text)), 0);
     assert_int_equal(page_file_write(file, page_number, &page), 0);
 }
 
@@ -120,7 +121,7 @@ static void mark_changed(size_t file, size_t page_number)
 static void assert_text(const page_t *page, const char *text)
 {
     size_t length = 0;
-    const void *tuple = page_get(page, 0, &length);
+    const void *tuple = test_slotted_get(page, 0, &length);
 
     assert_true(tuple != nullptr);
     assert_int_equal(length, strlen(text));
@@ -228,7 +229,7 @@ static void test_destroying_a_pool_with_a_pin_reports_it([[maybe_unused]] void *
 
 static void change_page(page_t *page)
 {
-    assert_int_equal(page_insert(page, "new", 3), 1);
+    assert_int_equal(test_slotted_insert(page, "new", 3), 1);
 }
 
 static void change_and_unpin(size_t file, size_t page_number)
@@ -243,7 +244,7 @@ static void assert_file_page_slot_count(size_t file, size_t page_number, size_t 
     page_t page;
 
     assert_int_equal(page_file_read(files[file], page_number, &page), 0);
-    assert_int_equal(page_slot_count(&page), count);
+    assert_int_equal(test_slotted_slot_count(&page), count);
 }
 
 static void assert_flush_fails(int error)
@@ -502,9 +503,9 @@ static void model_pin(model_t *model, size_t holder, size_t page)
     if (status != 0) {
         return;
     }
-    assert_int_equal(page_slot_count(frame), model->slot_count[page]);
+    assert_int_equal(test_slotted_slot_count(frame), model->slot_count[page]);
     if ((next_random(&model->random) & 1U) != 0) {
-        assert_true(page_insert(frame, "x", 1) >= 0);
+        assert_true(test_slotted_insert(frame, "x", 1) >= 0);
         model->slot_count[page]++;
         assert_int_equal(buffer_pool_mark_changed(pool, model_page_id(page)), 0);
     }
@@ -613,8 +614,8 @@ static void use_one_page(worker_t *worker)
     page_t *frame = nullptr;
 
     count_error(worker, buffer_pool_pin(pool, model_page_id(page), &frame));
-    count_error(worker, page_slot_count(frame) != worker->slot_count[page] ? -1 : 0);
-    count_error(worker, page_insert(frame, "x", 1) < 0 ? -1 : 0);
+    count_error(worker, test_slotted_slot_count(frame) != worker->slot_count[page] ? -1 : 0);
+    count_error(worker, test_slotted_insert(frame, "x", 1) < 0 ? -1 : 0);
     worker->slot_count[page]++;
     count_error(worker, buffer_pool_mark_changed(pool, model_page_id(page)));
     count_error(worker, buffer_pool_unpin(pool, model_page_id(page)));

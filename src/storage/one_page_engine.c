@@ -4,11 +4,13 @@
 #include <stdlib.h>
 
 #include "storage/page.h"
+#include "storage/slotted_page.h"
 #include "storage/one_page_file.h"
 
 typedef struct {
     storage_engine_t base;
     page_t page;
+    slotted_page_t slotted; // a view of page
     size_t largest_row;
     size_t column_count;
     const type_info_t *types[];
@@ -30,8 +32,9 @@ static row_layout_t layout_of(const one_page_engine_t *engine)
 static size_t largest_row_of_an_empty_page(void)
 {
     page_t empty;
-    page_init(&empty, PAGE_TYPE_HEAP);
-    return page_free_space(&empty);
+    slotted_page_t slotted;
+    slotted_page_init(&slotted, &empty, SLOTTED_PAGE_HEAP);
+    return slotted_page_free_space(&slotted);
 }
 
 static one_page_engine_t *allocate_engine(const row_layout_t *layout)
@@ -58,7 +61,7 @@ storage_engine_t *one_page_engine_create(const row_layout_t *layout)
     if (engine == nullptr) {
         return nullptr;
     }
-    page_init(&engine->page, PAGE_TYPE_HEAP);
+    slotted_page_init(&engine->slotted, &engine->page, SLOTTED_PAGE_HEAP);
     return &engine->base;
 }
 
@@ -72,7 +75,7 @@ storage_engine_t *one_page_engine_load(const row_layout_t *layout, const char *p
         free(engine);
         return nullptr;
     }
-    if (page_type(&engine->page) != PAGE_TYPE_HEAP) {
+    if (slotted_page_open(&engine->slotted, &engine->page, SLOTTED_PAGE_HEAP) != 0) {
         errno = EBADMSG;
         free(engine);
         return nullptr;
@@ -106,7 +109,7 @@ static int one_page_insert(storage_engine_t *base, const row_value_t *values)
         errno = EFBIG;
         return -1;
     }
-    return page_insert(&engine->page, row, (size_t) size) < 0 ? -1 : 0;
+    return slotted_page_insert(&engine->slotted, row, (size_t) size) < 0 ? -1 : 0;
 }
 
 static storage_cursor_t *one_page_open_cursor(storage_engine_t *base)
@@ -125,8 +128,8 @@ static int one_page_next(storage_cursor_t *base, row_value_t *values)
     const row_layout_t layout = layout_of(cursor->engine);
     const void *row = nullptr;
     size_t length = 0;
-    while (cursor->slot < page_slot_count(&cursor->engine->page) && row == nullptr) {
-        row = page_get(&cursor->engine->page, cursor->slot++, &length);
+    while (cursor->slot < slotted_page_slot_count(&cursor->engine->slotted) && row == nullptr) {
+        row = slotted_page_get(&cursor->engine->slotted, cursor->slot++, &length);
     }
     if (row == nullptr) {
         return 0;

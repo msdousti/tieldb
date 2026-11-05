@@ -19,6 +19,7 @@
 #include <cmocka.h>
 
 #include "direct_io.h"
+#include "slotted_helpers.h"
 #include "io/io.h"
 #include "io_fault.h"
 #include "storage/page_file.h"
@@ -55,7 +56,7 @@ static page_t page_holding(const char *text)
 {
     page_t page;
     page_init(&page, PAGE_TYPE_HEAP);
-    assert_int_equal(page_insert(&page, text, strlen(text)), 0);
+    assert_int_equal(test_slotted_insert(&page, text, strlen(text)), 0);
     return page;
 }
 
@@ -72,7 +73,7 @@ static void assert_page_holds(size_t page_number, const char *text)
     page_t page;
     size_t length = 0;
     assert_int_equal(page_file_read(file, page_number, &page), 0);
-    const void *tuple = page_get(&page, 0, &length);
+    const void *tuple = test_slotted_get(&page, 0, &length);
     if (tuple == nullptr) {
         fail();
     }
@@ -313,7 +314,7 @@ static void test_allocated_pages_are_empty_and_numbered_in_order([[maybe_unused]
     assert_int_equal(count_pages(), 2);
     assert_int_equal(page_file_read(file, 1, &page), 0);
     assert_int_equal(page_type(&page), PAGE_TYPE_CATALOG);
-    assert_int_equal(page_slot_count(&page), 0);
+    assert_int_equal(test_slotted_slot_count(&page), 0);
 }
 
 static void test_allocation_goes_after_the_last_written_page([[maybe_unused]] void **state)

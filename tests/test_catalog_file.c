@@ -19,6 +19,7 @@
 #include <cmocka.h>
 
 #include "storage/catalog_file.h"
+#include "slotted_helpers.h"
 #include "storage/one_page_engine.h"
 #include "storage/one_page_file.h"
 #include "storage/row_codec.h"
@@ -74,7 +75,7 @@ static void load_saved_page(void)
 static void read_record(size_t slot, row_value_t *fields)
 {
     size_t length = 0;
-    const void *row = page_get(&page, slot, &length);
+    const void *row = test_slotted_get(&page, slot, &length);
     if (row == nullptr) {
         fail();
     }
@@ -151,7 +152,7 @@ static void test_an_empty_catalog_has_only_the_version([[maybe_unused]] void **s
     assert_int_equal(catalog_file_save(path, nullptr, 0), 0);
 
     load_saved_page();
-    assert_int_equal(page_slot_count(&page), 1);
+    assert_int_equal(test_slotted_slot_count(&page), 1);
     assert_version_record();
 }
 
@@ -162,7 +163,7 @@ static void test_a_table_is_a_table_row_and_a_row_for_each_column([[maybe_unused
     assert_int_equal(catalog_file_save(path, &table, 1), 0);
 
     load_saved_page();
-    assert_int_equal(page_slot_count(&page), 4);
+    assert_int_equal(test_slotted_slot_count(&page), 4);
     assert_version_record();
     assert_table_record(1, "pet");
     assert_column_record(2, "pet", "id", (int32_t[]){OID_INT4, 0});
@@ -214,7 +215,7 @@ static void test_tables_are_saved_in_the_given_order([[maybe_unused]] void **sta
     assert_int_equal(catalog_file_save(path, tables, 3), 0);
 
     load_saved_page();
-    assert_int_equal(page_slot_count(&page), 1 + 2 + 1 + 3);
+    assert_int_equal(test_slotted_slot_count(&page), 1 + 2 + 1 + 3);
     assert_table_record(1, "b");
     assert_table_record(3, "empty");
     assert_table_record(4, "a");

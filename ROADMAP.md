@@ -221,6 +221,7 @@ Two milestones, so that the first visible result comes early:
     - [ ] A server option (for example `--direct-io`) that makes the heap engine open its files this way, when the heap engine exists; the server fails at startup with a clear message if the file system refuses
 - [ ] Free space map: a hint kept by the heap engine in a separate file, one byte per page in a max-tree, repaired from the heap (comparison with other systems and the reasons in `docs/FREE_SPACE_MAP.md`)
   - [x] A binary max-tree over byte values in caller-owned memory (`src/ds/max_tree`): set a leaf and recompute the parents, find the leftmost leaf of at least a given value. Padding leaves are not stored, so about 4,070 leaves fit in a page. `max_tree_attach` rebuilds the inner nodes of a page read back.
+  - [x] Typed pages: `page` keeps the header, the type, the checksum and the validation, and `slotted_page` has the slot functions on a `slotted_page_t` view that is opened for a page of the right kind. Other page types (the free space map) get their own modules, so no module reaches into the bytes of another.
   - [ ] An FSM page type and access to the body of a page after its header (`PAGE_TYPE_FSM`, `page_body`)
   - [ ] The map with one level: free space categories (free bytes / 32; rounded down to record, up to search), `record` and `find` through the buffer pool, for up to about 4,000 heap pages
   - [ ] The second level: a root page 0 above leaf pages 1.., written generically in the number of levels. It needs a format version and level count in the root page, growth of the file, and a rebuild when the file is missing or damaged. The limit is about 4,070 squared pages, which is 128 GiB at 8 KB. A third level would need sparse page files.
@@ -408,7 +409,7 @@ HAVING COUNT(*) > 5;
   - [ ] INSERT adds the key with the row's TID; a unique index rejects a duplicate (SQLSTATE `23505`)
   - [ ] DELETE and UPDATE remove or change the keys
   - [ ] CREATE INDEX builds the index in bulk from the rows that already exist
-  - [ ] A dead heap slot is reclaimed (`page_reclaim_dead_slots`) only after the index entries that point to it are gone
+  - [ ] A dead heap slot is reclaimed (`slotted_page_reclaim_dead_slots`) only after the index entries that point to it are gone
 - [ ] CREATE INDEX, DROP INDEX
 - [ ] Index scan operator
   - [ ] Volcano interface

@@ -19,6 +19,7 @@
 
 #include <cmocka.h>
 
+#include "slotted_helpers.h"
 #include "storage/catalog_file.h"
 #include "storage/one_page_file.h"
 #include "storage/row_codec.h"
@@ -205,7 +206,7 @@ static void add_row(page_t *page, const spec_t *spec)
     ssize_t size = row_encode(&RECORD_LAYOUT, values, row, sizeof(row));
 
     assert_true(size >= 0);
-    assert_true(page_insert(page, row, (size_t) size) >= 0);
+    assert_true(test_slotted_insert(page, row, (size_t) size) >= 0);
 }
 
 static void write_page(const spec_t *specs, size_t count)
@@ -352,13 +353,13 @@ static void test_a_slot_that_holds_no_row_is_refused([[maybe_unused]] void **sta
     page_init(&page, PAGE_TYPE_CATALOG);
     add_row(&page, &version);
     add_row(&page, &table);
-    assert_int_equal(page_delete(&page, 1), 0);
+    assert_int_equal(test_slotted_delete(&page, 1), 0);
     assert_int_equal(one_page_file_save(path, &page), 0);
     errno = 0;
     assert_int_equal(catalog_file_load(path, record_table, &recorder), -1);
     assert_int_equal(errno, EBADMSG);
     page_init(&page, PAGE_TYPE_CATALOG);
-    assert_true(page_insert(&page, "", 0) >= 0);
+    assert_true(test_slotted_insert(&page, "", 0) >= 0);
     assert_int_equal(one_page_file_save(path, &page), 0);
     errno = 0;
     assert_int_equal(catalog_file_load(path, record_table, &recorder), -1);
