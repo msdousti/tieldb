@@ -1,12 +1,12 @@
 /**
  * The buffer pool: a fixed number of in-memory copies of pages (frames) of page files.
  *
- * The pool knows nothing about what the pages hold, so the heap engine and any other engine can
- * use it. A page file is added to the pool once and gets a file number; a page is then named by
- * its page_id_t, the file number and the page number in that file. buffer_pool_pin brings the page
- * into a frame (reading and checking it, see page_file.h) and returns a pointer to it; the pointer
- * stays valid until the matching buffer_pool_unpin. A page that is pinned is never replaced, and
- * every pin must be unpinned: buffer_pool_destroy reports the ones that were not.
+ * The pool knows nothing about what the pages hold, so the heap engine and any other engine can use
+ * it. A page file is added to the pool once and gets a file number. A page is then named by its
+ * page_id_t, the file number and the page number in that file. buffer_pool_pin brings the page into
+ * a frame (reading and checking it, see page_file.h) and returns a pointer to it. The pointer stays
+ * valid until the matching buffer_pool_unpin. A page that is pinned is never replaced, and every
+ * pin must be unpinned: buffer_pool_destroy reports the ones that were not.
  *
  * The pool cannot see that the caller writes to a page, so the caller says so with
  * buffer_pool_mark_changed, while the page is pinned and when it changes it. A marked page is
@@ -15,20 +15,21 @@
  * flushed.
  *
  * When a page is pinned and every frame holds a page, the replacement policy (see
- * ds/replacement_policy.h) picks a page that nobody has pinned and the pool reuses its frame; if
- * the page is marked changed, it is written back first (without a sync: only buffer_pool_flush_all
- * syncs). A failed write-back fails the pin and leaves the page in the pool.
+ * ds/replacement_policy.h) picks a page that nobody has pinned. The pool reuses its frame. If the
+ * page is marked changed, it is written back first, without a sync: only buffer_pool_flush_all
+ * syncs. A failed write-back fails the pin and leaves the page in the pool.
  *
- * Several threads may use the pool at the same time: it has one lock, held during each call,
+ * Several threads may use the pool at the same time. It has one lock, held during each call,
  * including the reads and writes of a pin that has to evict a page, and during a flush. The lock
- * protects the pool, not the pages: a pinned page is the business of the caller, who makes sure
+ * protects the pool, not the pages. A pinned page is the business of the caller, who makes sure
  * that two threads do not change a page at once or while it is flushed. buffer_pool_destroy must
- * not run while another thread uses the pool. The pool does not own the page files: they stay open
+ * not run while another thread uses the pool. The pool does not own the page files. They stay open
  * until the pool is destroyed, and the caller closes them.
  *
- * Errors return -1 or nullptr and set errno: ENOMEM; EINVAL for a file number that was not added
- * or a page that is not pinned; ENOBUFS when every frame is pinned; EBUSY from buffer_pool_destroy
- * when pages are still pinned; and what page_file_read, page_file_write and page_file_sync return.
+ * Errors return -1 or nullptr and set errno. ENOMEM. EINVAL: a file number that was not added, or a
+ * page that is not pinned. ENOBUFS: every frame is pinned. EBUSY from buffer_pool_destroy: pages
+ * are still pinned. The pool also returns what page_file_read, page_file_write and page_file_sync
+ * return.
  */
 
 #pragma once

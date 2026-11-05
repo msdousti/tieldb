@@ -1,10 +1,10 @@
 /**
  * The storage engine interface: how the rows of one table are stored, behind rows and cursors.
  *
- * An engine instance stores the rows of one table. The executor sees only rows (values in the
- * stored format of their column types, see row_codec.h) and cursors, never pages, tuple IDs or
- * files, so that engines can be swapped: the one-page engine (one_page_engine.h) first, the heap
- * engine and perhaps an LSM engine later.
+ * An engine instance stores the rows of one table. The executor sees only rows and cursors, never
+ * pages, tuple IDs or files. Rows are values in the stored format of their column types (see
+ * row_codec.h). This lets engines be swapped: the one-page engine (one_page_engine.h) first, the
+ * heap engine and perhaps an LSM engine later.
  *
  * An implementation embeds storage_engine_t (and storage_cursor_t) as the first member of its own
  * struct and sets ops. The wrappers below call the operation of the engine behind the pointer.
@@ -14,10 +14,10 @@
  * insert may happen while a cursor is open. Values in an insert are copied. The values that
  * storage_next returns point into the engine and are valid until the next call on that cursor.
  *
- * Errors: insert returns -1 and sets errno: EINVAL for a value that does not fit its type (see
- * row_codec.h), EFBIG for a row that no row of this engine could hold, ENOSPC when the engine is
- * full, ENOMEM. storage_open_cursor returns nullptr with ENOMEM. storage_next returns 1 for a row,
- * 0 at the end, and -1 with errno for an error.
+ * Errors: insert returns -1 and sets errno. EINVAL: a value that does not fit its type (see
+ * row_codec.h). EFBIG: a row that no row of this engine could hold. ENOSPC: the engine is full.
+ * ENOMEM: memory runs out. storage_open_cursor returns nullptr with ENOMEM. storage_next returns 1
+ * for a row, 0 at the end, and -1 with errno for an error.
  */
 
 #pragma once

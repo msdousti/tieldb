@@ -10,22 +10,22 @@
  * ENOENT. A page that was never written (a gap in the file, which reads as zeros) is corrupt, not
  * empty. One thread at a time uses a page_file_t.
  *
- * Errors return -1 or nullptr and set errno, as the system calls do (EIO, ENOSPC, ENOENT from
- * page_file_open, EEXIST from page_file_create, ENOMEM), with these of its own: ENOENT from
- * page_file_read for a page beyond the end of the file; EBADMSG for a page that is truncated, fails
- * its checksum or fails page_validate, and from page_file_count_pages for a file that ends in the
- * middle of a page; EIO from page_file_write for a short write. page_file_read
- * leaves the page unspecified when it fails.
+ * Errors return -1 or nullptr and set errno. The errors of the system calls pass through: EIO,
+ * ENOSPC, ENOMEM, ENOENT from page_file_open and EEXIST from page_file_create. These are its own.
+ * ENOENT from page_file_read for a page beyond the end of the file. EBADMSG for a page that is
+ * truncated, fails its checksum or fails page_validate. EBADMSG from page_file_count_pages for a
+ * file that ends in the middle of a page. EIO from page_file_write for a short write.
+ * page_file_read leaves the page unspecified when it fails.
  *
  * Direct I/O: a file opened with PAGE_FILE_FLAG_DIRECT bypasses the page cache of the operating
  * system (O_DIRECT), so that a page that the buffer pool caches is not cached a second time. It is
  * off unless asked for. Pages are aligned as direct I/O needs (see PAGE_ALIGNMENT in page.h), so
  * any page_t can be read and written. If the file system refuses O_DIRECT (tmpfs did, for a long
- * time), the open fails with EINVAL: the caller asked for direct I/O, so there is no silent
- * fallback to buffered I/O, and whether buffered I/O is an acceptable substitute is the caller's
+ * time), the open fails with EINVAL. The caller asked for direct I/O, so there is no silent
+ * fallback to buffered I/O. Whether buffered I/O is an acceptable substitute is the caller's
  * decision. A refused page_file_create_direct may leave a new, empty file behind (the kernel
- * creates it before it checks O_DIRECT). Writes are still not durable until page_file_sync, with
- * or without direct I/O.
+ * creates it before it checks O_DIRECT). Writes are still not durable until page_file_sync, with or
+ * without direct I/O.
  */
 
 #pragma once
@@ -46,9 +46,9 @@ constexpr unsigned PAGE_FILE_FLAG_DIRECT = 1U << 0; // direct I/O; EINVAL if the
 constexpr unsigned PAGE_FILE_FLAG_CREATE = 1U << 1; // page_file_open creates a missing file
 
 /**
- * Opens a file for reading and writing; a file that does not exist is ENOENT, unless
- * PAGE_FILE_FLAG_CREATE is given: then it is created, in the same step (there is no moment in
- * which another process can create it first, as there is between a failed open and a create).
+ * Opens a file for reading and writing. A file that does not exist is ENOENT, unless
+ * PAGE_FILE_FLAG_CREATE is given. Then it is created in the same step, so there is no moment in
+ * which another process can create it first, as there is between a failed open and a create.
  */
 [[nodiscard]] page_file_t *page_file_open(const char *path, unsigned extra_flags);
 

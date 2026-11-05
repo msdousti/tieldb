@@ -26,12 +26,12 @@
 #include <stdint.h>
 
 /**
- * A handle to a tree, not the tree: the nodes are the bytes it points to, one byte per node, with
- * no pointers between them, because a pointer stored in a page means nothing after the page is
- * read back, and a link would be larger than the value. The children and the parent of a node are
- * computed from its index in the array. Only the nodes belong in a page; the other two fields
- * follow from the leaf count. max_tree_init makes an empty tree, and max_tree_attach makes a
- * handle for bytes that already hold leaves (a page read back).
+ * A handle to a tree, not the tree. The nodes are the bytes it points to, one byte per node, with
+ * no pointers between them. A pointer stored in a page means nothing after the page is read back,
+ * and a link would be larger than the value. The children and the parent of a node are computed
+ * from its index in the array. Only the nodes belong in a page; the other two fields follow from
+ * the leaf count. max_tree_init makes an empty tree, and max_tree_attach makes a handle for bytes
+ * that already hold leaves (a page read back).
  *
  * nodes: the caller's bytes; the root is nodes[0] and the leaves are the last of them.
  * leaf_count: the number of real leaves.

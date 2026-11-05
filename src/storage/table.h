@@ -2,11 +2,11 @@
  * Tables: the catalog entry of a table, and its rows.
  *
  * A table has a name, fixed columns (0 to TABLE_MAX_COLUMNS of them) and rows. The rows live in a
- * storage engine instance that the table creates and owns (the default engine, the one-page engine
- * for now, unless table_create_with_engine says otherwise), in the
- * format of their column's type (an integer as 4 bytes, see type_registry.h). table_create copies
- * the name and the column names, so the arguments need not outlive the call; table_insert
- * converts the text of each cell to its column's type and gives the row to the engine.
+ * storage engine instance that the table creates and owns. The default engine is the one-page
+ * engine for now, unless table_create_with_engine says otherwise. The rows are in the format of
+ * their column's type (an integer as 4 bytes, see type_registry.h). table_create copies the name
+ * and the column names, so the arguments need not outlive the call. table_insert converts the text
+ * of each cell to its column's type and gives the row to the engine.
  *
  * Columns are stored in the order they were defined (the physical order). They are shown in the
  * display order, which starts out the same and can be changed with table_set_display_order
@@ -20,10 +20,10 @@
  * because the display order can change. Index arguments must be in range; callers get the ranges
  * from the table itself. Tables are found by name through the catalog (catalog.h).
  *
- * Errors return -1 or nullptr and set errno: EINVAL for a null argument, a wrong cell count or a
- * cell whose text is not a valid value of its column's type, ENOMEM when memory runs out, and
- * those of the engine for an insert (ENOSPC when the table is full, EFBIG for a row that could
- * never fit; see storage_engine.h). A failed table_insert leaves the table unchanged.
+ * Errors return -1 or nullptr and set errno. EINVAL: a null argument, a wrong cell count, or a cell
+ * whose text is not a valid value of its column's type. ENOMEM: memory runs out. An insert also
+ * returns the errors of the engine (ENOSPC when the table is full, EFBIG for a row that could never
+ * fit; see storage_engine.h). A failed table_insert leaves the table unchanged.
  */
 
 #pragma once

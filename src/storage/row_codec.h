@@ -15,10 +15,10 @@
  * A value is a pointer and a length; the pointer is nullptr only for NULL (an empty text has a
  * pointer to anywhere, and length 0). The values that row_decode returns point into the row.
  *
- * Errors return -1 and set errno: EINVAL for a value whose length is not the size of its fixed-size
- * type, and for a row that row_decode finds malformed (too short, too long, or with the reserved
- * bit set); EFBIG for a value longer than ROW_MAX_VALUE_LENGTH; E2BIG when the row does not fit the
- * buffer of row_encode.
+ * Errors return -1 and set errno. EINVAL: a value whose length is not the size of its fixed-size
+ * type, or a row that row_decode finds malformed (too short, too long, or with the reserved bit
+ * set). EFBIG: a value longer than ROW_MAX_VALUE_LENGTH. E2BIG: the row does not fit the buffer of
+ * row_encode.
  */
 
 #pragma once
