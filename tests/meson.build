@@ -256,6 +256,15 @@ test_fsm_page = executable('test_fsm_page',
 
 test('fsm_page', test_fsm_page)
 
+# Test: free space map
+test_free_space_map = executable('test_free_space_map',
+  'test_free_space_map.c',
+  dependencies: [test_support_dep, cmocka_dep, thread_dep],
+  include_directories: inc,
+)
+
+test('free_space_map', test_free_space_map)
+
 # Test: binary max-tree
 test_max_tree = executable('test_max_tree',
   'test_max_tree.c',

@@ -99,6 +99,11 @@ int max_tree_attach(max_tree_t *tree, void *memory, size_t memory_size, size_t l
     return 0;
 }
 
+int max_tree_view(max_tree_t *tree, void *memory, size_t memory_size, size_t leaf_count)
+{
+    return bind_memory(tree, memory, memory_size, leaf_count);
+}
+
 static bool refresh_inner(max_tree_t *tree, size_t node_index)
 {
     uint8_t maximum = larger_child(tree, node_index);
@@ -153,6 +158,10 @@ int max_tree_find(const max_tree_t *tree, uint8_t at_least, size_t *leaf)
     while (node_index < tree->first_leaf) {
         size_t left_index = left_child(node_index);
         node_index = value_at(tree, left_index) >= at_least ? left_index : left_index + 1;
+    }
+    if (value_at(tree, node_index) < at_least) {
+        errno = EBADMSG;
+        return -1;
     }
     *leaf = node_index - tree->first_leaf;
     return 0;

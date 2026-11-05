@@ -29,6 +29,9 @@
 
 constexpr size_t PAGE_SIZE = 8192;
 
+// The bytes of the common header. The bytes after it belong to the page type
+constexpr size_t PAGE_HEADER_SIZE = 24;
+
 // The alignment of a page in memory: direct I/O (O_DIRECT) needs buffers aligned to the logical
 // block size of the device, up to 4096 bytes. It is part of the type, so that a page can always be
 // a buffer
