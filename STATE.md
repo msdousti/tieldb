@@ -102,12 +102,14 @@ themselves and expect a short triage (real / skipped, with reasons) before any f
 - **Clang 22 is the only compiler**: `clang.ini` is a Meson native file, and `meson.build` rejects
   anything else. Always set up build directories with `--native-file clang.ini`. GCC is not
   installed on the machine. CI uses the composite action `.github/actions/setup-clang`
-  (apt.llvm.org clang-22, meson, cmocka, `postgresql-client`).
+  (the clang-22 of the runner image, meson, cmocka, `postgresql-client`).
 - Tools: `clang-format-22`, `clang-tidy-22`, `llvm-cov-22` (through gcovr), Valgrind, `psql` 18.
   CI has Meson 1.3.2 (older than local 1.10): keep `meson.build` compatible (pass `psql.full_path()`,
   not the program object, to `test()`).
-- CI runs on `ubuntu-26.04` (glibc 2.43); the LLVM apt repository is `resolute`. It is a hosted
-  runner, so `/dev/kvm` can be enabled for QEMU experiments (public repository).
+- CI runs on `ubuntu-26.04` (glibc 2.43). It is a hosted runner, so `/dev/kvm` can be enabled for
+  QEMU experiments (public repository).
+- CI uses the clang 22.1.2 of the runner image (Ubuntu archive). The local machine has 22.1.8 from
+  apt.llvm.org. If a format or tidy result differs between the two, check that first.
 - `git.kernel.org`, `lore.kernel.org` and `phoronix.com` answer HTTP 403 to this machine. Read kernel
   sources with `gh api repos/torvalds/linux/contents/<path>?ref=<tag>` or `gh api
   repos/torvalds/linux/commits/<sha>`, and use WebSearch for mailing list threads.
