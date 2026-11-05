@@ -68,10 +68,9 @@ typedef struct {
 
 /**
  * Makes tree a view of memory that already holds leaf_count leaves, such as a page read back. The
- * leaf bytes are taken as they are (any byte is a valid leaf value) and every inner node is
- * recomputed from them, so memory in any state, torn or damaged, becomes a valid tree and the
- * result cannot be wrong; only the leaves, which this function cannot check, may be. Reads and
- * writes the first max_tree_size(leaf_count) bytes of memory and no others.
+ * leaves are kept as they are, and every inner node is recomputed from them, so damaged memory
+ * still gives a valid tree. Only the leaves can be wrong, and this function cannot check them. It
+ * reads and writes the first max_tree_size(leaf_count) bytes and no others.
  * Errors: as for max_tree_init.
  */
 [[nodiscard]] int max_tree_attach(max_tree_t *tree, void *memory, size_t memory_size,
