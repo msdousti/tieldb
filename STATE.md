@@ -1,4 +1,5 @@
 # TielDB Development State
+
 **Last updated:** 2026-11-04 **Phase 1 is complete. Phase 2 (persistence) is under way.** Milestone
 A is done: data survives a restart. Milestone B has the page file with direct I/O, the heap tuple
 header, and the buffer pool (replacement policy, dirty pages, eviction, a lock). Next: the free
@@ -45,6 +46,7 @@ select version();   select current_user;   select current_database();
   is no SQL to change it yet (roadmap: `ALTER TABLE ... MODIFY ... AFTER`).
 
 Integers are stored as 4-byte values, so `007` is shown as `7`, like Postgres.
+
 Known deviations from Postgres. The server reports `server_version` `18.0 (TielDB 0.1.0)` so that
 psql 18 does not print a version-mismatch warning. The table named `user` works only because
 TielDB's matcher is simple (it is a reserved word in Postgres). SQL is recognized by stopgap
@@ -214,6 +216,7 @@ Design points worth knowing:
   recorded writer size on failure).
 
 ## Coding rules that CI enforces (details in CLAUDE.md)
+
 C23 (`nullptr`, `constexpr`, `[[nodiscard]]`, `static_assert`, `bool`). Functions are at most 20
 lines, with nesting depth 2. The cmocka `assert_*` macros count as a nesting level inside loops and
 `if` blocks: use `if (...) { fail(); }` or small helpers. A function has at most 4 parameters. There
