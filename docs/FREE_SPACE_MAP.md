@@ -1,13 +1,13 @@
 # Where new data goes: free space maps, page reuse and compaction, and what TielDB does
 
-Every storage engine has to decide where a new piece of data goes, and what that costs differs a
-lot between engines. A heap file is an unordered pile of pages, so an `INSERT` has to find a page
-with enough room for the new row, and the systems that use heaps keep a summary of the free space
-for it (a free space map). A B+tree picks the page by the row's key and only needs whole pages to
-be handed out and taken back. An LSM store has no pages to place data in, and gets space back by
-deleting files. This document compares what several systems do, says which of the designs applies
-to which TielDB storage engine, records the design chosen for the heap engine (`ROADMAP.md`,
-Phase 2, milestone B), and lists what the other engines need and what is still undecided.
+Every storage engine has to decide where a new piece of data goes, and what that costs differs a lot
+between engines. A heap file is an unordered pile of pages, so an `INSERT` has to find a page with
+enough room for the new row. The systems that use heaps keep a summary of the free space for it (a
+free space map). A B+tree picks the page by the row's key and only needs whole pages to be handed
+out and taken back. An LSM store has no pages to place data in, and gets space back by deleting
+files. This document compares what several systems do. It says which of the designs applies to which
+TielDB storage engine. It records the design chosen for the heap engine (`ROADMAP.md`, Phase 2,
+milestone B). It also lists what the other engines need and what is still undecided.
 
 ## How to read this document
 
@@ -32,11 +32,11 @@ Rows in the table are marked with these words. Nothing here was measured.
    checkpointed row groups) get space back by rewriting data and deleting the old file or block.
    There is no page to place data in, so there is nothing to search for.
 
-A heap needs the first two. A structure that decides the position of a row by its key, such as a B+tree
-(a clustered index), needs only the first: the row goes to the leaf that the key selects, and if
-that leaf is full the leaf is split and one new page is allocated. SQL Server says exactly this:
-free space is tracked only for heap and LOB pages, because "the point at which to insert a new
-row is always determined by the index key values".
+A heap needs the first two. A structure that decides the position of a row by its key, such as a
+B+tree (a clustered index), needs only the first. The row goes to the leaf that the key selects. If
+that leaf is full, it is split and one new page is allocated. SQL Server says exactly this: free
+space is tracked only for heap and LOB pages, because "the point at which to insert a new row is
+always determined by the index key values".
 
 ## The comparison
 
@@ -57,11 +57,11 @@ row is always determined by the index key values".
 corrects itself, since after an update the root is compared with the new value, searches detect
 parents set too high, and corrupted upper nodes are rebuilt on the spot. Pages are written with
 `MarkBufferDirtyHint` and read with `RBM_ZERO_ON_ERROR`, so a damaged FSM page is zeroed instead of
-failing the read. Relation extension is not logged either, so after replay a slot can point past
-the end of the file; it is detected by comparing with the file size and marked full. A search
-starts at the root and descends to a child with enough room, takes one shared lock at a time, and
-uses a "next slot" hint kept in each FSM page so that concurrent inserters spread over different
-pages while still filling pages in order.
+failing the read. Relation extension is not logged either, so after replay a slot can point past the
+end of the file; it is detected by comparing with the file size and marked full. A search starts at
+the root and descends to a child with enough room. It takes one shared lock at a time. A "next slot"
+hint kept in each FSM page makes concurrent inserters spread over different pages while still
+filling pages in order.
 
 The structure, with 4 leaves per FSM page instead of about 4,000 (the numbers are the free space
 in units of 1/256 of a page):
@@ -91,10 +91,10 @@ FSM page, level 2                      A third level of the same kind sits on to
      (root of A) (root of B)
 ```
 
-A search for a page with category 50 or more reads the top root (120, so a page exists), follows a
-child with enough room at each step (the 120 that stands for B, then the 120 in B, then p7), and
-stops at a leaf. If the root were below 50, nothing fits and the heap is extended. An update sets
-a leaf and recomputes its parents up to the root, changing only the nodes on one path.
+A search for a page with category 50 or more reads the top root. It is 120, so a page exists. At
+each step the search follows a child with enough room: the 120 that stands for B, then the 120 in B,
+then p7. It stops at a leaf. If the root were below 50, nothing fits and the heap is extended. An
+update sets a leaf and recomputes its parents up to the root, changing only the nodes on one path.
 
 When the map is written (from `hio.c`, which chooses the target page of an insert, and from the
 README):
@@ -148,15 +148,16 @@ different things. Two layers follow:
 
 ### Heap engine: a PostgreSQL-style free space map
 
-The heap engine gets a free space map in a separate file next to the heap file: one byte per heap
-page holding the free space in units of 1/256 of the page size, organized as a tree of max-nodes,
-treated as a hint that is allowed to be wrong, and repaired from the heap itself.
+The heap engine gets a free space map in a separate file next to the heap file. It holds one byte
+per heap page: the free space in units of 1/256 of the page size. The bytes are organized as a tree
+of max-nodes. The map is a hint that is allowed to be wrong, and it is repaired from the heap
+itself.
 
 Why:
 
-1. **It is approximate by design.** A byte per page in 32-byte units is enough to choose a
-   candidate page; the inserter checks the real page (`page_free_space`) and, if it does not fit,
-   corrects the map and tries the next page. No exact bookkeeping is needed.
+1. **It is approximate by design.** A byte per page in 32-byte units is enough to choose a candidate
+   page. The inserter checks the real page (`page_free_space`). If the row does not fit, it corrects
+   the map and tries the next page. No exact bookkeeping is needed.
 2. **It needs no log.** Because the map is rebuilt from the heap pages (each page header states
    its free space), a lost or damaged map costs a scan and never data. This matters now: there
    is no WAL before Phase 5, and a map that had to be recovered would need one. It also fits the
@@ -195,9 +196,9 @@ show three answers, and the decision belongs to the task in Phase 2 of `ROADMAP.
 Two points that hold whatever is chosen:
 
 - **Unlike the free space map, this structure must be exact.** A wrong hint costs one extra page
-  visit, but a page that is both on the free list and in use is corruption, and one that is lost
-  from the list is a leak. So changes to it have to be logged once the WAL exists (Phase 5). *(an
-  inference from the difference between the two problems, not from a source)*
+  visit. A page that is both on the free list and in use is corruption. A page that is lost from the
+  list is a leak. So changes to it have to be logged once the WAL exists (Phase 5). *(an inference
+  from the difference between the two problems, not from a source)*
 - **The heap needs it too**, once delete and vacuum can empty a page, so it is shared and is not a
   B+tree detail.
 
