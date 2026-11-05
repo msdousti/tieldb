@@ -14,9 +14,18 @@ static size_t parent_of(size_t node_index)
     return (node_index - 1) / 2;
 }
 
+static size_t stored_node_count(const max_tree_t *tree)
+{
+    return tree->first_leaf + tree->leaf_count;
+}
+
+// The padded leaves are not stored; they read as 0
 static uint8_t value_at(const max_tree_t *tree, size_t node_index)
 {
-    return node_index < tree->first_leaf + tree->leaf_count ? tree->nodes[node_index] : 0;
+    if (node_index >= stored_node_count(tree)) {
+        return 0;
+    }
+    return tree->nodes[node_index];
 }
 
 static uint8_t larger_child(const max_tree_t *tree, size_t node_index)
@@ -75,7 +84,7 @@ int max_tree_init(max_tree_t *tree, void *memory, size_t memory_size, size_t lea
     if (bind_memory(tree, memory, memory_size, leaf_count) != 0) {
         return -1;
     }
-    memset(memory, 0, tree->first_leaf + leaf_count);
+    memset(memory, 0, stored_node_count(tree));
     return 0;
 }
 
