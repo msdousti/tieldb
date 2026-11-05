@@ -378,6 +378,7 @@ Before submitting/committing code:
 - [ ] All tests pass under ASan + UBSan
 - [ ] New feature has tests (unit, reference-model, or crash test)
 - [ ] Functions <20 lines, nesting depth ≤2
+- [ ] At most three kinds of operation per statement (cast, ternary, shift or bitwise, arithmetic, comparison, `&&`/`||`); a ternary condition with `&&` or `||` is in parentheses
 - [ ] No magic numbers in `src/`: constants are named
 - [ ] No raw `malloc`/`free` in application code (use arenas)
 - [ ] All error returns checked

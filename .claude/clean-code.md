@@ -111,6 +111,13 @@ A long name beats a short enigmatic one or a comment. `validate_page_checksum` i
 ### No side effects
 If `buffer_pin(page_id)` secretly increments a global counter that `buffer_evict` must later decrement, that's a side effect. Make ownership and state changes explicit.
 
+### Keep each statement simple
+A statement says one thing. Two rules keep it that way (examples in `style-guide.md`):
+- **At most three kinds of operation per statement.** The kinds are: a cast, a ternary, a shift or bitwise operator, arithmetic, a comparison, and `&&` or `||`. With four or more, split the statement: name the inner part with a variable or a small function, and handle a special case with an `if` and an early return.
+- **Parenthesize the condition of a ternary when it contains `&&` or `||`.** A condition that is a single comparison or a single call needs none.
+
+The compiler and `clang-tidy` already require parentheses for mixed `&&` and `||` and for mixed arithmetic.
+
 ---
 
 ## 3. Comments
@@ -207,6 +214,7 @@ Every time you touch a file, leave it a little better: rename a confusing variab
 
 - [ ] Functions do one thing, stay under 20 lines
 - [ ] Nesting depth rarely exceeds 2; flatten with early returns/extraction
+- [ ] At most three kinds of operation per statement; a ternary condition with `&&` or `||` is in parentheses
 - [ ] Names reveal intent; no abbreviations that save 2 characters
 - [ ] Comments explain *why*, not *what*, in short sentences; or don't exist
 - [ ] Error returns are checked everywhere; context is logged

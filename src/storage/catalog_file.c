@@ -224,7 +224,7 @@ static int check_version(const row_value_t *fields)
         read_number(&version, &fields[FIELD_FIRST_NUMBER]) != 0) {
         return -1;
     }
-    return kind == RECORD_VERSION && version == CATALOG_FILE_FORMAT_VERSION ? 0 : malformed();
+    return (kind == RECORD_VERSION && version == CATALOG_FILE_FORMAT_VERSION) ? 0 : malformed();
 }
 
 static int load_record(loader_t *loader, const page_t *page, size_t slot)
@@ -240,7 +240,7 @@ static int load_record(loader_t *loader, const page_t *page, size_t slot)
 
 static int check_page(const page_t *page)
 {
-    return page_type(page) == PAGE_TYPE_CATALOG && page_slot_count(page) > 0 ? 0 : malformed();
+    return (page_type(page) == PAGE_TYPE_CATALOG && page_slot_count(page) > 0) ? 0 : malformed();
 }
 
 int catalog_file_load(const char *path, catalog_file_visitor_t visit, void *context)

@@ -189,7 +189,7 @@ int data_dir_load(const char *dir)
         return -1;
     }
     int status = catalog_file_load(path, restore_table, (void *) dir);
-    return status != 0 && errno == ENOENT ? 0 : status;
+    return (status != 0 && errno == ENOENT) ? 0 : status;
 }
 
 static int save_tables(const char *dir, table_t *const *tables, size_t count)
