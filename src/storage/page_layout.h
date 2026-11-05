@@ -35,10 +35,3 @@ static inline void page_header_store(page_t *page, const page_header_t *header)
 {
     memcpy(page->bytes, header, sizeof(*header));
 }
-
-/**
- * Checks that the slots of a page of a slotted type are consistent, so that the slotted page
- * functions can trust the page. Called by page_validate, for pages of slotted types only. It does
- * not check the page type. EBADMSG: the page is corrupt.
- */
-[[nodiscard]] int slotted_page_validate(const page_t *page);

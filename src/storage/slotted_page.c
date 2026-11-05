@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "storage/page_layout.h"
+#include "storage/slotted_page_check.h"
 
 // A slot on the page: the state in the top bits of the first word, then the 14-bit offset, then
 // the length
