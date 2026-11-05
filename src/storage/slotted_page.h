@@ -63,6 +63,13 @@ typedef struct {
 [[nodiscard]] int slotted_page_open(slotted_page_t *slotted, page_t *page,
                                     slotted_page_kind_t kind);
 
+/**
+ * Makes slotted a view of page, whichever slotted kind it has. For code that gets pages of any
+ * type, such as a test or a fuzz target, so that it does not have to cast the page type to a kind.
+ * EINVAL: the page type is not slotted.
+ */
+[[nodiscard]] int slotted_page_open_any(slotted_page_t *slotted, page_t *page);
+
 /** Turns page into an empty page of the kind and makes slotted a view of it. */
 void slotted_page_init(slotted_page_t *slotted, page_t *page, slotted_page_kind_t kind);
 

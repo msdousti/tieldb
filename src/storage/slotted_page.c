@@ -54,7 +54,17 @@ bool slotted_page_is_type(page_type_t type)
 
 int slotted_page_open(slotted_page_t *slotted, page_t *page, slotted_page_kind_t kind)
 {
-    if (!slotted_page_is_type((page_type_t) kind) || page_type(page) != (page_type_t) kind) {
+    if (page_type(page) != (page_type_t) kind) {
+        errno = EINVAL;
+        return -1;
+    }
+    slotted->page = page;
+    return 0;
+}
+
+int slotted_page_open_any(slotted_page_t *slotted, page_t *page)
+{
+    if (!slotted_page_is_type(page_type(page))) {
         errno = EINVAL;
         return -1;
     }

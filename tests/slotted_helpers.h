@@ -17,8 +17,7 @@ static inline slotted_page_t test_slotted_view(const page_t *page)
 {
     slotted_page_t slotted;
     // The view is only read through the const functions, or written by the caller's own page
-    assert_int_equal(
-        slotted_page_open(&slotted, (page_t *) page, (slotted_page_kind_t) page_type(page)), 0);
+    assert_int_equal(slotted_page_open_any(&slotted, (page_t *) page), 0);
     return slotted;
 }
 

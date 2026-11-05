@@ -42,7 +42,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) // NOLINT(misc-use-
     (void) page_type(&page);
     (void) page_flags(&page);
     slotted_page_t slotted;
-    if (slotted_page_open(&slotted, &page, (slotted_page_kind_t) page_type(&page)) != 0) {
+    if (slotted_page_open_any(&slotted, &page) != 0) {
         return 0;
     }
     (void) slotted_page_free_space(&slotted);

@@ -399,29 +399,28 @@ static void test_a_page_opens_only_as_its_own_kind([[maybe_unused]] void **state
     errno = 0;
     assert_int_equal(slotted_page_open(&other, &free_page, SLOTTED_PAGE_HEAP), -1);
     assert_int_equal(errno, EINVAL);
-}
-
-static void test_a_value_that_is_not_a_kind_opens_nothing([[maybe_unused]] void **state)
-{
-    slotted_page_t other;
-    page_t free_page;
-
-    page_init(&free_page, PAGE_TYPE_FREE);
-    errno = 0;
-    // A cast can make a value that is not a kind; open must refuse it
-    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
-    assert_int_equal(slotted_page_open(&other, &free_page, (slotted_page_kind_t) PAGE_TYPE_FREE),
-                     -1);
-    assert_int_equal(errno, EINVAL);
     assert_true(slotted_page_is_type(PAGE_TYPE_HEAP));
     assert_true(slotted_page_is_type(PAGE_TYPE_CATALOG));
     assert_false(slotted_page_is_type(PAGE_TYPE_FREE));
 }
 
+static void test_open_any_takes_the_kind_from_the_page([[maybe_unused]] void **state)
+{
+    slotted_page_t other;
+    page_t free_page;
+
+    assert_int_equal(slotted_page_open_any(&other, &page), 0);
+    assert_ptr_equal(other.page, &page);
+    page_init(&free_page, PAGE_TYPE_FREE);
+    errno = 0;
+    assert_int_equal(slotted_page_open_any(&other, &free_page), -1);
+    assert_int_equal(errno, EINVAL);
+}
+
 static const struct CMUnitTest tests[] = {
     cmocka_unit_test_setup(test_new_page_is_empty, new_page),
     cmocka_unit_test_setup(test_a_page_opens_only_as_its_own_kind, new_page),
-    cmocka_unit_test(test_a_value_that_is_not_a_kind_opens_nothing),
+    cmocka_unit_test_setup(test_open_any_takes_the_kind_from_the_page, new_page),
     cmocka_unit_test_setup(test_inserted_tuples_are_returned_unchanged, new_page),
     cmocka_unit_test_setup(test_an_empty_tuple_can_be_stored, new_page),
     cmocka_unit_test_setup(test_missing_slots_are_reported, new_page),
