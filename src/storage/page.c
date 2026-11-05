@@ -69,6 +69,8 @@ int page_validate(const page_t *page)
         errno = EBADMSG;
         return -1;
     }
+    // This names the slotted kind, so the common module depends on one concrete page kind. When
+    // a second kind needs its own check, replace it with a table of per-type operations
     return slotted_page_is_type(page_type(page)) ? slotted_page_validate(page) : 0;
 }
 
