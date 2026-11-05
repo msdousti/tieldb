@@ -2,8 +2,8 @@
  * The type registry: what is known about each SQL type, as data, like Postgres's pg_type.
  *
  * A type has a name, an OID (the same number the wire protocol sends), a storage size, and three
- * functions: input turns text into the stored form, output turns the stored form back into text,
- * and compare orders two stored values. A stored value is a byte string; a type with a fixed size
+ * functions. input turns text into the stored form. output turns the stored form back into text.
+ * compare orders two stored values. A stored value is a byte string; a type with a fixed size
  * always stores exactly that many bytes, a type of variable length stores any number.
  *
  * Integers are stored as 4 bytes in the machine's byte order, so "007" and "7" are the same value.

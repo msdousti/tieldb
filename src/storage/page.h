@@ -12,12 +12,12 @@
  * checksum field (filled in when the page is written to disk) and the bookkeeping for the slots.
  * The page does not look inside a tuple; it stores and returns bytes.
  *
- * Deleting a tuple frees its space at once but not its slot number: the slot becomes dead, so
+ * Deleting a tuple frees its space at once but not its slot number. The slot becomes dead, so
  * nothing that still holds the number (an index entry, a reader) can see a new tuple under it.
- * page_reclaim_dead_slots makes dead slots unused, and only unused numbers are given to new tuples
- * (the lowest first). The storage engine calls it when no one can still refer to a dead slot,
- * which for an engine without indexes or concurrent readers is right after deleting. When the
- * free space is in pieces, page_insert first moves the tuples together.
+ * page_reclaim_dead_slots makes dead slots unused. Only unused numbers are given to new tuples (the
+ * lowest first). The storage engine calls it when no one can still refer to a dead slot, which for
+ * an engine without indexes or concurrent readers is right after deleting. When the free space is
+ * in pieces, page_insert first moves the tuples together.
  *
  * Each page has 16 flag bits for the storage engine; the page stores them and does not look at
  * them. Flags of a tuple belong in the tuple's own header.
@@ -25,9 +25,9 @@
  * Pages have no locks; the buffer pool decides who may use a page. Slot numbers and tuple
  * lengths must come from the page itself.
  *
- * A page read from disk is checked before it is used: page_verify_checksum compares the CRC-32C in
- * the header with the page, and page_validate checks that the header and the slots are consistent,
- * so that the other functions can trust the page (a page of zeros is not valid: use page_init).
+ * A page read from disk is checked before it is used. page_verify_checksum compares the CRC-32C in
+ * the header with the page. page_validate checks that the header and the slots are consistent, so
+ * that the other functions can trust the page. A page of zeros is not valid: use page_init.
  * page_set_checksum fills in the checksum, just before a page is written.
  *
  * Errors return -1 or nullptr and set errno: ENOSPC when a tuple does not fit in the page, ENOENT

@@ -47,11 +47,11 @@
  *     0     1  2  3  4    5
  *    'Z'    length = 5    status
  *
- * Each encoder appends one complete message to a wire_writer_t, or nothing on
- * failure. Failures return -1 and set errno as documented in wire_buffer.h;
- * a null writer or an invalid argument gives EINVAL; for RowDescription that
- * includes a type OID other than the registered type OIDs (type_registry.h), and for DataRow a
- * value longer than INT32_MAX bytes, or with a length but no data.
+ * Each encoder appends one complete message to a wire_writer_t, or nothing on failure. Failures
+ * return -1 and set errno as documented in wire_buffer.h. A null writer or an invalid argument
+ * gives EINVAL. For RowDescription that includes a type OID other than the registered type OIDs
+ * (type_registry.h). For DataRow it includes a value longer than INT32_MAX bytes, or with a length
+ * but no data.
  */
 
 #pragma once

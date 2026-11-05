@@ -14,15 +14,15 @@
  *
  * catalog_file_save writes the given tables, locking each one while it reads its columns.
  * catalog_file_load reads the file and calls the visitor once for each table, in the order of the
- * file; the strings and arrays it is given are valid during the call only. The visitor returns 0,
+ * file. The strings and arrays it is given are valid during the call only. The visitor returns 0,
  * or -1 with errno set, which stops the load and is returned. The file does not say how rows are
  * stored: each table's rows are in a file of the table's engine.
  *
- * Errors return -1 and set errno: ENOSPC when the tables do not fit in one page, EFBIG for a name
- * that is far too long, those of one_page_file.h (ENOENT for a missing file, EBADMSG for a corrupt
- * one), and EBADMSG for a file that is intact but is not a catalog of this format: another
- * version, a column outside a table, a name of CATALOG_FILE_NAME_CAPACITY or more bytes, a type
- * that is not in the registry, more than TABLE_MAX_COLUMNS columns.
+ * Errors return -1 and set errno. ENOSPC: the tables do not fit in one page. EFBIG: a name that is
+ * far too long. The errors of one_page_file.h pass through (ENOENT for a missing file, EBADMSG for
+ * a corrupt one). EBADMSG also means a file that is intact but is not a catalog of this format:
+ * another version, a column outside a table, a name of CATALOG_FILE_NAME_CAPACITY or more bytes, a
+ * type that is not in the registry, or more than TABLE_MAX_COLUMNS columns.
  */
 
 #pragma once

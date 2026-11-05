@@ -5,10 +5,10 @@
  *   catalog          the catalog file (catalog_file.h): the tables, their columns and types
  *   <table>.tbl      the rows of each table, saved by the table's storage engine
  *
- * The directory must exist; the server does not create it, as initdb does for Postgres. It should
- * be empty or be a TielDB data directory: data_dir_init writes the version file into an empty one
- * and refuses a directory whose version file says another format version (EBADMSG), so that an
- * old or foreign directory is never misread. The path is at most DATA_DIR_PATH_CAPACITY - 1 bytes
+ * The directory must exist. The server does not create it, as initdb does for Postgres. It should
+ * be empty or be a TielDB data directory. data_dir_init writes the version file into an empty one.
+ * It refuses a directory whose version file says another format version (EBADMSG), so that an old
+ * or foreign directory is never misread. The path is at most DATA_DIR_PATH_CAPACITY - 1 bytes
  * including a file name (ENAMETOOLONG otherwise).
  *
  * data_dir_load puts the tables of the directory into the catalog (catalog.h), which should be

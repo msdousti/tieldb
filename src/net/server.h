@@ -8,10 +8,10 @@
  *
  * A client that disconnects abruptly ends only its own session; the server keeps accepting.
  *
- * server_stop, which any thread may call (not from a signal handler), ends server_serve: no more
- * connections are accepted, every open session is told that its client has nothing more to say, so
- * it finishes the statement it is running and ends, and server_serve returns 0 once they have. A
- * client that is in the middle of a statement therefore gets its answer.
+ * server_stop ends server_serve. Any thread may call it, but not a signal handler. No more
+ * connections are accepted. Every open session is told that its client has nothing more to say, so
+ * it finishes the statement it is running and ends. server_serve returns 0 once they have. A client
+ * that is in the middle of a statement therefore gets its answer.
  *
  * Errors return nullptr or -1 and set errno: ENOMEM when memory runs out, otherwise the error of
  * the failed socket or thread call (for example EADDRINUSE when the port is taken).

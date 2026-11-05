@@ -5,8 +5,8 @@
  * HEAP_TUPLE_HAS_XIDS is set, then the row as the row codec laid it out (see row_codec.h).
  *
  * The IDs are optional because the heap does not always need them. They are the multi-version
- * concurrency control (MVCC, Phase 6) of a version of a row; with the strict two-phase locking
- * that comes first there is one version of each row, locks protect it, and a tuple costs two
+ * concurrency control (MVCC, Phase 6) data of a version of a row. With the strict two-phase locking
+ * that comes first, there is one version of each row, and locks protect it. A tuple then costs two
  * bytes more than its row. A database with MVCC sets the flag on every tuple.
  *
  * The flags that are not named here are reserved and must be zero. Tuples are encoded and decoded
@@ -18,9 +18,9 @@
  * A tuple ID (TID) says where a tuple is: the page of its file and the slot in that page. It is
  * private to the heap engine; the executor sees rows and cursors only.
  *
- * Errors return -1 and set errno: EINVAL for a reserved flag in a tuple to encode, E2BIG when the
- * tuple does not fit the buffer of heap_tuple_encode, EBADMSG for bytes that are not a tuple (too
- * short, or with a reserved flag).
+ * Errors return -1 and set errno. EINVAL: a reserved flag in a tuple to encode. E2BIG: the tuple
+ * does not fit the buffer of heap_tuple_encode. EBADMSG: bytes that are not a tuple (too short, or
+ * with a reserved flag).
  */
 
 #pragma once
