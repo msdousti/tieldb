@@ -39,10 +39,14 @@
 typedef enum {
     SLOT_UNUSED = 0, // no tuple, and the number may be given to a new tuple
     SLOT_NORMAL = 1, // holds a tuple
-    SLOT_DEAD = 2,   // the tuple is deleted; the number stays taken until page_reclaim_dead_slots
+    SLOT_DEAD =
+        2, // the tuple is deleted; the number stays taken until slotted_page_reclaim_dead_slots
 } slot_state_t;
 
-/** The page types that are slotted. The values equal the page types. */
+/**
+ * The page types that are slotted. The values equal the page types. A new slotted type is also
+ * added to slotted_page_is_type.
+ */
 typedef enum {
     SLOTTED_PAGE_HEAP = PAGE_TYPE_HEAP,
     SLOTTED_PAGE_CATALOG = PAGE_TYPE_CATALOG,

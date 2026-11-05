@@ -46,6 +46,7 @@ static void store_slot(page_t *page, size_t slot, slot_t value)
     memcpy(page->bytes + slot_position(slot), &stored, sizeof(stored));
 }
 
+// Lists the same types as slotted_page_kind_t; page_validate relies on it to check the slots
 bool slotted_page_is_type(page_type_t type)
 {
     return type == PAGE_TYPE_HEAP || type == PAGE_TYPE_CATALOG;
